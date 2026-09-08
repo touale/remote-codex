@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS identity(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,config TEXT NOT NULL,revision INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS operations(id TEXT PRIMARY KEY,digest TEXT NOT NULL,result TEXT,event_cursor INTEGER);
+CREATE TABLE IF NOT EXISTS execution_channels(id TEXT PRIMARY KEY,profile TEXT NOT NULL,revision INTEGER NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL DEFAULT(unixepoch()),replay_bytes INTEGER NOT NULL DEFAULT 0,replay_floor INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS exec_events(cursor INTEGER PRIMARY KEY AUTOINCREMENT,channel TEXT NOT NULL,record TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS exec_events_channel ON exec_events(channel,cursor);
+CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,process_id TEXT NOT NULL,kind TEXT NOT NULL,profile TEXT NOT NULL,channel TEXT NOT NULL,thread TEXT,cwd TEXT NOT NULL,state TEXT NOT NULL,exit_code INTEGER,created_at INTEGER NOT NULL DEFAULT(unixepoch()),updated_at INTEGER NOT NULL DEFAULT(unixepoch()),output_bytes INTEGER NOT NULL DEFAULT 0,output_truncated INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS jobs_profile ON jobs(profile,thread,created_at);
+CREATE TABLE IF NOT EXISTS job_output(cursor INTEGER PRIMARY KEY AUTOINCREMENT,job TEXT NOT NULL,record TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS job_output_job ON job_output(job,cursor);
+CREATE INDEX IF NOT EXISTS operations_event ON operations(event_cursor);
+CREATE INDEX IF NOT EXISTS jobs_process ON jobs(channel,process_id);
+CREATE TABLE IF NOT EXISTS execution_approvals(id TEXT PRIMARY KEY,channel TEXT NOT NULL,thread TEXT NOT NULL,turn TEXT NOT NULL,item TEXT NOT NULL,argv TEXT NOT NULL,cwd TEXT NOT NULL,created_at INTEGER NOT NULL DEFAULT(unixepoch()));
+CREATE TABLE IF NOT EXISTS session_permissions(id TEXT PRIMARY KEY,channel TEXT NOT NULL,thread TEXT NOT NULL,created_at INTEGER NOT NULL DEFAULT(unixepoch()));

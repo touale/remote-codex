@@ -1,0 +1,26 @@
+[package]
+name = "remote-codex-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+remote-codex-core = { path = "../core" }
+remote-codex-protocol = { path = "../protocol" }
+remote-codex-adapter = { path = "../codex-adapter" }
+clap.workspace = true
+nix.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

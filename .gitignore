@@ -1,0 +1,6 @@
+/target/
+/.tools/
+/.artifacts/
+/.DS_Store
+**/__pycache__/
+*.py[cod]
