@@ -6,7 +6,6 @@ use serde::Serialize;
 pub enum PrepareEvent {
     Stage(PrepareStage),
     Transfer(TransferProgress),
-    ServiceWaiting(remote_codex_protocol::ServiceActivity),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -24,7 +23,7 @@ pub enum PrepareStage {
     Prepared,
     InstallService,
     StartService,
-    WaitService,
+    UseRunningService,
     Synchronize,
     StartLocalCodex,
     ConnectExecution,

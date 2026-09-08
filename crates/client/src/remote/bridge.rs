@@ -14,9 +14,9 @@ use tokio_tungstenite::{
 };
 
 /// Capability-addressed loopback endpoint consumed only by the local Codex.
-pub struct Bridge {
-    pub url: String,
-    pub channel: String,
+pub(crate) struct Bridge {
+    pub(crate) url: String,
+    pub(crate) channel: String,
     remote: Arc<Remote>,
     stop: watch::Sender<bool>,
     task: tokio::task::JoinHandle<Result<()>>,
@@ -105,7 +105,7 @@ impl Bridge {
         })
     }
 
-    pub async fn detach(&self) {
+    pub(crate) async fn detach(&self) {
         self.close();
         let _ = tokio::time::timeout(
             Duration::from_secs(3),
@@ -122,7 +122,7 @@ impl Bridge {
         self.task.abort();
     }
 
-    pub fn check(&self) -> Result<()> {
+    pub(crate) fn check(&self) -> Result<()> {
         if self.task.is_finished() {
             Err(ClientError::RemoteFault(
                 "EXECUTION_DISCONNECTED".into(),

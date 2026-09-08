@@ -12,7 +12,7 @@ use tokio::sync::watch;
 /// Locks are OS-owned; takeover asks the existing frontend to detach, and only
 /// succeeds after it releases its lock. No PID-based process termination.
 pub(crate) struct Lease {
-    _lock: Flock<File>,
+    lock: std::sync::Mutex<Option<Flock<File>>>,
     marker: PathBuf,
     generation: String,
     pub(crate) revoked: watch::Receiver<bool>,
@@ -75,20 +75,28 @@ impl Lease {
             }
         });
         Ok(Self {
-            _lock: lock,
+            lock: std::sync::Mutex::new(Some(lock)),
             marker,
             generation,
             revoked,
             task,
         })
     }
+    pub(crate) fn release(&self) {
+        if let Ok(mut lock) = self.lock.lock()
+            && lock.is_some()
+        {
+            self.task.abort();
+            if std::fs::read_to_string(&self.marker).ok().as_deref() == Some(&self.generation) {
+                let _ = std::fs::remove_file(&self.marker);
+            }
+            lock.take();
+        }
+    }
 }
 
 impl Drop for Lease {
     fn drop(&mut self) {
-        self.task.abort();
-        if std::fs::read_to_string(&self.marker).ok().as_deref() == Some(&self.generation) {
-            let _ = std::fs::remove_file(&self.marker);
-        }
+        self.release();
     }
 }

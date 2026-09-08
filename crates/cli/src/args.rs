@@ -12,21 +12,9 @@ use std::{ffi::OsString, path::PathBuf};
     about = "Run local Codex with remote execution environments"
 )]
 pub(crate) struct Cli {
-    #[arg(
-        short = 'n',
-        long = "name",
-        alias = "connection",
-        global = true,
-        value_name = "SERVER"
-    )]
+    #[arg(short = 'n', long = "name", global = true, value_name = "SERVER")]
     pub(crate) connection: Option<String>,
-    #[arg(
-        long,
-        alias = "cd",
-        short = 'C',
-        global = true,
-        value_name = "REMOTE_DIRECTORY"
-    )]
+    #[arg(long, global = true, value_name = "REMOTE_DIRECTORY")]
     pub(crate) path: Option<String>,
     #[arg(long, global = true)]
     pub(crate) json: bool,
@@ -44,6 +32,8 @@ pub(crate) struct Cli {
     pub(crate) mcp_source: Option<String>,
     #[command(subcommand)]
     pub(crate) command: Option<Command>,
+    #[arg(skip)]
+    pub(crate) native_arguments: Vec<OsString>,
 }
 
 #[derive(Subcommand)]
@@ -73,61 +63,27 @@ pub(crate) enum Command {
         command: ConfigCommand,
     },
     /// Open an interactive SSH shell on the selected server.
-    Shell {
-        #[arg(hide = true)]
-        legacy: Option<String>,
-        #[arg(hide = true)]
-        legacy_shell: Option<String>,
-    },
-    #[command(external_subcommand)]
-    Codex(Vec<OsString>),
+    Shell,
 }
 
 impl Cli {
     pub(crate) fn parse_argv(arguments: Vec<OsString>) -> Result<Self, clap::Error> {
-        let mut index = 1;
-        while index < arguments.len() {
-            let arg = arguments[index].to_string_lossy();
-            if arg == "--" {
-                let mut cli = Self::try_parse_from(&arguments[..index])?;
-                cli.command = Some(Command::Codex(arguments[index + 1..].to_vec()));
-                return Ok(cli);
-            }
-            if matches!(
-                arg.as_ref(),
-                "-n" | "--name"
-                    | "--connection"
-                    | "--path"
-                    | "--cd"
-                    | "-C"
-                    | "--data-dir"
-                    | "--ssh-config"
-                    | "--mcp-source"
-            ) {
-                index += 2;
-                continue;
-            }
-            if matches!(
-                arg.as_ref(),
-                "--json" | "--takeover" | "--trust-project-mcp"
-            ) || [
-                "--name=",
-                "--connection=",
-                "--path=",
-                "--cd=",
-                "--data-dir=",
-                "--ssh-config=",
-                "--mcp-source=",
-            ]
-            .iter()
-            .any(|p| arg.starts_with(p))
-            {
-                index += 1;
-                continue;
-            }
-            break;
+        let separator = arguments.iter().position(|arg| arg == "--");
+        let Some(index) = separator else {
+            return Self::try_parse_from(arguments);
+        };
+        let mut cli = Self::try_parse_from(&arguments[..index])?;
+        if !matches!(
+            cli.command,
+            None | Some(Command::Resume { read: false, .. })
+        ) {
+            return Err(clap::Error::raw(
+                clap::error::ErrorKind::ArgumentConflict,
+                "native arguments are only supported when opening a session",
+            ));
         }
-        Self::try_parse_from(arguments)
+        cli.native_arguments = arguments[index + 1..].to_vec();
+        Ok(cli)
     }
 }
 
@@ -142,7 +98,9 @@ mod tests {
                 .map(Into::into)
                 .collect(),
         )?;
-        assert!(matches!(cli.command,Some(Command::Codex(args)) if args[0]=="server"));
+        assert!(cli.command.is_none());
+        assert_eq!(cli.native_arguments[0], "server");
+        assert!(Cli::parse_argv(vec!["remote-codex".into(), "conect".into()]).is_err());
         Ok(())
     }
 }

@@ -6,15 +6,15 @@ use std::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use super::{ASSET_URL, LINUX_X86_64_SHA256};
 use crate::{
     ClientError, Result,
     progress::{PrepareEvent, PrepareStage, TransferKind, TransferProgress},
     store::private_directory,
 };
+use remote_codex_adapter::catalog;
 
 pub(super) async fn package(cache: &Path, progress: impl Fn(PrepareEvent)) -> Result<PathBuf> {
-    verified_package(cache, ASSET_URL, LINUX_X86_64_SHA256, progress).await
+    verified_package(cache, catalog::REMOTE_URL, catalog::REMOTE_SHA256, progress).await
 }
 
 pub(super) async fn verified_package(

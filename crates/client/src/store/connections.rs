@@ -8,20 +8,18 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Serialize)]
-pub struct ConnectionRecord {
-    pub id: String,
-    pub name: String,
-    pub endpoint: SshEndpoint,
-    pub saved_revision: i64,
-    pub phase: String,
-    pub runtime: Option<crate::runtime::RuntimeInfo>,
-    pub session_service_ready: bool,
+pub(crate) struct ConnectionRecord {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) endpoint: SshEndpoint,
+    pub(crate) saved_revision: i64,
+    pub(crate) runtime: Option<crate::runtime::RuntimeInfo>,
 }
 
 const SELECT: &str = "SELECT connections.*,server_revisions.revision FROM connections JOIN server_revisions ON connections.id=server_revisions.id";
 
 impl LocalStore {
-    pub async fn find_connection(&self, name: &str) -> Result<ConnectionRecord> {
+    pub(crate) async fn find_connection(&self, name: &str) -> Result<ConnectionRecord> {
         let row = sqlx::query(&format!("{SELECT} WHERE connections.name=?"))
             .bind(name)
             .fetch_optional(&self.pool)
@@ -30,7 +28,7 @@ impl LocalStore {
         decode(row)
     }
 
-    pub async fn connection_by_id(&self, id: &str) -> Result<ConnectionRecord> {
+    pub(crate) async fn connection_by_id(&self, id: &str) -> Result<ConnectionRecord> {
         let row = sqlx::query(&format!("{SELECT} WHERE connections.id=?"))
             .bind(id)
             .fetch_optional(&self.pool)
@@ -39,7 +37,7 @@ impl LocalStore {
         decode(row)
     }
 
-    pub async fn list_connections(&self) -> Result<Vec<ConnectionRecord>> {
+    pub(crate) async fn list_connections(&self) -> Result<Vec<ConnectionRecord>> {
         sqlx::query(&format!("{SELECT} ORDER BY connections.name"))
             .fetch_all(&self.pool)
             .await?
@@ -48,7 +46,7 @@ impl LocalStore {
             .collect()
     }
 
-    pub async fn save_connection(
+    pub(crate) async fn save_connection(
         &self,
         endpoint: &SshEndpoint,
         name: Option<&str>,
@@ -100,14 +98,14 @@ impl LocalStore {
         self.connection_by_id(&id).await
     }
 
-    pub async fn record_runtime(
+    pub(crate) async fn record_runtime(
         &self,
         id: &str,
         expected: i64,
         runtime: &crate::runtime::RuntimeInfo,
     ) -> Result<()> {
         let mut tx = self.begin_write().await?;
-        let changed = sqlx::query("UPDATE connections SET runtime=?,phase='runtime_prepared' WHERE id=? AND EXISTS (SELECT 1 FROM server_revisions WHERE id=? AND revision=?)")
+        let changed = sqlx::query("UPDATE connections SET runtime=? WHERE id=? AND EXISTS (SELECT 1 FROM server_revisions WHERE id=? AND revision=?)")
             .bind(serde_json::to_string(runtime)?).bind(id).bind(id).bind(expected).execute(&mut *tx).await?.rows_affected();
         if changed != 1 {
             return Err(ClientError::RevisionConflict);
@@ -116,7 +114,7 @@ impl LocalStore {
         Ok(())
     }
 
-    pub async fn activate_runtime(
+    pub(crate) async fn activate_runtime(
         &self,
         id: &str,
         expected: i64,
@@ -160,10 +158,8 @@ fn decode(row: SqliteRow) -> Result<ConnectionRecord> {
         name: row.try_get("name")?,
         endpoint,
         saved_revision: row.try_get("revision")?,
-        phase: row.try_get("phase")?,
         runtime: runtime
             .map(|text| serde_json::from_str(&text))
             .transpose()?,
-        session_service_ready: row.try_get::<&str, _>("phase")? == "service_prepared",
     })
 }

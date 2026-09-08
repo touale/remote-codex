@@ -12,7 +12,7 @@ pub struct ServerStatus {
     pub checked_at: i64,
 }
 
-pub async fn refresh(
+pub(crate) async fn refresh(
     store: &LocalStore,
     selected: Option<&str>,
     ssh_config: Option<PathBuf>,

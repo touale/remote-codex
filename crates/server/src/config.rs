@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Clone)]
 pub(crate) struct Runtime {
     pub(crate) config: RemoteConfig,
     pub(crate) env: BTreeMap<String, String>,

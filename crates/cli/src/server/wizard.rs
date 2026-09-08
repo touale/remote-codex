@@ -4,8 +4,8 @@ use crate::{
 };
 use remote_codex_client::{
     ClientError, Result,
+    application::Client,
     config::{ConfigInput, ConfigKey, ConfigLayer, ConfigValue, resolve},
-    store::LocalStore,
 };
 
 pub(crate) struct Settings {
@@ -13,18 +13,17 @@ pub(crate) struct Settings {
     pub(crate) address: String,
     pub(crate) changes: Vec<(String, String)>,
     pub(crate) install_key: bool,
-    pub(crate) interactive: bool,
     pub(crate) port: Option<u16>,
 }
 
-pub(crate) async fn collect(cli: &Cli, store: &LocalStore, args: &AddArgs) -> Result<Settings> {
+pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Result<Settings> {
     let interactive = ui::interactive() && !cli.json && !args.non_interactive;
     let name = match &cli.connection {
         Some(name) => name.clone(),
         None if interactive => ui::input("Server name")?,
         None => return Err(ClientError::Argument("server add requires -n NAME")),
     };
-    let existing = store.find_connection(&name).await.ok();
+    let existing = client.servers().find(&name).await.ok();
     let address = match &args.addr {
         Some(addr) => addr.clone(),
         None => match &existing {
@@ -56,7 +55,7 @@ pub(crate) async fn collect(cli: &Cli, store: &LocalStore, args: &AddArgs) -> Re
         }
     });
     let effective = match &existing {
-        Some(record) => store.config_snapshot(&record.id).await?.effective,
+        Some(record) => client.config().effective(&record.name).await?,
         None => resolve(&ConfigLayer::new())?,
     };
     let mut changes = Vec::new();
@@ -123,7 +122,6 @@ pub(crate) async fn collect(cli: &Cli, store: &LocalStore, args: &AddArgs) -> Re
         address,
         changes,
         install_key,
-        interactive,
         port,
     })
 }

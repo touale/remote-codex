@@ -18,3 +18,5 @@ impl<T, E> Checked<T> for std::result::Result<T, E> {
         self.map_err(|_| remote_codex_protocol::Fault::new(code, message))
     }
 }
+
+mod profiles;

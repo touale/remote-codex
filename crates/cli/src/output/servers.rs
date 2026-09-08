@@ -1,9 +1,12 @@
 use crate::ui;
 use console::{Alignment, Term, measure_text_width, pad_str, truncate_str};
-use remote_codex_client::{Result, servers::status::ServerStatus, store::ConnectionRecord};
+use remote_codex_client::{
+    Result,
+    application::{ServerStatus, ServerSummary},
+};
 use std::io::{self, Write};
 
-pub(crate) fn server_list(records: &[ConnectionRecord], refreshed: &[ServerStatus]) -> Result<()> {
+pub(crate) fn server_list(records: &[ServerSummary], refreshed: &[ServerStatus]) -> Result<()> {
     let mut out = io::stdout().lock();
     if records.is_empty() {
         writeln!(out, "No servers configured.")?;

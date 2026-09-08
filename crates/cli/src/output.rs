@@ -2,11 +2,41 @@ mod servers;
 
 pub(crate) use servers::server_list;
 
-use remote_codex_client::{Result, config::VisibleValue, store::ConfigReport};
+use remote_codex_client::{
+    ClientError, Result,
+    config::{ConfigReport, VisibleValue},
+};
 use serde::Serialize;
 
 pub(crate) fn json(value: &impl Serialize) -> Result<()> {
-    println!("{}", serde_json::to_string_pretty(value)?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({"schema_version":4,"data":value}))?
+    );
+    Ok(())
+}
+
+pub(crate) fn error(error: &ClientError) -> Result<()> {
+    failure(
+        error.code(),
+        &error.to_string(),
+        error.retryable(),
+        error.outcome_is_unknown(),
+    )
+}
+
+pub(crate) fn failure(
+    code: &str,
+    message: &str,
+    retryable: bool,
+    outcome_unknown: bool,
+) -> Result<()> {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({"schema_version":4,"error":{
+            "code":code,"message":message,"retryable":retryable,"outcome_unknown":outcome_unknown
+        }}))?
+    );
     Ok(())
 }
 

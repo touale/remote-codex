@@ -20,47 +20,33 @@ use std::{
     time::Duration,
 };
 
-use crate::config::{ConfigLayer, EffectiveConfig, SettingView};
+use crate::config::{ConfigLayer, EffectiveConfig};
 use crate::{ClientError, Result};
 
-pub use connections::ConnectionRecord;
-pub use servers::ServerAccess;
-pub use sessions::CachedSession;
+pub(crate) use connections::ConnectionRecord;
+pub(crate) use servers::ServerAccess;
+pub(crate) use sessions::CachedSession;
 
 #[derive(Clone)]
-pub struct LocalStore {
+pub(crate) struct LocalStore {
     pub(crate) pool: SqlitePool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub struct Revision {
-    pub saved: i64,
+pub(crate) struct Revision {
+    pub(crate) saved: i64,
 }
 
-pub struct ConfigSnapshot {
-    pub revision: Revision,
-    pub layer: ConfigLayer,
-    pub effective: EffectiveConfig,
+pub(crate) struct ConfigSnapshot {
+    pub(crate) revision: Revision,
+    pub(crate) layer: ConfigLayer,
+    pub(crate) effective: EffectiveConfig,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ConfigReport {
-    pub schema_version: u32,
-    pub server_id: String,
-    pub saved_revision: i64,
-    pub applied_revision: Option<i64>,
-    pub items: Vec<ConfigItem>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ConfigItem {
-    #[serde(flatten)]
-    pub setting: SettingView,
-    pub application_state: &'static str,
-}
+pub(crate) use remote_codex_core::config::{ConfigItem, ConfigReport};
 
 impl LocalStore {
-    pub async fn open(directory: &Path) -> Result<Self> {
+    pub(crate) async fn open(directory: &Path) -> Result<Self> {
         private_directory(directory)?;
         let _initialization = initialization::lock(directory).await?;
         let path = directory.join("state.sqlite3");
@@ -100,7 +86,7 @@ impl LocalStore {
         Ok(Self { pool })
     }
 
-    pub async fn close(&self) {
+    pub(crate) async fn close(&self) {
         self.pool.close().await;
     }
 
@@ -111,7 +97,7 @@ impl LocalStore {
     }
 }
 
-pub fn default_data_dir() -> Result<PathBuf> {
+pub(crate) fn default_data_dir() -> Result<PathBuf> {
     if let Some(path) = std::env::var_os("REMOTE_CODEX_DATA_DIR") {
         return Ok(PathBuf::from(path));
     }
@@ -126,7 +112,7 @@ pub fn default_data_dir() -> Result<PathBuf> {
     Ok(directory)
 }
 
-pub fn private_directory(path: &Path) -> Result<()> {
+pub(crate) fn private_directory(path: &Path) -> Result<()> {
     fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)

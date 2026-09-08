@@ -4,114 +4,95 @@ use crate::{
     protocol::{Request, SkillFile},
     remote::Remote,
 };
-use remote_codex_adapter::engine::Engine;
-use serde_json::{Value, json};
+use remote_codex_adapter::thread::Codex;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, path::Path};
 
 /// Maps enabled local Skill paths to verified assets in the selected environment.
 #[derive(Default)]
-pub struct SkillMap(BTreeMap<String, String>);
+pub(crate) struct SkillMap(BTreeMap<String, String>);
 
 impl SkillMap {
-    pub async fn prepare(
-        engine: &Engine,
+    pub(crate) async fn prepare(
+        engine: &Codex,
         remote: &Remote,
         home: &Path,
         progress: &(dyn Fn(PrepareEvent) + Send + Sync),
     ) -> Result<Self> {
         progress(PrepareEvent::Stage(PrepareStage::PrepareSkills));
-        let result = engine
-            .call("skills/list", json!({"cwds":[home],"forceReload":true}))
-            .await?;
         let mut map = BTreeMap::new();
-        for group in result["data"].as_array().into_iter().flatten() {
-            for skill in group["skills"].as_array().into_iter().flatten() {
-                if skill["enabled"] == false {
-                    continue;
+        for path in engine.enabled_skills(home).await? {
+            let path = path.as_path();
+            if !path.is_absolute() || !path.is_file() {
+                continue;
+            }
+            let Some(root) = path.parent() else {
+                continue;
+            };
+            let canonical = root.canonicalize()?;
+            let files = manifest(&canonical)?;
+            let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(&files)?));
+            let prepared = remote
+                .call(Request::PrepareSkill {
+                    digest: digest.clone(),
+                    files: files.clone(),
+                })
+                .await?;
+            let destination = prepared["path"]
+                .as_str()
+                .ok_or(ClientError::RemoteResponse)?;
+            let installed = if prepared["ready"] == true {
+                destination.to_owned()
+            } else {
+                progress(PrepareEvent::Stage(PrepareStage::PrepareSkills));
+                let total = files.iter().map(|f| f.size).sum();
+                let mut completed = 0;
+                for file in &files {
+                    remote
+                        .ssh
+                        .upload(
+                            &remote.server.endpoint,
+                            &canonical.join(&file.path),
+                            &format!("{destination}/{}", file.path),
+                            |bytes, _| {
+                                progress(PrepareEvent::Transfer(TransferProgress {
+                                    kind: TransferKind::Upload,
+                                    transferred_bytes: completed + bytes,
+                                    total_bytes: Some(total),
+                                }))
+                            },
+                        )
+                        .await?;
+                    completed += file.size;
                 }
-                let Some(path) = skill["path"].as_str() else {
-                    continue;
-                };
-                let path = Path::new(path);
-                if !path.is_absolute() || !path.is_file() {
-                    continue;
-                }
-                let Some(root) = path.parent() else {
-                    continue;
-                };
-                let canonical = root.canonicalize()?;
-                let files = manifest(&canonical)?;
-                let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(&files)?));
-                let prepared = remote
-                    .call(Request::PrepareSkill {
-                        digest: digest.clone(),
-                        files: files.clone(),
+                let result = remote
+                    .call(Request::CommitSkill {
+                        stage: prepared["stage"]
+                            .as_str()
+                            .ok_or(ClientError::RemoteResponse)?
+                            .into(),
+                        digest,
                     })
                     .await?;
-                let destination = prepared["path"]
+                result["path"]
                     .as_str()
-                    .ok_or(ClientError::RemoteResponse)?;
-                let installed = if prepared["ready"] == true {
-                    destination.to_owned()
-                } else {
-                    progress(PrepareEvent::Stage(PrepareStage::PrepareSkills));
-                    let total = files.iter().map(|f| f.size).sum();
-                    let mut completed = 0;
-                    for file in &files {
-                        remote
-                            .ssh
-                            .upload(
-                                &remote.server.endpoint,
-                                &canonical.join(&file.path),
-                                &format!("{destination}/{}", file.path),
-                                |bytes, _| {
-                                    progress(PrepareEvent::Transfer(TransferProgress {
-                                        kind: TransferKind::Upload,
-                                        transferred_bytes: completed + bytes,
-                                        total_bytes: Some(total),
-                                    }))
-                                },
-                            )
-                            .await?;
-                        completed += file.size;
-                    }
-                    let result = remote
-                        .call(Request::CommitSkill {
-                            stage: prepared["stage"]
-                                .as_str()
-                                .ok_or(ClientError::RemoteResponse)?
-                                .into(),
-                            digest,
-                        })
-                        .await?;
-                    result["path"]
-                        .as_str()
-                        .ok_or(ClientError::RemoteResponse)?
-                        .into()
-                };
-                map.insert(
-                    path.to_string_lossy().into_owned(),
-                    format!("{installed}/SKILL.md"),
-                );
-            }
+                    .ok_or(ClientError::RemoteResponse)?
+                    .into()
+            };
+            map.insert(
+                path.to_string_lossy().into_owned(),
+                format!("{installed}/SKILL.md"),
+            );
         }
         Ok(Self(map))
     }
 
-    pub fn remap_inputs(&self, params: &mut Value) {
-        if let Some(inputs) = params["input"].as_array_mut() {
-            for input in inputs {
-                if input["type"] == "skill"
-                    && let Some(path) = input["path"].as_str().and_then(|p| self.0.get(p))
-                {
-                    input["path"] = json!(path);
-                }
-            }
-        }
+    pub(crate) fn mappings(&self) -> &BTreeMap<String, String> {
+        &self.0
     }
 
-    pub fn instructions(&self) -> String {
+    pub(crate) fn instructions(&self) -> String {
         if self.0.is_empty() {
             return String::new();
         }

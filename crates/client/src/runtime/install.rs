@@ -1,14 +1,15 @@
 use std::path::Path;
 
-use super::{CANDIDATE_VERSION, LINUX_X86_64_SHA256, RuntimeInfo, download, inspect_host};
+use super::{RuntimeInfo, download, inspect_host};
 use crate::{
     ClientError, Result,
     connection::SshEndpoint,
     progress::{PrepareEvent, PrepareStage, TransferKind, TransferProgress},
     ssh::{SshTransport, quote},
 };
+use remote_codex_adapter::catalog;
 
-pub async fn prepare(
+pub(crate) async fn prepare(
     ssh: &SshTransport,
     endpoint: &SshEndpoint,
     cache: &Path,
@@ -21,8 +22,8 @@ pub async fn prepare(
     let bindings = format!(
         "RC_ROOT={}\nRC_VERSION={}\nRC_SHA256={}\nRC_ARCHIVE={}\nRC_OPERATION={}\n",
         quote(&host.data_dir)?,
-        quote(CANDIDATE_VERSION)?,
-        quote(LINUX_X86_64_SHA256)?,
+        quote(catalog::VERSION)?,
+        quote(catalog::REMOTE_SHA256)?,
         quote(&archive)?,
         quote(&operation)?
     );
@@ -63,13 +64,14 @@ pub async fn prepare(
     }
     progress(PrepareEvent::Stage(PrepareStage::Prepared));
     Ok(RuntimeInfo {
-        version: CANDIDATE_VERSION.to_owned(),
+        version: catalog::VERSION.to_owned(),
         platform: host.platform,
         executable: format!(
             "{}/runtimes/codex/{}-linux-x86_64/bin/codex",
-            host.data_dir, CANDIDATE_VERSION
+            host.data_dir,
+            catalog::VERSION
         ),
-        archive_sha256: LINUX_X86_64_SHA256.to_owned(),
+        archive_sha256: catalog::REMOTE_SHA256.to_owned(),
         reused,
     })
 }

@@ -1,9 +1,9 @@
 use super::*;
 
 pub(crate) struct ScriptOutput {
-    pub status: std::process::ExitStatus,
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
+    pub(crate) status: std::process::ExitStatus,
+    pub(crate) stdout: Vec<u8>,
+    pub(crate) stderr: Vec<u8>,
 }
 
 impl SshTransport {

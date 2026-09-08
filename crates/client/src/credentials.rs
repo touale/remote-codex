@@ -7,19 +7,19 @@ use crate::{
 };
 use zeroize::Zeroizing;
 
-pub trait CredentialVault: Send + Sync {
+pub(crate) trait CredentialVault: Send + Sync {
     fn put(&self, reference: &SecretRef, value: &str) -> impl Future<Output = Result<()>> + Send;
     fn read(&self, reference: &SecretRef)
     -> impl Future<Output = Result<Zeroizing<String>>> + Send;
     fn delete(&self, reference: &SecretRef) -> impl Future<Output = Result<()>> + Send;
 }
 
-pub struct NativeVault {
+pub(crate) struct NativeVault {
     service: String,
 }
 
 impl NativeVault {
-    pub fn new(installation_id: &str) -> Self {
+    pub(crate) fn new(installation_id: &str) -> Self {
         Self {
             service: format!("remote-codex.{installation_id}"),
         }
@@ -55,7 +55,7 @@ impl CredentialVault for NativeVault {
 
 /// Validate before writing to the vault. Record intent first so a crash between
 /// the vault write and SQLite commit leaves a discoverable credential handle.
-pub async fn set_secret(
+pub(crate) async fn set_secret(
     store: &LocalStore,
     vault: &impl CredentialVault,
     server: &str,

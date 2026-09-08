@@ -3,7 +3,7 @@ use sqlx::{Connection, SqliteConnection, SqlitePool, sqlite::SqliteConnectOption
 use crate::{ClientError, Result};
 
 const APPLICATION_ID: i64 = 0x52434458;
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 pub(super) async fn preflight(path: &std::path::Path) -> Result<()> {
     let mut connection =
@@ -16,7 +16,7 @@ pub(super) async fn preflight(path: &std::path::Path) -> Result<()> {
         let version: i64 = sqlx::query_scalar("PRAGMA user_version")
             .fetch_one(&mut connection)
             .await?;
-        if app == APPLICATION_ID && (1..=SCHEMA_VERSION).contains(&version) {
+        if app == APPLICATION_ID && (6..=SCHEMA_VERSION).contains(&version) {
             return Ok(());
         }
         let count: i64 = sqlx::query_scalar(
@@ -61,29 +61,20 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
         tx.commit().await?;
         return Ok(());
     }
-    if (1..SCHEMA_VERSION).contains(&version) && app == APPLICATION_ID {
+    if (6..SCHEMA_VERSION).contains(&version) && app == APPLICATION_ID {
         super::backup::create(pool, directory, version).await?;
-        if version == 1 {
-            sqlx::raw_sql(include_str!("migration_v2.sql"))
-                .execute(&mut *tx)
-                .await?;
+        sqlx::query("DELETE FROM settings WHERE key='codex.update_policy'")
+            .execute(&mut *tx)
+            .await?;
+        if version == 6 {
+            sqlx::query("UPDATE server_revisions SET revision=CASE WHEN revision<9223372036854775807 THEN revision+1 ELSE -1 END")
+                .execute(&mut *tx).await?;
         }
-        if version <= 2 {
-            sqlx::raw_sql(include_str!("migration_v3.sql"))
-                .execute(&mut *tx)
-                .await?;
-        }
-        if version <= 3 {
-            sqlx::raw_sql(include_str!("migration_v4.sql"))
-                .execute(&mut *tx)
-                .await?;
-        }
-        if version < 6 {
-            sqlx::raw_sql(include_str!("migration_v6.sql"))
-                .execute(&mut *tx)
-                .await?;
-        }
-        sqlx::raw_sql(include_str!("migration_v7.sql"))
+        // Original vault entries stay untouched; only obsolete Agent bookkeeping goes away.
+        sqlx::query("DROP TABLE IF EXISTS retained_legacy_credentials")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("ALTER TABLE connections DROP COLUMN phase")
             .execute(&mut *tx)
             .await?;
         validate_migration(&mut tx).await?;
@@ -102,9 +93,6 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
         return Err(ClientError::Schema);
     }
     sqlx::raw_sql(include_str!("schema.sql"))
-        .execute(&mut *tx)
-        .await?;
-    sqlx::raw_sql(include_str!("migration_v6.sql"))
         .execute(&mut *tx)
         .await?;
     sqlx::query("INSERT INTO installation(id) VALUES (?)")
@@ -137,7 +125,7 @@ async fn validate_migration(connection: &mut SqliteConnection) -> Result<()> {
         crate::config::resolve(&layer)?;
     }
     let missing: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM settings s WHERE representation='secret' AND NOT EXISTS(SELECT 1 FROM credentials c WHERE c.id=s.value AND c.state='active')) OR EXISTS(SELECT 1 FROM retained_legacy_credentials r WHERE NOT EXISTS(SELECT 1 FROM credentials c WHERE c.id=r.id AND c.state='active'))",
+        "SELECT EXISTS(SELECT 1 FROM settings s WHERE representation='secret' AND NOT EXISTS(SELECT 1 FROM credentials c WHERE c.id=s.value AND c.state='active'))",
     ).fetch_one(connection).await?;
     if missing {
         return Err(ClientError::Credentials);

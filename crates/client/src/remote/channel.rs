@@ -10,15 +10,15 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout},
 };
 
-pub struct Channel {
-    pub reader: codec::Reader<BufReader<ChildStdout>>,
-    pub writer: ChildStdin,
+pub(crate) struct Channel {
+    pub(crate) reader: codec::Reader<BufReader<ChildStdout>>,
+    pub(crate) writer: ChildStdin,
     _child: Child,
-    pub expected_identity: Option<String>,
+    pub(crate) expected_identity: Option<String>,
 }
 
 impl Channel {
-    pub async fn open(
+    pub(crate) async fn open(
         ssh: &SshTransport,
         server: &ConnectionRecord,
         access: &ServerAccess,
@@ -56,7 +56,11 @@ impl Channel {
         })
     }
 
-    pub async fn call(&mut self, profile: &str, request: Request) -> Result<serde_json::Value> {
+    pub(crate) async fn call(
+        &mut self,
+        profile: &str,
+        request: Request,
+    ) -> Result<serde_json::Value> {
         let call = Call {
             protocol: VERSION,
             id: uuid::Uuid::new_v4().to_string(),

@@ -1,6 +1,6 @@
 use crate::{
     Checked, Result,
-    config::{Runtime, canonical_directory},
+    config::canonical_directory,
     execution::{Execution, Input},
     storage::Store,
 };
@@ -18,11 +18,14 @@ pub struct Service {
     root: PathBuf,
     executions: Mutex<HashMap<String, Arc<Execution>>>,
     build_id: String,
+    profiles: crate::profiles::Profiles,
 }
 impl Service {
     pub async fn open(root: &Path) -> Result<Arc<Self>> {
+        let store = Store::open(root).await?;
         Ok(Arc::new(Self {
-            store: Store::open(root).await?,
+            profiles: crate::profiles::Profiles::new(store.clone()),
+            store,
             root: root.into(),
             executions: Mutex::new(HashMap::new()),
             build_id: crate::installation::build_id()?,
@@ -76,8 +79,9 @@ impl Service {
                 Ok(json!({}))
             }
             Request::Configure(config) => {
-                Runtime::load(config.clone()).await?;
-                self.store.save_config(&call.profile, config).await?;
+                self.profiles
+                    .configure(&call.profile, config.clone())
+                    .await?;
                 Ok(json!({"revision":config.revision}))
             }
             Request::Workspace { path } => Ok(json!({"path":canonical_directory(path).await?})),
@@ -142,14 +146,13 @@ impl Service {
                         "too many active execution channels",
                     ));
                 }
-                let config = self.store.config(&call.profile).await?;
-                if config.revision != *revision {
+                let (mut runtime, updates) = self.profiles.snapshot(&call.profile).await?;
+                if runtime.config.revision != *revision {
                     return Err(Fault::new(
                         "REVISION_CONFLICT",
                         "environment configuration changed before execution",
                     ));
                 }
-                let mut runtime = Runtime::load(config).await?;
                 if mcp.len() > 32
                     || mcp
                         .iter()
@@ -163,6 +166,7 @@ impl Service {
                     channel,
                     &call.profile,
                     runtime,
+                    updates,
                     self.store.clone(),
                 )
                 .await?;

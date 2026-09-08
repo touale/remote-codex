@@ -33,3 +33,6 @@ pub enum ConfigError {
     #[error("custom proxy mode requires at least one configured proxy address")]
     MissingCustomProxy,
 }
+
+mod report;
+pub use report::{ConfigItem, ConfigReport};

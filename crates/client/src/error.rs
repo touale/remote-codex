@@ -72,6 +72,17 @@ impl ClientError {
         }
     }
 
+    pub fn retryable(&self) -> bool {
+        matches!(
+            self,
+            Self::RevisionConflict
+                | Self::Ssh(255)
+                | Self::Ssh(75)
+                | Self::Timeout
+                | Self::Download(_)
+        ) || matches!(self, Self::RemoteFault(code, _, false) if matches!(code.as_str(), "SERVICE_UPDATE_BUSY" | "SETTINGS_BUSY"))
+    }
+
     pub fn outcome_is_unknown(&self) -> bool {
         if let Self::RemoteFault(_, _, unknown) = self {
             return *unknown;

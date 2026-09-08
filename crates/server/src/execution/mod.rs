@@ -41,6 +41,7 @@ impl Execution {
         id: &str,
         profile: &str,
         runtime: Runtime,
+        updates: tokio::sync::watch::Receiver<crate::profiles::LiveSettings>,
         store: Store,
     ) -> Result<Arc<Self>> {
         let home = root.join("executors").join(id);
@@ -61,7 +62,16 @@ impl Execution {
         let id = id.to_owned();
         let profile = profile.to_owned();
         tokio::spawn(async move {
-            actor::run(&id, &profile, runtime, store, backend, receiver, &weak).await;
+            actor::run(
+                (&id, &profile),
+                runtime,
+                updates,
+                store,
+                backend,
+                receiver,
+                &weak,
+            )
+            .await;
             if let Some(handle) = weak.upgrade() {
                 handle.alive.store(false, Ordering::Release);
                 handle.changed.notify_waiters();

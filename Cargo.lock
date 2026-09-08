@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "remote-codex"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "console",
@@ -1225,6 +1225,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shlex",
+ "sqlx",
  "tempfile",
  "tokio",
  "zeroize",
@@ -1232,18 +1234,23 @@ dependencies = [
 
 [[package]]
 name = "remote-codex-adapter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "futures-util",
  "nix 0.30.1",
+ "remote-codex-core",
  "remote-codex-protocol",
  "serde_json",
+ "shlex",
  "tempfile",
  "tokio",
+ "tokio-tungstenite",
+ "url",
 ]
 
 [[package]]
 name = "remote-codex-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures-util",
  "nix 0.30.1",
@@ -1269,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "remote-codex-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1278,25 +1285,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "remote-codex-m0"
-version = "0.1.0"
-dependencies = [
- "clap",
- "futures-util",
- "nix 0.30.1",
- "portable-pty",
- "remote-codex-test-support",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
 name = "remote-codex-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1305,13 +1295,14 @@ dependencies = [
 
 [[package]]
 name = "remote-codex-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "nix 0.30.1",
  "remote-codex-adapter",
  "remote-codex-core",
  "remote-codex-protocol",
+ "remote-codex-test-support",
  "serde",
  "serde_json",
  "sha2",
@@ -1324,15 +1315,25 @@ dependencies = [
 
 [[package]]
 name = "remote-codex-test-support"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "clap",
  "futures-util",
+ "nix 0.30.1",
  "portable-pty",
+ "remote-codex-adapter",
+ "remote-codex-client",
+ "remote-codex-protocol",
  "serde",
  "serde_json",
+ "sha2",
+ "shlex",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tokio-tungstenite",
+ "toml",
+ "uuid",
 ]
 
 [[package]]

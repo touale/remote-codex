@@ -22,7 +22,6 @@ pub(crate) struct PrepareProgress<W: Write> {
     started: Instant,
     transfer_started: Option<Instant>,
     transfer: Option<TransferProgress>,
-    service_wait: Option<remote_codex_client::protocol::ServiceActivity>,
     last_draw: Instant,
     line_active: bool,
     terminal_columns: Option<fn() -> usize>,
@@ -55,7 +54,6 @@ impl<W: Write> PrepareProgress<W> {
             started: now,
             transfer_started: None,
             transfer: None,
-            service_wait: None,
             last_draw: now,
             line_active: false,
             terminal_columns: None,
@@ -83,17 +81,6 @@ impl<W: Write> PrepareProgress<W> {
                     self.draw(now, false);
                 }
             }
-            PrepareEvent::ServiceWaiting(activity) => {
-                if self.stage != Some(PrepareStage::WaitService) {
-                    self.finish(now);
-                    self.stage = Some(PrepareStage::WaitService);
-                    self.started = now;
-                    self.service_wait = Some(activity);
-                    self.draw(now, false);
-                } else {
-                    self.service_wait = Some(activity);
-                }
-            }
         }
     }
 
@@ -115,7 +102,6 @@ impl<W: Write> PrepareProgress<W> {
         }
         self.stage = None;
         self.transfer = None;
-        self.service_wait = None;
         self.transfer_started = None;
     }
 
@@ -123,7 +109,10 @@ impl<W: Write> PrepareProgress<W> {
         !matches!(
             self.stage,
             None | Some(
-                PrepareStage::ConnectSsh | PrepareStage::UseCachedPackage | PrepareStage::Prepared
+                PrepareStage::ConnectSsh
+                    | PrepareStage::UseCachedPackage
+                    | PrepareStage::Prepared
+                    | PrepareStage::UseRunningService
             )
         )
     }
@@ -134,14 +123,7 @@ impl<W: Write> PrepareProgress<W> {
             return;
         }
         let elapsed = now.duration_since(self.started);
-        let message = if let Some(activity) = self.service_wait {
-            let reason = if activity.jobs > 0 {
-                "Waiting for running commands to finish"
-            } else {
-                "Waiting for the remote environment to become idle"
-            };
-            format!("{reason} ({}s)", elapsed.as_secs())
-        } else {
+        let message = {
             match (self.transfer, self.transfer_started) {
                 (Some(transfer), Some(started)) => {
                     format::transfer(transfer, now.duration_since(started))

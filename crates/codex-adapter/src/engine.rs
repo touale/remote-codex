@@ -63,7 +63,7 @@ impl Engine {
             .kill_on_drop(true);
         let child = command
             .spawn()
-            .map_err(|_| Fault::new("ENGINE_START_FAILED", "could not start managed Codex"))?;
+            .map_err(|_| Fault::new("ENGINE_START_FAILED", "could not start local Codex"))?;
         let (sender, receiver) = mpsc::channel(64);
         let (events, _) = broadcast::channel(512);
         let task = tokio::spawn(driver::run(child, receiver, events.clone()));

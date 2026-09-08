@@ -1,5 +1,6 @@
-use remote_codex_protocol::{CommandApproval, Fault, SessionBinding};
-use serde_json::{Value, json};
+use remote_codex_core::session::SessionBinding;
+use remote_codex_protocol::{CommandApproval, Fault};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::Mutex,
@@ -22,80 +23,54 @@ struct State {
 impl Approvals {
     pub(crate) fn observe(
         &self,
-        event: &mut Value,
+        notice: &remote_codex_adapter::events::Notice,
         binding: &SessionBinding,
         channel: &str,
     ) -> Result<(), Fault> {
+        use remote_codex_adapter::events::Notice;
         let mut state = self.0.lock().map_err(|_| invalid())?;
-        let method = event["method"].as_str().unwrap_or_default();
-        if matches!(method, "item/completed" | "turn/completed") {
-            let item = event.pointer("/params/item/id").and_then(Value::as_str);
-            let turn = event.pointer("/params/turn/id").and_then(Value::as_str);
-            state
-                .accepted
-                .retain(|(_, grant)| item != Some(&grant.item) && turn != Some(&grant.turn));
-            state
-                .pending
-                .retain(|_, grant| item != Some(&grant.item) && turn != Some(&grant.turn));
+        match notice {
+            Notice::Completed { item, turn } => {
+                state.accepted.retain(|(_, grant)| {
+                    item.as_ref() != Some(&grant.item) && turn.as_ref() != Some(&grant.turn)
+                });
+                state.pending.retain(|_, grant| {
+                    item.as_ref() != Some(&grant.item) && turn.as_ref() != Some(&grant.turn)
+                });
+            }
+            Notice::Approval(approval) => {
+                if approval.thread != binding.session.id
+                    || approval.environment != binding.environment_id
+                {
+                    return Err(invalid());
+                }
+                if state.pending.len() + state.accepted.len() >= 64 {
+                    return Err(invalid());
+                }
+                state.pending.insert(
+                    approval.request_id.clone(),
+                    CommandApproval {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        channel: channel.into(),
+                        thread: approval.thread.clone(),
+                        turn: approval.turn.clone(),
+                        item: approval.item.clone(),
+                        argv: approval.argv.clone(),
+                        cwd: approval.cwd.clone(),
+                    },
+                );
+            }
+            _ => {}
         }
-        if method != "item/commandExecution/requestApproval"
-            || binding.execution_mode != "sandboxed"
-        {
-            return Ok(());
-        }
-        let params = &event["params"];
-        if params["kind"]
-            .as_str()
-            .is_some_and(|kind| kind != "command")
-        {
-            return Ok(());
-        }
-        if params["threadId"].as_str() != Some(&binding.session.id)
-            || params["environmentId"].as_str() != Some(&binding.environment_id)
-        {
-            return Err(invalid());
-        }
-        let command = params["command"].as_str().ok_or_else(invalid)?;
-        let argv = shlex::split(command)
-            .filter(|argv| !argv.is_empty())
-            .ok_or_else(invalid)?;
-        let cwd = url::Url::from_file_path(params["cwd"].as_str().ok_or_else(invalid)?)
-            .map_err(|_| invalid())?
-            .to_string();
-        let approval = CommandApproval {
-            id: uuid::Uuid::new_v4().to_string(),
-            channel: channel.into(),
-            thread: binding.session.id.clone(),
-            turn: params["turnId"].as_str().ok_or_else(invalid)?.into(),
-            item: params["itemId"].as_str().ok_or_else(invalid)?.into(),
-            argv,
-            cwd,
-        };
-        if state.pending.len() + state.accepted.len() >= 64 {
-            return Err(invalid());
-        }
-        let id = event.get("id").ok_or_else(invalid)?.to_string();
-        state.pending.insert(id, approval);
-        // A permanent native rule cannot be represented by a one-use grant.
-        event["params"]["availableDecisions"] = json!(["accept", "cancel"]);
-        event["params"]["proposedExecpolicyAmendment"] = Value::Null;
         Ok(())
     }
 
-    pub(crate) fn respond(&self, response: &Value) -> Result<(), Fault> {
+    pub(crate) fn respond(&self, id: &str, accepted: bool) -> Result<(), Fault> {
         let mut state = self.0.lock().map_err(|_| invalid())?;
-        let Some(grant) = state.pending.remove(&response["id"].to_string()) else {
-            return Ok(());
-        };
-        match response.pointer("/result/decision").and_then(Value::as_str) {
-            Some("accept") => state.accepted.push((Instant::now(), grant)),
-            Some("cancel" | "decline") | None => {}
-            _ => {
-                return Err(Fault::new(
-                    "UNSUPPORTED_APPROVAL_SCOPE",
-                    "this execution environment supports approving this command once",
-                ));
-            }
+        if let Some(grant) = state.pending.remove(id)
+            && accepted
+        {
+            state.accepted.push((Instant::now(), grant));
         }
         Ok(())
     }

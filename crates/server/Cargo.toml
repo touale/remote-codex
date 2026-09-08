@@ -23,4 +23,5 @@ url.workspace = true
 workspace = true
 
 [dev-dependencies]
+remote-codex-test-support = { path = "../../tools/test-support" }
 tempfile.workspace = true

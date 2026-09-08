@@ -7,7 +7,7 @@ use crate::{
 use std::{path::Path, process::Stdio};
 use tokio::process::Command;
 
-pub async fn install(
+pub(crate) async fn install(
     ssh: &SshTransport,
     endpoint: &SshEndpoint,
     directory: &Path,
@@ -32,7 +32,7 @@ pub async fn install(
             return Err(ClientError::Argument("SSH key generation did not complete"));
         }
     }
-    let public = tokio::fs::read_to_string(key.with_extension("pub"))
+    let public = tokio::fs::read_to_string(key.with_extension("pub(crate)"))
         .await?
         .trim()
         .to_owned();
@@ -72,7 +72,7 @@ pub async fn install(
     Ok(())
 }
 
-pub async fn revoke(
+pub(crate) async fn revoke(
     ssh: &SshTransport,
     endpoint: &SshEndpoint,
     access: &ServerAccess,

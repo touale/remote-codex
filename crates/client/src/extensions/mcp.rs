@@ -12,21 +12,21 @@ use std::{collections::BTreeMap, path::Path};
 #[path = "mcp_tests.rs"]
 mod tests;
 
-pub struct ProjectMcp {
-    pub path: String,
-    pub names: Vec<String>,
-    pub trusted: bool,
+pub(crate) struct ProjectMcp {
+    pub(crate) path: String,
+    pub(crate) names: Vec<String>,
+    pub(crate) trusted: bool,
     digest: String,
     servers: BTreeMap<String, Value>,
 }
 
 #[derive(Default)]
-pub struct McpPlan {
-    pub config: BTreeMap<String, Value>,
-    pub commands: Vec<ExecutionCommand>,
+pub(crate) struct McpPlan {
+    pub(crate) config: BTreeMap<String, Value>,
+    pub(crate) commands: Vec<ExecutionCommand>,
 }
 
-pub async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> Result<ProjectMcp> {
+pub(crate) async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> Result<ProjectMcp> {
     let response = remote
         .call(Request::ProjectConfig { path: path.into() })
         .await?;
@@ -77,14 +77,14 @@ pub async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> Result<
 }
 
 impl ProjectMcp {
-    pub async fn trust(&mut self, store: &LocalStore, server: &str) -> Result<()> {
+    pub(crate) async fn trust(&mut self, store: &LocalStore, server: &str) -> Result<()> {
         sqlx::query("INSERT INTO project_trust(server,path,digest) VALUES(?,?,?) ON CONFLICT(server,path) DO UPDATE SET digest=excluded.digest")
             .bind(server).bind(&self.path).bind(&self.digest).execute(&store.pool).await?;
         self.trusted = true;
         Ok(())
     }
 
-    pub fn resolve(
+    pub(crate) fn resolve(
         &self,
         home: &Path,
         environment: &str,

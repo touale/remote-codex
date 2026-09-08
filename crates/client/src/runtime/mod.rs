@@ -1,33 +1,27 @@
 mod download;
 mod install;
-pub mod tui;
 
 use crate::{ClientError, Result, connection::SshEndpoint, ssh::SshTransport};
 use serde::{Deserialize, Serialize};
 
-pub use install::prepare;
-
-pub const CANDIDATE_VERSION: &str = "0.153.4";
-pub const LINUX_X86_64_SHA256: &str =
-    "a822187e1a2420c61c5926721bfbd878701ed95547c9bb0d4de4498a16ba1821";
-const ASSET_URL: &str = "https://github.com/openai/codex/releases/download/rust-v0.153.4/codex-package-x86_64-unknown-linux-musl.tar.gz";
+pub(crate) use install::prepare;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RuntimeInfo {
-    pub version: String,
-    pub platform: String,
-    pub executable: String,
-    pub archive_sha256: String,
-    pub reused: bool,
+pub(crate) struct RuntimeInfo {
+    pub(crate) version: String,
+    pub(crate) platform: String,
+    pub(crate) executable: String,
+    pub(crate) archive_sha256: String,
+    pub(crate) reused: bool,
 }
 
-pub struct RemoteHost {
-    pub platform: String,
-    pub data_dir: String,
+pub(crate) struct RemoteHost {
+    pub(crate) platform: String,
+    pub(crate) data_dir: String,
 }
 
-pub async fn inspect_host(ssh: &SshTransport, endpoint: &SshEndpoint) -> Result<RemoteHost> {
+pub(crate) async fn inspect_host(ssh: &SshTransport, endpoint: &SshEndpoint) -> Result<RemoteHost> {
     let output = ssh.script(endpoint, include_str!("probe.sh")).await?;
     let (_, fields) = output
         .split_once("REMOTE_CODEX_HOST_V1\n")
@@ -42,7 +36,7 @@ pub async fn inspect_host(ssh: &SshTransport, endpoint: &SshEndpoint) -> Result<
         return Err(ClientError::RemoteResponse);
     }
     Ok(RemoteHost {
-        platform: "linux-x86_64".to_owned(),
+        platform: remote_codex_adapter::catalog::REMOTE_TARGET.to_owned(),
         data_dir: format!("{}/.local/share/remote-codex", fields[2]),
     })
 }

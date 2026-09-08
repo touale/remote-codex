@@ -1,7 +1,7 @@
 mod deploy;
-pub mod keys;
+pub(crate) mod keys;
 pub(crate) mod start;
-pub mod status;
+pub(crate) mod status;
 
 use crate::{
     ClientError, Result,
@@ -15,24 +15,24 @@ use crate::{
 };
 use std::path::{Path, PathBuf};
 
-pub struct ServerBundle<'a> {
-    pub bytes: &'a [u8],
-    pub sha256: &'a str,
+pub(crate) struct ServerBundle<'a> {
+    pub(crate) bytes: &'a [u8],
+    pub(crate) sha256: &'a str,
 }
 
-pub struct AddServer<'a> {
-    pub name: &'a str,
-    pub address: &'a str,
-    pub port: Option<u16>,
-    pub settings: &'a [(String, String)],
-    pub identity: Option<PathBuf>,
-    pub ssh_config: Option<PathBuf>,
-    pub install_key: bool,
-    pub interactive: bool,
+pub(crate) struct AddServer<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) address: &'a str,
+    pub(crate) port: Option<u16>,
+    pub(crate) settings: &'a [(String, String)],
+    pub(crate) identity: Option<PathBuf>,
+    pub(crate) ssh_config: Option<PathBuf>,
+    pub(crate) install_key: bool,
+    pub(crate) interactive: bool,
 }
 
-/// Upgrade an existing saved endpoint to the service lifecycle on first use.
-pub async fn ensure(
+/// Prepare a saved environment, including retries after incomplete initialization.
+pub(crate) async fn ensure(
     store: &LocalStore,
     directory: &Path,
     mut record: crate::store::ConnectionRecord,
@@ -44,14 +44,10 @@ pub async fn ensure(
     let mut access = store.server_access(&record.id).await?;
     if access.service_executable.is_some() && record.runtime.is_some() {
         progress(PrepareEvent::Stage(PrepareStage::ConnectSsh));
-        // Development fixtures own their service binary. Distribution installs
-        // are immutable by digest and upgraded before opening an execution.
-        let managed = record
-            .runtime
-            .as_ref()
-            .is_some_and(|r| r.executable.contains("/runtimes/codex/"));
-        if !managed || bundle.bytes.is_empty() {
-            return Remote::connect(store, record, ssh_config, !interactive).await;
+        if bundle.bytes.is_empty() {
+            return Err(ClientError::Argument(
+                "service bundle missing; use a packaged remote-codex distribution",
+            ));
         }
         let ssh = SshTransport::connect_with(
             ConnectOptions {
@@ -65,7 +61,7 @@ pub async fn ensure(
         if record
             .runtime
             .as_ref()
-            .is_some_and(|r| r.version != runtime::CANDIDATE_VERSION)
+            .is_some_and(|r| r.version != remote_codex_adapter::catalog::VERSION)
         {
             let prepared = runtime::prepare(
                 &ssh,
@@ -114,7 +110,7 @@ pub async fn ensure(
     .await
 }
 
-pub async fn add(
+pub(crate) async fn add(
     store: &LocalStore,
     directory: &Path,
     request: AddServer<'_>,

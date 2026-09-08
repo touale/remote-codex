@@ -1,15 +1,19 @@
-pub mod credentials;
+pub mod application;
+mod credentials;
 mod error;
-pub mod extensions;
-pub mod local;
+mod extensions;
+mod local;
 pub mod progress;
-pub mod remote;
-pub mod runtime;
-pub mod servers;
-pub mod sessions;
-pub mod ssh;
-pub mod store;
+mod remote;
+mod runtime;
+mod servers;
+mod sessions;
+mod ssh;
+mod store;
 
 pub use error::{ClientError, Result};
-pub use remote_codex_core::{config, connection};
-pub use remote_codex_protocol as protocol;
+pub use remote_codex_core::{config, connection, session};
+pub(crate) use remote_codex_protocol as protocol;
+
+#[cfg(test)]
+mod tests;

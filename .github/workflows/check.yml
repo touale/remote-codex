@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Run native and SSH release gates on the configured release runner
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,3 +37,21 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked --offline -- -D warnings
       - name: Tests without model credentials
         run: cargo test --workspace --all-targets --locked --offline
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    runs-on: [self-hosted, macOS, ARM64, remote-codex-release]
+    environment: release-acceptance
+    timeout-minutes: 30
+    env:
+      REMOTE_CODEX_NATIVE: ${{ vars.REMOTE_CODEX_NATIVE }}
+      REMOTE_CODEX_SSH_TARGET: ${{ vars.REMOTE_CODEX_SSH_TARGET }}
+      REMOTE_CODEX_SSH_PORT: ${{ vars.REMOTE_CODEX_SSH_PORT }}
+      REMOTE_CODEX_SSH_IDENTITY: ${{ vars.REMOTE_CODEX_SSH_IDENTITY }}
+      REMOTE_CODEX_SSH_CONFIG: ${{ vars.REMOTE_CODEX_SSH_CONFIG }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: cargo fetch --locked
+      - run: python3 tools/release.py

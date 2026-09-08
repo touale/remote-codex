@@ -1,27 +1,17 @@
-use super::*;
+use super::codex_home;
+use crate::{ClientError, Result};
+use remote_codex_core::session::{HistoryPage, SessionBinding};
+use std::path::Path;
 
-pub async fn read(program: &Path, binding: &SessionBinding, cursor: Option<&str>) -> Result<Value> {
+pub(crate) async fn read(
+    program: &Path,
+    binding: &SessionBinding,
+    cursor: Option<&str>,
+) -> Result<HistoryPage> {
     if codex_home()? != Path::new(&binding.codex_home) {
         return Err(ClientError::Argument(
             "session belongs to another local CODEX_HOME",
         ));
     }
-    let (engine, _) = Engine::local(program, Path::new(&binding.codex_home)).await?;
-    let result = if let Some(cursor) = cursor {
-        engine
-            .call(
-                "thread/turns/list",
-                json!({"threadId":binding.session.id,"cursor":cursor}),
-            )
-            .await
-    } else {
-        engine
-            .call(
-                "thread/read",
-                json!({"threadId":binding.session.id,"includeTurns":true}),
-            )
-            .await
-    };
-    engine.shutdown().await;
-    Ok(result?)
+    Ok(remote_codex_adapter::thread::history::read(program, binding, cursor).await?)
 }

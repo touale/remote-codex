@@ -1,28 +1,20 @@
 use crate::{args::Cli, ui};
-use remote_codex_client::{
-    ClientError, Result,
-    local::{LocalRuntime, gateway::Gateway},
-};
-use std::{ffi::OsString, path::Path, process::Stdio, sync::Arc};
+use remote_codex_client::{ClientError, Result, application::SessionHandle};
+use std::{ffi::OsString, process::Stdio};
 
-pub(crate) async fn run(
-    cli: &Cli,
-    program: &Path,
-    runtime: Arc<LocalRuntime>,
-    arguments: &[OsString],
-) -> Result<()> {
+pub(crate) async fn run(cli: &Cli, runtime: SessionHandle, arguments: &[OsString]) -> Result<()> {
     let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
     println!(
         "Workspace: {} · {}",
-        ui::text(&runtime.remote.server.name),
-        ui::text(&runtime.binding.session.cwd)
+        ui::text(runtime.server()),
+        ui::text(&runtime.session().cwd)
     );
-    println!("Local session: {}", ui::text(&runtime.binding.session.id));
-    let result = attach(program, runtime.clone(), arguments, &mut interrupt).await;
+    println!("Local session: {}", ui::text(&runtime.session().id));
+    let result = attach(runtime.clone(), arguments, &mut interrupt).await;
     // Every returning exit path shares cleanup and recovery guidance, including
     // failed frontend launch, native errors and interactive interruption.
-    runtime.shutdown().await;
-    if let Some(id) = runtime.persisted_session_id() {
+    runtime.close().await;
+    if let Some(id) = runtime.persisted_id() {
         match resume_command(cli, id) {
             Ok(command) => eprintln!("Resume: {command}"),
             Err(_) => eprintln!(
@@ -35,23 +27,14 @@ pub(crate) async fn run(
 }
 
 async fn attach(
-    program: &Path,
-    runtime: Arc<LocalRuntime>,
+    runtime: SessionHandle,
     arguments: &[OsString],
     interrupt: &mut tokio::signal::unix::Signal,
 ) -> Result<()> {
-    let gateway = Gateway::start(runtime.clone()).await?;
+    let mut gateway = runtime.terminal(arguments).await?;
     let mut closed = gateway.closed.clone();
-    let mut child = tokio::process::Command::new(program)
-        .env("CODEX_HOME", &runtime.binding.codex_home)
-        .current_dir(&runtime.binding.codex_home)
-        .arg("--remote")
-        .arg(format!("unix://{}", gateway.socket.display()))
-        .arg("--cd")
-        .arg(&runtime.binding.session.cwd)
-        .arg("resume")
-        .arg(&runtime.binding.session.id)
-        .args(arguments)
+    let mut child = gateway
+        .command
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -104,7 +87,9 @@ fn word(value: &str) -> Result<String> {
     {
         Ok(value.into())
     } else {
-        remote_codex_client::ssh::quote(value)
+        shlex::try_quote(value)
+            .map(|word| word.into_owned())
+            .map_err(|_| ClientError::Argument("resume argument contains a null byte"))
     }
 }
 

@@ -17,14 +17,15 @@ struct Pending {
 }
 
 pub(super) async fn run(
-    id: &str,
-    profile: &str,
+    identity: (&str, &str),
     mut runtime: Runtime,
+    mut updates: tokio::sync::watch::Receiver<crate::profiles::LiveSettings>,
     store: Store,
     mut backend: Executor,
     mut input: mpsc::Receiver<Input>,
     handle: &Weak<Execution>,
 ) {
+    let (id, profile) = identity;
     let mut pending = HashMap::<String, Pending>::new();
     let mut touched = Instant::now();
     let mut attached = true;
@@ -50,10 +51,14 @@ pub(super) async fn run(
                 Some(Ok(value))=>collect(id,&store,&mut pending,value).await,
                 _=>break,
             },
+            update=updates.changed()=>{
+                if update.is_err() {break;}
+                let latest=*updates.borrow_and_update();
+                runtime.background=latest.background;
+                runtime.grace=latest.grace;
+                Ok(())
+            },
             _=timer.tick()=>{
-                if let Ok(config)=store.config(profile).await && let Ok(latest)=Runtime::load(config).await {
-                    runtime.background=latest.background;runtime.grace=latest.grace;
-                }
                 if attached && touched.elapsed()>Duration::from_secs(15){attached=false;touched=Instant::now();let _=terminate(&store,&mut backend,id,true).await;}
                 if !attached && !runtime.background && touched.elapsed()>Duration::from_secs(runtime.grace){break;}
                 if !attached && touched.elapsed()>Duration::from_secs(15){let _=terminate(&store,&mut backend,id,true).await;}

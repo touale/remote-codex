@@ -1,2 +1,2 @@
-pub mod mcp;
-pub mod skills;
+pub(crate) mod mcp;
+pub(crate) mod skills;

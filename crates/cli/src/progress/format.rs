@@ -19,7 +19,9 @@ pub(super) fn stage(stage: PrepareStage) -> &'static str {
         PrepareStage::Prepared => "Codex prepared",
         PrepareStage::InstallService => "Installing remote execution service",
         PrepareStage::StartService => "Starting remote execution service",
-        PrepareStage::WaitService => "Waiting for the remote environment to become idle",
+        PrepareStage::UseRunningService => {
+            "Using the compatible running service; update deferred until idle"
+        }
         PrepareStage::Synchronize => "Applying server configuration",
     }
 }

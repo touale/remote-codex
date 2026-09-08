@@ -64,7 +64,7 @@ pub(super) async fn save(
         .execute(&mut *connection)
         .await?;
     }
-    sqlx::query("UPDATE credentials SET state='retired' WHERE state='active' AND NOT EXISTS (SELECT 1 FROM retained_legacy_credentials r WHERE r.id=credentials.id) AND NOT EXISTS (SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
+    sqlx::query("UPDATE credentials SET state='retired' WHERE state='active' AND NOT EXISTS (SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
         .execute(connection).await?;
     Ok(())
 }

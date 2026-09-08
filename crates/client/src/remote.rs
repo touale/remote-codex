@@ -1,4 +1,4 @@
-pub mod bridge;
+pub(crate) mod bridge;
 mod channel;
 mod configuration;
 
@@ -7,47 +7,19 @@ use crate::{
     ssh::{ConnectOptions, SshTransport},
     store::{ConnectionRecord, LocalStore, ServerAccess},
 };
-pub use channel::Channel;
-use remote_codex_protocol::{Hello, Request, VERSION};
+pub(crate) use channel::Channel;
+use remote_codex_protocol::{Hello, Request};
 use std::{path::PathBuf, time::Duration};
 
-pub struct Remote {
-    pub ssh: SshTransport,
-    pub server: ConnectionRecord,
-    pub access: ServerAccess,
-    pub identity: Hello,
-    pub profile: String,
+pub(crate) struct Remote {
+    pub(crate) ssh: SshTransport,
+    pub(crate) server: ConnectionRecord,
+    pub(crate) access: ServerAccess,
+    pub(crate) identity: Hello,
+    pub(crate) profile: String,
 }
 
 impl Remote {
-    pub async fn connect(
-        store: &LocalStore,
-        server: ConnectionRecord,
-        config: Option<PathBuf>,
-        batch: bool,
-    ) -> Result<Self> {
-        let access = store.server_access(&server.id).await?;
-        let ssh = SshTransport::connect_with(
-            ConnectOptions {
-                config: config.or_else(|| access.ssh_config.clone()),
-                identity_file: access.identity_file.clone(),
-                batch,
-            },
-            &server.endpoint,
-        )
-        .await?;
-        Self::from_transport(store, server, access, ssh).await
-    }
-
-    pub async fn from_transport(
-        store: &LocalStore,
-        server: ConnectionRecord,
-        access: ServerAccess,
-        ssh: SshTransport,
-    ) -> Result<Self> {
-        Self::from_transport_with_progress(store, server, access, ssh, &|_| {}).await
-    }
-
     pub(crate) async fn from_transport_with_progress(
         store: &LocalStore,
         server: ConnectionRecord,
@@ -65,21 +37,19 @@ impl Remote {
             .service_root
             .as_deref()
             .ok_or(ClientError::RemoteResponse)?;
-        crate::servers::start::ensure(
-            &ssh,
-            &server.endpoint,
-            program,
-            root,
-            &server.name,
-            progress,
-        )
-        .await?;
-        Self::attach(store, server, access, ssh).await
+        let deferred = crate::servers::start::ensure(&ssh, &server.endpoint, program, root).await?;
+        let remote = Self::attach(store, server, access, ssh).await?;
+        if deferred {
+            progress(crate::progress::PrepareEvent::Stage(
+                crate::progress::PrepareStage::UseRunningService,
+            ));
+        }
+        Ok(remote)
     }
 
     /// Inspect or configure a running compatible supervisor without replacing
     /// it, so server checks remain available during pending updates.
-    pub async fn connect_running(
+    pub(crate) async fn connect_running(
         store: &LocalStore,
         server: ConnectionRecord,
         config: Option<PathBuf>,
@@ -109,12 +79,12 @@ impl Remote {
             let mut channel = Channel::open(&ssh, &server, &access).await?;
             serde_json::from_value(channel.call(&profile, Request::Hello).await?)?
         };
-        if identity.protocol != VERSION {
-            return Err(ClientError::RemoteFault(
-                "PROTOCOL_MISMATCH".into(),
-                "remote service requires a compatible client".into(),
-                false,
-            ));
+        if !remote_codex_adapter::catalog::compatible_service(
+            identity.protocol,
+            &identity.capabilities,
+        ) {
+            return Err(ClientError::RemoteFault("SERVICE_UPDATE_REQUIRED".into(),
+                "running service is incompatible; finish active work and reconnect to apply the prepared update".into(), false));
         }
         if access
             .remote_identity
@@ -132,13 +102,13 @@ impl Remote {
         })
     }
 
-    pub async fn channel(&self) -> Result<Channel> {
+    pub(crate) async fn channel(&self) -> Result<Channel> {
         let mut channel = Channel::open(&self.ssh, &self.server, &self.access).await?;
         channel.expected_identity = Some(self.identity.identity.clone());
         Ok(channel)
     }
 
-    pub async fn call(&self, request: Request) -> Result<serde_json::Value> {
+    pub(crate) async fn call(&self, request: Request) -> Result<serde_json::Value> {
         let mut channel = self.channel().await?;
         tokio::time::timeout(
             Duration::from_secs(40),
@@ -148,7 +118,7 @@ impl Remote {
         .map_err(|_| ClientError::Timeout)?
     }
 
-    pub async fn synchronize(&self, store: &LocalStore) -> Result<()> {
+    pub(crate) async fn synchronize(&self, store: &LocalStore) -> Result<()> {
         let config = configuration::resolve(store, &self.server).await?;
         let revision = config.revision;
         self.call(Request::Configure(config)).await?;
@@ -165,7 +135,7 @@ impl Remote {
         store.save_access(&self.server.id, &access).await
     }
 
-    pub async fn close(self) -> Result<()> {
+    pub(crate) async fn close(self) -> Result<()> {
         self.ssh.close().await
     }
 }

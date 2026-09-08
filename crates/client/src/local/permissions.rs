@@ -32,26 +32,22 @@ impl Permissions {
         &self,
         channel: &str,
         thread: &str,
-        sandbox: &Value,
+        full_access: bool,
     ) -> Result<(), Fault> {
         let mut state = self.state.lock().map_err(|_| invalid())?;
         state.channel = channel.into();
         state.thread = thread.into();
-        state.grant = (sandbox["type"] == "dangerFullAccess").then(|| state.grant());
+        state.grant = full_access.then(|| state.grant());
         Ok(())
     }
 
     /// Record frontend intent. An expansion needs both a native response and
     /// notification; a reduction stops issuing full-access frames immediately.
-    pub(crate) fn begin(&self, params: &Value, supported: bool) -> Result<Option<String>, Fault> {
-        let full = if let Some(preset) = params["permissions"].as_str() {
-            Some(preset == ":danger-full-access")
-        } else {
-            params
-                .pointer("/sandboxPolicy/type")
-                .and_then(Value::as_str)
-                .map(|p| p == "dangerFullAccess")
-        };
+    pub(crate) fn begin(
+        &self,
+        full: Option<bool>,
+        supported: bool,
+    ) -> Result<Option<String>, Fault> {
         let Some(full) = full else {
             return Ok(None);
         };
@@ -98,18 +94,11 @@ impl Permissions {
         Ok(())
     }
 
-    pub(crate) fn observe(&self, event: &Value) -> Result<(), Fault> {
-        if event["method"] != "thread/settings/updated" {
-            return Ok(());
-        }
+    pub(crate) fn observe(&self, thread: &str, full: bool) -> Result<(), Fault> {
         let mut state = self.state.lock().map_err(|_| invalid())?;
-        if event.pointer("/params/threadId").and_then(Value::as_str) != Some(&state.thread) {
+        if thread != state.thread {
             return Ok(());
         }
-        let full = event
-            .pointer("/params/threadSettings/sandboxPolicy/type")
-            .and_then(Value::as_str)
-            == Some("dangerFullAccess");
         if !full {
             state.grant = None;
         }

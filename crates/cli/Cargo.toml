@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 remote-codex-client = { path = "../client" }
 clap.workspace = true
+shlex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -20,6 +21,7 @@ console = { version = "0.16.4", default-features = false, features = ["std", "un
 sha2.workspace = true
 
 [dev-dependencies]
+sqlx.workspace = true
 tempfile.workspace = true
 remote-codex-test-support = { path = "../../tools/test-support" }
 portable-pty.workspace = true

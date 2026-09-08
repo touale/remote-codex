@@ -1,60 +1,64 @@
+mod actions;
 pub(crate) mod approvals;
 mod binding;
-mod execution_policy;
-pub mod gateway;
-pub mod history;
+mod events;
+pub(crate) mod gateway;
+pub(crate) mod history;
 mod lease;
 pub(crate) mod permissions;
 mod recovery;
 mod route;
-mod settings;
 
 use crate::{
     ClientError, Result,
     remote::{Remote, bridge::Bridge},
     store::LocalStore,
 };
-use remote_codex_adapter::engine::Engine;
-use remote_codex_protocol::SessionBinding;
-use serde_json::{Value, json};
+use remote_codex_adapter::thread::{Codex, OpenThread, Thread};
+use remote_codex_core::session::{SessionBinding, SessionEvent};
+use serde_json::Value;
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
+use tokio::sync::{broadcast, watch};
 
-/// A frontend-owned local runtime. App tabs share this handle; independent CLI
-/// processes have isolated engines and cooperate through a per-thread lease.
-pub struct LocalRuntime {
-    pub engine: Engine,
-    pub initialized: Value,
-    pub binding: SessionBinding,
-    pub remote: Arc<Remote>,
-    pub(crate) store: LocalStore,
-    pub(crate) bridge: Bridge,
-    pub(crate) lease: lease::Lease,
-    pub(crate) bootstrap: Value,
-    pub(crate) has_history: AtomicBool,
-    pub(crate) skills: crate::extensions::skills::SkillMap,
-    pub(crate) approvals: Arc<approvals::Approvals>,
-    pub(crate) permissions: Arc<permissions::Permissions>,
+/// Owns the local Codex process, execution channel and exclusive session lease.
+pub(crate) struct LocalRuntime {
+    native: Thread,
+    pub(crate) binding: SessionBinding,
+    pub(crate) remote: Arc<Remote>,
+    store: LocalStore,
+    bridge: Bridge,
+    lease: lease::Lease,
+    has_history: AtomicBool,
+    skills: crate::extensions::skills::SkillMap,
+    approvals: Arc<approvals::Approvals>,
+    permissions: Arc<permissions::Permissions>,
+    events: broadcast::Sender<SessionEvent>,
+    native_events: broadcast::Sender<Value>,
+    pending_approvals: Mutex<HashMap<String, bool>>,
+    closed: watch::Sender<Option<Option<String>>>,
+    event_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     shutdown_once: tokio::sync::OnceCell<()>,
 }
 
-pub struct OpenOptions<'a> {
-    pub directory: &'a Path,
-    pub program: &'a Path,
-    pub path: &'a str,
-    pub existing: Option<SessionBinding>,
-    pub takeover: bool,
-    pub mcp: crate::extensions::mcp::McpPlan,
-    pub progress: Option<Arc<dyn Fn(crate::progress::PrepareEvent) + Send + Sync>>,
+pub(crate) struct OpenOptions<'a> {
+    pub(crate) directory: &'a Path,
+    pub(crate) program: &'a Path,
+    pub(crate) path: &'a str,
+    pub(crate) existing: Option<SessionBinding>,
+    pub(crate) takeover: bool,
+    pub(crate) mcp: crate::extensions::mcp::McpPlan,
+    pub(crate) progress: Option<Arc<dyn Fn(crate::progress::PrepareEvent) + Send + Sync>>,
 }
 
 impl LocalRuntime {
-    pub async fn open(
+    pub(crate) async fn open(
         store: &LocalStore,
         remote: Arc<Remote>,
         options: OpenOptions<'_>,
@@ -105,77 +109,94 @@ impl LocalRuntime {
         )
         .await?;
         progress(PrepareEvent::Stage(PrepareStage::StartLocalCodex));
-        let (engine, initialized) = Engine::local(program, &home).await?;
-        let environment_id = format!("rc_{}", remote.server.id.replace('-', ""));
-        let setup = async {
-            engine.call("environment/add", json!({"environmentId":environment_id,"execServerUrl":bridge.url,"connectTimeoutMs":15000})).await?;
-            let skills = crate::extensions::skills::SkillMap::prepare(&engine, &remote, &home, &*progress).await?;
-            let mut params = binding::start_params(&environment_id, cwd, &mode);
-            for (key, value) in mcp.config { params["config"][key] = value; }
-            let resources=skills.instructions();
-            if !resources.is_empty() {
-                let native=engine.call("config/read",json!({"includeLayers":false})).await?;
-                let inherited=native["config"]["developer_instructions"].as_str().unwrap_or_default();
-                params["developerInstructions"]=json!(format!("{inherited}\n\n{resources}"));
-            }
-            params["dynamicTools"] = recovery::tools();
-            progress(PrepareEvent::Stage(PrepareStage::OpenLocalSession));
-            let response = if let Some(binding) = &existing {
-                let mut params = params;
-                let object = params.as_object_mut().ok_or(ClientError::RemoteResponse)?;
-                for key in ["environments", "sandbox", "approvalPolicy"] { object.remove(key); }
-                params["threadId"] = json!(binding.session.id);
-                engine.call("thread/resume", params).await?
-            } else { engine.call("thread/start", params).await? };
-            let session = binding::session(&response["thread"], cwd)?;
-            let binding = SessionBinding {server_id: remote.server.id.clone(), remote_identity: remote.identity.identity.clone(),
-                environment_id, codex_home: home.to_string_lossy().into_owned(), codex_version: crate::runtime::CANDIDATE_VERSION.into(),
-                execution_mode: mode, revision: snapshot.revision.saved, session};
-            execution_policy::validate(&json!({"cwd": response["cwd"], "sandboxPolicy": response["sandbox"], "approvalsReviewer": response["approvalsReviewer"]}), &binding, existing.is_some())?;
-            permissions.restore(&bridge.channel, &binding.session.id, &response["sandbox"])?;
-            if existing.is_some() {store.save_session(&binding).await?;}
-            store.remember_workspace(&remote.server.id, cwd).await?;
-            Ok::<_, ClientError>((binding, response, skills))
-        }.await;
-        match setup {
-            Ok((binding, bootstrap, skills)) => {
-                let lease = if existing.is_none() {
-                    lease::Lease::acquire(directory, &binding.session.id, false).await?
-                } else {
-                    lease
-                };
-                Ok(Arc::new(Self {
-                    engine,
-                    initialized,
-                    binding,
-                    remote,
-                    store: store.clone(),
-                    bridge,
-                    lease,
-                    bootstrap,
-                    skills,
-                    approvals,
-                    permissions,
-                    has_history: AtomicBool::new(existing.is_some()),
-                    shutdown_once: tokio::sync::OnceCell::new(),
-                }))
-            }
+        let codex = match Codex::start(program, &home).await {
+            Ok(codex) => codex,
             Err(error) => {
                 bridge.detach().await;
-                engine.shutdown().await;
-                Err(error)
+                return Err(error.into());
             }
+        };
+        let environment = format!("rc_{}", remote.server.id.replace('-', ""));
+        let setup = async {
+            codex
+                .register_environment(&environment, &bridge.url)
+                .await?;
+            let skills =
+                crate::extensions::skills::SkillMap::prepare(&codex, &remote, &home, &*progress)
+                    .await?;
+            progress(PrepareEvent::Stage(PrepareStage::OpenLocalSession));
+            let opened = codex
+                .open(OpenThread {
+                    environment: &environment,
+                    directory: cwd,
+                    execution_mode: &mode,
+                    existing: existing.as_ref().map(|b| b.session.id.as_str()),
+                    mcp: mcp.config,
+                    instructions: skills.instructions(),
+                })
+                .await?;
+            let binding = SessionBinding {
+                server_id: remote.server.id.clone(),
+                remote_identity: remote.identity.identity.clone(),
+                environment_id: environment,
+                codex_home: home.to_string_lossy().into_owned(),
+                codex_version: remote_codex_adapter::catalog::VERSION.into(),
+                execution_mode: mode,
+                revision: snapshot.revision.saved,
+                session: opened.session.clone(),
+            };
+            let full_access = opened.full_access;
+            let native = codex.bind(opened, binding.clone(), existing.is_some())?;
+            permissions.restore(&bridge.channel, &binding.session.id, full_access)?;
+            let lease = if existing.is_none() {
+                lease::Lease::acquire(directory, &binding.session.id, false).await?
+            } else {
+                lease
+            };
+            if existing.is_some() {
+                store.save_session(&binding).await?;
+            }
+            store.remember_workspace(&remote.server.id, cwd).await?;
+            Ok::<_, ClientError>((native, binding, skills, lease))
         }
+        .await;
+        let (native, binding, skills, lease) = match setup {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                bridge.detach().await;
+                codex.shutdown().await;
+                return Err(error);
+            }
+        };
+        let runtime = Arc::new(Self {
+            native,
+            binding,
+            remote,
+            store: store.clone(),
+            bridge,
+            lease,
+            skills,
+            approvals,
+            permissions,
+            has_history: AtomicBool::new(existing.is_some()),
+            events: broadcast::channel(256).0,
+            native_events: broadcast::channel(256).0,
+            pending_approvals: Mutex::new(HashMap::new()),
+            closed: watch::channel(None).0,
+            event_task: Mutex::new(None),
+            shutdown_once: tokio::sync::OnceCell::new(),
+        });
+        events::start(&runtime);
+        Ok(runtime)
     }
 
-    pub async fn shutdown(&self) {
+    pub(crate) async fn shutdown(&self) {
         self.shutdown_once
             .get_or_init(|| self.finish_shutdown())
             .await;
     }
 
-    /// A catalogued session can be named in recovery guidance; empty drafts cannot.
-    pub fn persisted_session_id(&self) -> Option<&str> {
+    pub(crate) fn persisted_session_id(&self) -> Option<&str> {
         self.has_history
             .load(Ordering::Acquire)
             .then_some(self.binding.session.id.as_str())
@@ -184,28 +205,29 @@ impl LocalRuntime {
     async fn finish_shutdown(&self) {
         self.approvals.clear();
         self.permissions.clear();
-        // Close execution subscriptions before Codex's exit cleanup can terminate
-        // commands whose server explicitly permits background execution.
+        // Detach before native cleanup can terminate background commands.
         self.bridge.detach().await;
         if self.has_history.load(Ordering::Acquire)
-            && let Ok(response) = self
-                .engine
-                .call(
-                    "thread/read",
-                    json!({"threadId":self.binding.session.id,"includeTurns":false}),
-                )
-                .await
-            && let Ok(session) = binding::session(&response["thread"], &self.binding.session.cwd)
+            && let Ok(session) = self.native.summary().await
         {
             let mut binding = self.binding.clone();
             binding.session = session;
             let _ = self.store.save_session(&binding).await;
         }
-        self.engine.shutdown().await;
+        self.native.shutdown().await;
+        self.lease.release();
+        self.closed.send_if_modified(|state| {
+            if state.is_none() {
+                *state = Some(None);
+                true
+            } else {
+                false
+            }
+        });
     }
 }
 
-pub fn codex_home() -> Result<PathBuf> {
+pub(crate) fn codex_home() -> Result<PathBuf> {
     let path = match std::env::var_os("CODEX_HOME") {
         Some(value) => PathBuf::from(value),
         None => {
@@ -225,6 +247,11 @@ pub fn codex_home() -> Result<PathBuf> {
 impl Drop for LocalRuntime {
     fn drop(&mut self) {
         self.bridge.close();
-        self.engine.stop();
+        self.native.stop();
+        if let Ok(mut task) = self.event_task.lock()
+            && let Some(task) = task.take()
+        {
+            task.abort();
+        }
     }
 }

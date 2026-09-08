@@ -7,7 +7,7 @@ use crate::{
 };
 
 impl LocalStore {
-    pub async fn set_many_config(
+    pub(crate) async fn set_many_config(
         &self,
         server: &str,
         changes: &[(String, String)],
@@ -27,14 +27,18 @@ impl LocalStore {
         Ok(revision)
     }
 
-    pub async fn config_snapshot(&self, server: &str) -> Result<ConfigSnapshot> {
+    pub(crate) async fn config_snapshot(&self, server: &str) -> Result<ConfigSnapshot> {
         let mut tx = self.pool.begin().await?;
         let state = snapshot(&mut tx, server).await?;
         tx.commit().await?;
         Ok(state)
     }
 
-    pub async fn config_report(&self, server: &str, overrides: bool) -> Result<ConfigReport> {
+    pub(crate) async fn config_report(
+        &self,
+        server: &str,
+        overrides: bool,
+    ) -> Result<ConfigReport> {
         let state = self.config_snapshot(server).await?;
         let applied_revision = self.server_access(server).await?.applied_revision;
         let mut items: Vec<ConfigItem> = state
@@ -89,7 +93,6 @@ impl LocalStore {
             }
         }
         Ok(ConfigReport {
-            schema_version: 2,
             server_id: server.to_owned(),
             saved_revision: state.revision.saved,
             applied_revision,
@@ -97,7 +100,7 @@ impl LocalStore {
         })
     }
 
-    pub async fn set_config(
+    pub(crate) async fn set_config(
         &self,
         server: &str,
         key: &str,
@@ -116,7 +119,7 @@ impl LocalStore {
         Ok(revision)
     }
 
-    pub async fn unset_config(
+    pub(crate) async fn unset_config(
         &self,
         server: &str,
         key: &str,

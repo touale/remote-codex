@@ -14,21 +14,24 @@ use crate::{ClientError, Result, connection::SshEndpoint};
 mod capture;
 mod transfer;
 
-pub struct SshTransport {
+pub(crate) struct SshTransport {
     options: ConnectOptions,
     socket_dir: tempfile::TempDir,
     master: tokio::process::Child,
 }
 
 #[derive(Clone, Default)]
-pub struct ConnectOptions {
-    pub config: Option<PathBuf>,
-    pub identity_file: Option<PathBuf>,
-    pub batch: bool,
+pub(crate) struct ConnectOptions {
+    pub(crate) config: Option<PathBuf>,
+    pub(crate) identity_file: Option<PathBuf>,
+    pub(crate) batch: bool,
 }
 
 impl SshTransport {
-    pub async fn connect_with(options: ConnectOptions, endpoint: &SshEndpoint) -> Result<Self> {
+    pub(crate) async fn connect_with(
+        options: ConnectOptions,
+        endpoint: &SshEndpoint,
+    ) -> Result<Self> {
         endpoint.validate()?;
         let socket_dir = tempfile::Builder::new()
             .prefix("rc-ssh-")
@@ -77,19 +80,19 @@ impl SshTransport {
         })
     }
 
-    pub async fn close(mut self) -> Result<()> {
+    pub(crate) async fn close(mut self) -> Result<()> {
         if self.master.try_wait()?.is_none() {
             self.master.kill().await?;
         }
         Ok(())
     }
 
-    pub async fn script(&self, endpoint: &SshEndpoint, script: &str) -> Result<String> {
+    pub(crate) async fn script(&self, endpoint: &SshEndpoint, script: &str) -> Result<String> {
         self.run(endpoint, "sh -s", Cursor::new(script.as_bytes()), |_| {})
             .await
     }
 
-    pub async fn upload(
+    pub(crate) async fn upload(
         &self,
         endpoint: &SshEndpoint,
         source: &Path,
@@ -161,7 +164,12 @@ impl SshTransport {
         }
     }
 
-    pub fn command(&self, endpoint: &SshEndpoint, remote: Option<&str>, terminal: bool) -> Command {
+    pub(crate) fn command(
+        &self,
+        endpoint: &SshEndpoint,
+        remote: Option<&str>,
+        terminal: bool,
+    ) -> Command {
         let mut command = base_command(&self.options, endpoint);
         command
             .arg("-S")
@@ -216,7 +224,7 @@ fn base_command(options: &ConnectOptions, endpoint: &SshEndpoint) -> Command {
 }
 
 /// POSIX shell literal; values are never evaluated as shell source.
-pub fn quote(value: &str) -> Result<String> {
+pub(crate) fn quote(value: &str) -> Result<String> {
     if value.contains('\0') {
         return Err(ClientError::RemoteResponse);
     }

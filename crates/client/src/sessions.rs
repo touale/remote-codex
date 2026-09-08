@@ -3,7 +3,11 @@ use crate::{
     store::{CachedSession, LocalStore},
 };
 
-pub async fn resolve(store: &LocalStore, id: &str, server: Option<&str>) -> Result<CachedSession> {
+pub(crate) async fn resolve(
+    store: &LocalStore,
+    id: &str,
+    server: Option<&str>,
+) -> Result<CachedSession> {
     let selected = match server {
         Some(name) => Some(store.find_connection(name).await?.id),
         None => None,

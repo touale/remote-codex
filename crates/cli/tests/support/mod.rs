@@ -1,4 +1,5 @@
-use remote_codex_client::{connection::SshEndpoint, store::LocalStore};
+use remote_codex_client::application::{Client, ClientOptions};
+use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
 use std::{
     os::unix::fs::PermissionsExt,
     path::Path,
@@ -12,7 +13,6 @@ pub(crate) fn run(root: &Path, args: &[&str]) -> std::io::Result<Output> {
     command
         .arg("--data-dir")
         .arg(root.join("state"))
-        .env_remove("REMOTE_CODEX_CONTEXT_ID")
         .env_remove("REMOTE_CODEX_DATA_DIR");
     if root.join("bin").exists() {
         command
@@ -22,18 +22,22 @@ pub(crate) fn run(root: &Path, args: &[&str]) -> std::io::Result<Output> {
     command.args(args).output()
 }
 
+/// Offline registration fixture. Production initialization is covered by the SSH gate.
 pub(crate) async fn seed(root: &Path) -> TestResult<String> {
-    let store = LocalStore::open(&root.join("state")).await?;
-    let record = store
-        .save_connection(&SshEndpoint::parse("root@dev.example", None)?, Some("dev"))
-        .await?;
-    store
-        .save_connection(
-            &SshEndpoint::parse("root@prod.example", None)?,
-            Some("prod"),
-        )
-        .await?;
-    store.close().await;
+    let state = root.join("state");
+    Client::open(ClientOptions {
+        data_dir: Some(state.clone()),
+        ..Default::default()
+    })
+    .await?
+    .close()
+    .await;
+    let mut db = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new().filename(state.join("state.sqlite3")),
+    )
+    .await?;
+    sqlx::raw_sql("INSERT INTO server_revisions(id,revision) VALUES('dev-id',0),('prod-id',0); INSERT INTO connections(id,name,endpoint) VALUES('dev-id','dev','{\"host\":\"dev.example\",\"user\":\"root\",\"port\":null}'),('prod-id','prod','{\"host\":\"prod.example\",\"user\":\"root\",\"port\":null}');").execute(&mut db).await?;
+    db.close().await?;
     std::fs::create_dir(root.join("bin"))?;
     let ssh = root.join("bin/ssh");
     std::fs::write(
@@ -41,5 +45,5 @@ pub(crate) async fn seed(root: &Path) -> TestResult<String> {
         "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$RC_TEST_SSH_LOG\"\nexit 255\n",
     )?;
     std::fs::set_permissions(ssh, std::fs::Permissions::from_mode(0o700))?;
-    Ok(record.id)
+    Ok("dev-id".into())
 }

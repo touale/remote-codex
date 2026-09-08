@@ -1,29 +1,4 @@
 use super::*;
-
-#[test]
-fn service_wait_updates_reason_without_resetting_elapsed_time_or_leaving_an_open_line() {
-    let now = Instant::now();
-    let mut display = PrepareProgress::new(Vec::new(), Mode::Terminal, now);
-    display.event(
-        PrepareEvent::ServiceWaiting(remote_codex_client::protocol::ServiceActivity {
-            channels: 2,
-            jobs: 1,
-        }),
-        now,
-    );
-    display.event(
-        PrepareEvent::ServiceWaiting(remote_codex_client::protocol::ServiceActivity {
-            channels: 1,
-            jobs: 0,
-        }),
-        now + Duration::from_secs(8),
-    );
-    display.finish(now + Duration::from_secs(9));
-    let text = String::from_utf8_lossy(&display.writer);
-    assert!(text.contains("Waiting for running commands to finish (0s)"));
-    assert!(text.contains("Waiting for the remote environment to become idle (9s)"));
-    assert!(text.ends_with('\n'));
-}
 use remote_codex_client::progress::TransferKind;
 
 fn transfer(kind: TransferKind, bytes: u64, total: Option<u64>) -> PrepareEvent {

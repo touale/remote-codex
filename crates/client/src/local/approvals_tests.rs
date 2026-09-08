@@ -1,4 +1,6 @@
 use super::*;
+use remote_codex_adapter::events::{Approval, Notice};
+use serde_json::json;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn binding() -> Result<SessionBinding, serde_json::Error> {
@@ -8,19 +10,24 @@ fn binding() -> Result<SessionBinding, serde_json::Error> {
         "session":{"id":"thread","title":"test","cwd":"/workspace","created_at":1,"updated_at":1,"archived":false,"state":"idle"}}),
     )
 }
-fn event() -> Value {
-    json!({"id":1,"method":"item/commandExecution/requestApproval","params":{
-        "threadId":"thread","turnId":"turn","itemId":"item","environmentId":"remote","kind":"command",
-        "command":"/bin/sh -c 'printf 123 > 1.txt'","cwd":"/workspace with spaces",
-        "availableDecisions":["accept","acceptForSession","cancel"],"proposedExecpolicyAmendment":["/bin/sh"]}})
+fn event() -> Notice {
+    Notice::Approval(Approval {
+        request_id: "1".into(),
+        thread: "thread".into(),
+        environment: "remote".into(),
+        turn: "turn".into(),
+        item: "item".into(),
+        argv: vec!["/bin/sh".into(), "-c".into(), "printf 123 > 1.txt".into()],
+        cwd: "file:///workspace%20with%20spaces".into(),
+    })
 }
 fn command() -> Value {
     json!({"method":"process/start","params":{"argv":["/bin/sh","-c","printf 123 > 1.txt"],
         "cwd":"file:///workspace%20with%20spaces","env":{"CODEX_THREAD_ID":"thread"},"sandbox":null}})
 }
 fn accept(approvals: &Approvals) -> TestResult {
-    approvals.observe(&mut event(), &binding()?, "channel")?;
-    approvals.respond(&json!({"id":1,"result":{"decision":"accept"}}))?;
+    approvals.observe(&event(), &binding()?, "channel")?;
+    approvals.respond("1", true)?;
     Ok(())
 }
 
@@ -61,24 +68,30 @@ fn approval_cannot_authorize_different_command_directory_or_thread() -> TestResu
 #[test]
 fn decline_cancel_and_unknown_responses_never_grant_execution() -> TestResult {
     let approvals = Approvals::default();
-    for decision in ["decline", "cancel"] {
-        approvals.observe(&mut event(), &binding()?, "channel")?;
-        approvals.respond(&json!({"id":1,"result":{"decision":decision}}))?;
+    for _ in 0..2 {
+        approvals.observe(&event(), &binding()?, "channel")?;
+        approvals.respond("1", false)?;
         assert!(approvals.take(&command())?.is_none());
     }
-    approvals.respond(&json!({"id":1,"result":{"decision":"accept"}}))?;
+    approvals.respond("1", true)?;
     assert!(approvals.take(&command())?.is_none());
     Ok(())
 }
 
 #[test]
 fn approvals_cannot_cross_the_bound_environment_or_thread() -> TestResult {
-    for key in ["environmentId", "threadId"] {
-        let mut event = event();
-        event["params"][key] = json!("other");
+    for thread in [true, false] {
+        let mut notice = event();
+        if let Notice::Approval(approval) = &mut notice {
+            if thread {
+                approval.thread = "other".into();
+            } else {
+                approval.environment = "other".into();
+            }
+        }
         assert!(
             Approvals::default()
-                .observe(&mut event, &binding()?, "channel")
+                .observe(&notice, &binding()?, "channel")
                 .is_err()
         );
     }
@@ -86,33 +99,20 @@ fn approvals_cannot_cross_the_bound_environment_or_thread() -> TestResult {
 }
 
 #[test]
-fn only_single_command_decisions_are_exposed() -> TestResult {
-    let approvals = Approvals::default();
-    let mut event = event();
-    approvals.observe(&mut event, &binding()?, "channel")?;
-    assert_eq!(
-        event["params"]["availableDecisions"],
-        json!(["accept", "cancel"])
-    );
-    assert!(event["params"]["proposedExecpolicyAmendment"].is_null());
-    assert!(
-        approvals
-            .respond(&json!({"id":1,"result":{"decision":"acceptForSession"}}))
-            .is_err()
-    );
-    assert!(approvals.take(&command())?.is_none());
-    Ok(())
-}
-
-#[test]
 fn completion_timeout_and_shutdown_revoke_unused_grants() -> TestResult {
     let approvals = Approvals::default();
     for event in [
-        json!({"method":"item/completed","params":{"item":{"id":"item"}}}),
-        json!({"method":"turn/completed","params":{"turn":{"id":"turn"}}}),
+        Notice::Completed {
+            item: Some("item".into()),
+            turn: None,
+        },
+        Notice::Completed {
+            item: None,
+            turn: Some("turn".into()),
+        },
     ] {
         accept(&approvals)?;
-        approvals.observe(&mut event.clone(), &binding()?, "channel")?;
+        approvals.observe(&event, &binding()?, "channel")?;
         assert!(approvals.take(&command())?.is_none());
     }
     accept(&approvals)?;

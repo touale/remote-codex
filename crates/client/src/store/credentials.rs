@@ -2,7 +2,7 @@ use super::LocalStore;
 use crate::{Result, config::SecretRef};
 
 impl LocalStore {
-    pub async fn installation_id(&self) -> Result<String> {
+    pub(crate) async fn installation_id(&self) -> Result<String> {
         Ok(sqlx::query_scalar("SELECT id FROM installation")
             .fetch_one(&self.pool)
             .await?)

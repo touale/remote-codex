@@ -7,7 +7,6 @@ CREATE TABLE connections (
     id TEXT NOT NULL PRIMARY KEY REFERENCES server_revisions(id),
     name TEXT NOT NULL UNIQUE,
     endpoint TEXT NOT NULL,
-    phase TEXT NOT NULL DEFAULT 'saved',
     runtime TEXT
 );
 CREATE INDEX connection_endpoint ON connections(endpoint);
@@ -33,4 +32,16 @@ CREATE TABLE server_access(
 CREATE TABLE workspace_history(
     server TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
     path TEXT NOT NULL,used_at INTEGER NOT NULL DEFAULT(unixepoch()),PRIMARY KEY(server,path)
+);
+
+CREATE TABLE local_sessions (
+    id TEXT PRIMARY KEY,
+    server TEXT NOT NULL REFERENCES connections(id),
+    record TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT(unixepoch())
+);
+CREATE INDEX local_sessions_server ON local_sessions(server,updated_at);
+CREATE TABLE project_trust (
+    server TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+    path TEXT NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(server,path)
 );

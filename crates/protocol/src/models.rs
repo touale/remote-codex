@@ -24,29 +24,6 @@ pub struct Hello {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
-    pub id: String,
-    pub title: String,
-    pub cwd: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub archived: bool,
-    pub state: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionBinding {
-    pub server_id: String,
-    pub remote_identity: String,
-    pub environment_id: String,
-    pub codex_home: String,
-    pub codex_version: String,
-    pub execution_mode: String,
-    pub revision: i64,
-    pub session: Session,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub id: String,
     pub process_id: String,
