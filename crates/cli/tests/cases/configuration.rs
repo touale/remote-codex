@@ -1,7 +1,53 @@
 use crate::support::{TestResult, run, seed};
 
 #[tokio::test]
-async fn retired_update_policy_is_absent_and_cannot_be_read_or_written() -> TestResult {
+async fn deferred_cleanup_warns_without_failing_removal_or_polluting_json() -> TestResult {
+    use std::os::unix::fs::OpenOptionsExt;
+    let root = tempfile::tempdir()?;
+    seed(root.path()).await?;
+    let pool = sqlx::SqlitePool::connect_with(
+        sqlx::sqlite::SqliteConnectOptions::new().filename(root.path().join("state/state.sqlite3")),
+    )
+    .await?;
+    sqlx::query(
+        "INSERT INTO credentials(id,state,managed) VALUES('test-owned-retired','retired',1)",
+    )
+    .execute(&pool)
+    .await?;
+    pool.close().await;
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(root.path().join("state/credentials.lock"))?;
+    let _writer = nix::fcntl::Flock::lock(lock, nix::fcntl::FlockArg::LockSharedNonblock)
+        .map_err(|(_, error)| error)?;
+    let result = run(root.path(), &["server", "remove", "dev", "--yes", "--json"])?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let response: serde_json::Value = serde_json::from_slice(&result.stdout)?;
+    assert_eq!(response["schema_version"], 4);
+    assert_eq!(response["data"]["removed"], "dev");
+    let warning: serde_json::Value = serde_json::from_slice(&result.stderr)?;
+    assert_eq!(warning["code"], "CREDENTIAL_CLEANUP_PENDING");
+    assert_eq!(warning["level"], "warning");
+    assert!(
+        warning["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("retry"))
+    );
+    let other = run(root.path(), &["config", "get", "background", "-n", "prod"])?;
+    assert!(other.status.success());
+    assert_eq!(other.stdout, b"true\n");
+    Ok(())
+}
+
+#[tokio::test]
+async fn configuration_lists_the_supported_public_settings() -> TestResult {
     let root = tempfile::tempdir()?;
     seed(root.path()).await?;
     let result = run(root.path(), &["config", "list", "-n", "dev", "--json"])?;
@@ -24,15 +70,6 @@ async fn retired_update_policy_is_absent_and_cannot_be_read_or_written() -> Test
             "ssh.port"
         ]
     );
-    for mut args in [
-        vec!["config", "get", "codex.update_policy"],
-        vec!["config", "set", "codex.update_policy", "manual"],
-        vec!["config", "unset", "codex.update_policy"],
-    ] {
-        args.extend(["-n", "dev", "--json"]);
-        let rejected = run(root.path(), &args)?;
-        assert_eq!(rejected.status.code(), Some(2));
-    }
     assert!(!root.path().join("ssh.log").exists());
     Ok(())
 }
@@ -143,12 +180,6 @@ fn every_config_command_requires_a_server_before_opening_state() -> TestResult {
         let result = run(root.path(), &args)?;
         assert_eq!(result.status.code(), Some(2));
         assert!(String::from_utf8_lossy(&result.stderr).contains("specify a server with -n NAME"));
-        assert!(!root.path().join("state").exists());
-        let mut global = args.clone();
-        global.extend(["--global", "-n", "dev"]);
-        let result = run(root.path(), &global)?;
-        assert_eq!(result.status.code(), Some(2));
-        assert!(String::from_utf8_lossy(&result.stderr).contains("unexpected argument '--global'"));
         assert!(!root.path().join("state").exists());
     }
     Ok(())

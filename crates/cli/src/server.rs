@@ -1,14 +1,19 @@
+mod authentication;
 mod wizard;
 use crate::{
     args::{AddArgs, Cli, ServerCommand},
     context::Context,
     output, ui,
 };
-use remote_codex_client::{Result, application::AddServer};
+use remote_codex_client::Result;
 
 pub(crate) async fn run(cli: &Cli, context: &Context, command: &ServerCommand) -> Result<()> {
     match command {
         ServerCommand::Add(args) => add(cli, context, args).await,
+        ServerCommand::Auth {
+            forget,
+            password_stdin,
+        } => authentication::run(cli, context, *forget, *password_stdin).await,
         ServerCommand::List => {
             let list = context
                 .client
@@ -52,14 +57,7 @@ pub(crate) async fn run(cli: &Cli, context: &Context, command: &ServerCommand) -
 pub(crate) async fn add(cli: &Cli, context: &Context, args: &AddArgs) -> Result<()> {
     let settings = wizard::collect(cli, &context.client, args).await?;
     let server = context
-        .prepare(context.client.servers().add(AddServer {
-            name: settings.name,
-            address: settings.address,
-            port: settings.port,
-            settings: settings.changes,
-            identity: args.identity.clone(),
-            install_key: settings.install_key,
-        }))
+        .prepare(context.client.servers().add(settings))
         .await?;
     if cli.json {
         output::json(&serde_json::json!({"server":server}))

@@ -36,7 +36,7 @@ pub enum ClientError {
     Integrity,
     #[error("download failed; check network settings")]
     Download(#[from] reqwest::Error),
-    #[error("credential backend is unavailable")]
+    #[error("local credential store is unavailable; unlock it and retry")]
     Credentials,
     #[error("{0}: {1}")]
     RemoteFault(String, String, bool),

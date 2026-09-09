@@ -50,6 +50,9 @@ pub enum Request {
         channel: String,
         after: i64,
     },
+    InspectExecution {
+        channel: String,
+    },
     DetachExecution {
         channel: String,
     },

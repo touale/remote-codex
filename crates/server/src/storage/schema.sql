@@ -9,6 +9,7 @@ CREATE INDEX IF NOT EXISTS jobs_profile ON jobs(profile,thread,created_at);
 CREATE TABLE IF NOT EXISTS job_output(cursor INTEGER PRIMARY KEY AUTOINCREMENT,job TEXT NOT NULL,record TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS job_output_job ON job_output(job,cursor);
 CREATE INDEX IF NOT EXISTS operations_event ON operations(event_cursor);
+CREATE INDEX IF NOT EXISTS operations_channel ON operations(substr(id,1,instr(id,'/')-1));
 CREATE INDEX IF NOT EXISTS jobs_process ON jobs(channel,process_id);
 CREATE TABLE IF NOT EXISTS execution_approvals(id TEXT PRIMARY KEY,channel TEXT NOT NULL,thread TEXT NOT NULL,turn TEXT NOT NULL,item TEXT NOT NULL,argv TEXT NOT NULL,cwd TEXT NOT NULL,created_at INTEGER NOT NULL DEFAULT(unixepoch()));
 CREATE TABLE IF NOT EXISTS session_permissions(id TEXT PRIMARY KEY,channel TEXT NOT NULL,thread TEXT NOT NULL,created_at INTEGER NOT NULL DEFAULT(unixepoch()));

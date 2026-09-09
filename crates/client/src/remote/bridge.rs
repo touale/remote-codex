@@ -19,7 +19,8 @@ pub(crate) struct Bridge {
     pub(crate) channel: String,
     remote: Arc<Remote>,
     stop: watch::Sender<bool>,
-    task: tokio::task::JoinHandle<Result<()>>,
+    task: tokio::task::JoinHandle<()>,
+    pub(crate) finished: watch::Receiver<Option<remote_codex_protocol::Fault>>,
 }
 
 impl Bridge {
@@ -29,6 +30,7 @@ impl Bridge {
         mcp: Vec<remote_codex_protocol::ExecutionCommand>,
         approvals: Arc<crate::local::approvals::Approvals>,
         permissions: Arc<crate::local::permissions::Permissions>,
+        recovery: Arc<super::recovery::Recovery>,
     ) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let capability = format!(
@@ -48,7 +50,9 @@ impl Bridge {
         let (stop, mut stopped) = watch::channel(false);
         let connection = remote.clone();
         let id = channel.clone();
+        let (finished, completion) = watch::channel(None);
         let task = tokio::spawn(async move {
+            let result: Result<()> = async {
             loop {
                 let stream = tokio::select! {
                     incoming = listener.accept() => incoming?.0,
@@ -92,9 +96,20 @@ impl Bridge {
                     &mut stopped,
                     &approvals,
                     &permissions,
+                    &recovery,
                 )
                 .await;
             }
+            }.await;
+            let fault = match result {
+                Err(error) => remote_codex_protocol::Fault {
+                    code: error.code().into(),
+                    message: error.to_string(),
+                    outcome_unknown: error.outcome_is_unknown(),
+                },
+                Ok(()) => remote_codex_protocol::Fault::unknown("execution transport closed"),
+            };
+            finished.send_replace(Some(fault));
         });
         Ok(Self {
             url,
@@ -102,6 +117,7 @@ impl Bridge {
             remote,
             stop,
             task,
+            finished: completion,
         })
     }
 
@@ -125,10 +141,9 @@ impl Bridge {
     pub(crate) fn check(&self) -> Result<()> {
         if self.task.is_finished() {
             Err(ClientError::RemoteFault(
-                "EXECUTION_DISCONNECTED".into(),
-                "execution environment disconnected; reopen this local session to recover jobs"
-                    .into(),
-                true,
+                "ENVIRONMENT_NOT_READY".into(),
+                "execution environment is being restored; wait for recovery before sending a new task".into(),
+                false,
             ))
         } else {
             Ok(())

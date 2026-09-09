@@ -39,6 +39,18 @@ async fn existing_client_refuses_writes_after_a_newer_schema_is_installed() -> T
             .await,
         Err(ClientError::Schema)
     ));
+    assert!(matches!(
+        store
+            .trust_project(&record.id, "/workspace", "new-digest")
+            .await,
+        Err(ClientError::Schema)
+    ));
+    assert!(
+        store
+            .project_trust(&record.id, "/workspace")
+            .await?
+            .is_none()
+    );
     newer.close().await?;
     store.close().await;
     let before = fs::read(state.join("state.sqlite3"))?;

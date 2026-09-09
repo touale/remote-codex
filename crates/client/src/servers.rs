@@ -1,5 +1,7 @@
+pub(crate) mod authentication;
 mod deploy;
 pub(crate) mod keys;
+mod prepare;
 pub(crate) mod start;
 pub(crate) mod status;
 
@@ -9,7 +11,6 @@ use crate::{
     connection::SshEndpoint,
     progress::{PrepareEvent, PrepareStage},
     remote::Remote,
-    runtime,
     ssh::{ConnectOptions, SshTransport},
     store::LocalStore,
 };
@@ -29,85 +30,34 @@ pub(crate) struct AddServer<'a> {
     pub(crate) ssh_config: Option<PathBuf>,
     pub(crate) install_key: bool,
     pub(crate) interactive: bool,
+    pub(crate) password: Option<zeroize::Zeroizing<String>>,
 }
 
 /// Prepare a saved environment, including retries after incomplete initialization.
 pub(crate) async fn ensure(
     store: &LocalStore,
     directory: &Path,
-    mut record: crate::store::ConnectionRecord,
+    record: crate::store::ConnectionRecord,
     ssh_config: Option<PathBuf>,
     interactive: bool,
     bundle: ServerBundle<'_>,
     progress: impl Fn(PrepareEvent),
 ) -> Result<Remote> {
-    let mut access = store.server_access(&record.id).await?;
-    if access.service_executable.is_some() && record.runtime.is_some() {
-        progress(PrepareEvent::Stage(PrepareStage::ConnectSsh));
-        if bundle.bytes.is_empty() {
-            return Err(ClientError::Argument(
-                "service bundle missing; use a packaged remote-codex distribution",
-            ));
-        }
-        let ssh = SshTransport::connect_with(
-            ConnectOptions {
-                config: ssh_config.or_else(|| access.ssh_config.clone()),
-                identity_file: access.identity_file.clone(),
-                batch: !interactive,
-            },
-            &record.endpoint,
-        )
-        .await?;
-        if record
-            .runtime
-            .as_ref()
-            .is_some_and(|r| r.version != remote_codex_adapter::catalog::VERSION)
-        {
-            let prepared = runtime::prepare(
-                &ssh,
-                &record.endpoint,
-                &directory.join("cache/runtime"),
-                &progress,
-            )
-            .await?;
-            store
-                .activate_runtime(&record.id, record.saved_revision, &prepared)
-                .await?;
-            record = store.connection_by_id(&record.id).await?;
-        }
-        if !access
-            .service_executable
-            .as_deref()
-            .is_some_and(|path| path.ends_with(&format!("/{}/remote-codex-server", bundle.sha256)))
-        {
-            progress(PrepareEvent::Stage(PrepareStage::InstallService));
-            let (program, root) =
-                deploy::install(&ssh, &record.endpoint, &record, bundle, &progress).await?;
-            access.service_executable = Some(program);
-            access.service_root = Some(root);
-            store.save_access(&record.id, &access).await?;
-        }
-        progress(PrepareEvent::Stage(PrepareStage::StartService));
-        return Remote::from_transport_with_progress(store, record, access, ssh, &progress).await;
-    }
-    let address = record.endpoint.destination();
-    add(
-        store,
-        directory,
-        AddServer {
-            name: &record.name,
-            address: &address,
-            port: record.endpoint.port(),
-            settings: &[],
-            identity: None,
-            ssh_config,
-            install_key: false,
-            interactive,
+    let access = store.server_access(&record.id).await?;
+    progress(PrepareEvent::Stage(PrepareStage::ConnectSsh));
+    let ssh = SshTransport::connect_with(
+        ConnectOptions {
+            config: ssh_config.or(access.ssh_config),
+            identity_file: access.identity_file,
+            batch: !interactive,
+            credentials: Some(crate::ssh::credentials::Credentials::saved(
+                store, &record.id,
+            )),
         },
-        bundle,
-        progress,
+        &record.endpoint,
     )
-    .await
+    .await?;
+    prepare::environment(store, directory, record, ssh, bundle, false, progress).await
 }
 
 pub(crate) async fn add(
@@ -118,31 +68,43 @@ pub(crate) async fn add(
     progress: impl Fn(PrepareEvent),
 ) -> Result<Remote> {
     let endpoint = SshEndpoint::parse(request.address, request.port)?;
+    if let Some(password) = &request.password {
+        crate::credentials::validate_password(password)?;
+    }
     let mut validated = ConfigLayer::new();
     for (key, value) in request.settings {
         validated.set(key, ConfigInput::Plain(value))?;
     }
-    let mut record = store.save_connection(&endpoint, Some(request.name)).await?;
+    let record = store.save_connection(&endpoint, Some(request.name)).await?;
     let revision = store.config_snapshot(&record.id).await?.revision;
-    let revision = store
+    store
         .set_many_config(&record.id, request.settings, revision)
         .await?;
-    let mut access = store.server_access(&record.id).await?;
-    if let Some(identity) = request.identity {
-        access.identity_file = Some(identity.canonicalize()?);
-    }
-    if let Some(config) = request.ssh_config {
-        access.ssh_config = Some(config.canonicalize()?);
-    }
-    store.save_access(&record.id, &access).await?;
+    let identity = request
+        .identity
+        .map(|path| path.canonicalize())
+        .transpose()?;
+    let config = request
+        .ssh_config
+        .map(|path| path.canonicalize())
+        .transpose()?;
+    store
+        .set_ssh_options(&record.id, identity.as_deref(), config.as_deref())
+        .await?;
+    let access = store.server_access(&record.id).await?;
     progress(PrepareEvent::Stage(PrepareStage::ConnectSsh));
-    let ssh = SshTransport::connect_with(
+    let ssh = authentication::connect(
+        store,
+        &record,
         ConnectOptions {
             config: access.ssh_config.clone(),
             identity_file: access.identity_file.clone(),
             batch: !request.interactive,
+            credentials: Some(crate::ssh::credentials::Credentials::saved(
+                store, &record.id,
+            )),
         },
-        &endpoint,
+        request.password,
     )
     .await?;
     if request.install_key {
@@ -151,25 +113,8 @@ pub(crate) async fn add(
                 "install-key requires an interactive terminal; scripts should supply an existing identity",
             ));
         }
-        let installed = keys::install(&ssh, &endpoint, directory, &record.id, &mut access).await;
-        store.save_access(&record.id, &access).await?;
-        installed?;
+        keys::install(&ssh, &endpoint, directory, &record.id, store).await?;
     }
-    let runtime =
-        runtime::prepare(&ssh, &endpoint, &directory.join("cache/runtime"), &progress).await?;
-    store
-        .record_runtime(&record.id, revision.saved, &runtime)
-        .await?;
-    record.runtime = Some(runtime);
-    progress(PrepareEvent::Stage(PrepareStage::InstallService));
-    let (program, root) = deploy::install(&ssh, &endpoint, &record, bundle, &progress).await?;
-    access.service_executable = Some(program);
-    access.service_root = Some(root);
-    store.save_access(&record.id, &access).await?;
-    progress(PrepareEvent::Stage(PrepareStage::StartService));
-    let remote =
-        Remote::from_transport_with_progress(store, record, access, ssh, &progress).await?;
-    progress(PrepareEvent::Stage(PrepareStage::Synchronize));
-    remote.synchronize(store).await?;
-    Ok(remote)
+    let record = store.connection_by_id(&record.id).await?;
+    prepare::environment(store, directory, record, ssh, bundle, true, progress).await
 }

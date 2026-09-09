@@ -20,10 +20,11 @@ pub(crate) struct ProjectMcp {
     servers: BTreeMap<String, Value>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct McpPlan {
     pub(crate) config: BTreeMap<String, Value>,
     pub(crate) commands: Vec<ExecutionCommand>,
+    local_digest: String,
 }
 
 pub(crate) async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> Result<ProjectMcp> {
@@ -61,12 +62,7 @@ pub(crate) async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> 
         }
     }
     let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(&servers)?));
-    let stored: Option<String> =
-        sqlx::query_scalar("SELECT digest FROM project_trust WHERE server=? AND path=?")
-            .bind(&remote.server.id)
-            .bind(&path)
-            .fetch_optional(&store.pool)
-            .await?;
+    let stored = store.project_trust(&remote.server.id, &path).await?;
     Ok(ProjectMcp {
         path,
         names: servers.keys().cloned().collect(),
@@ -78,8 +74,9 @@ pub(crate) async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> 
 
 impl ProjectMcp {
     pub(crate) async fn trust(&mut self, store: &LocalStore, server: &str) -> Result<()> {
-        sqlx::query("INSERT INTO project_trust(server,path,digest) VALUES(?,?,?) ON CONFLICT(server,path) DO UPDATE SET digest=excluded.digest")
-            .bind(server).bind(&self.path).bind(&self.digest).execute(&store.pool).await?;
+        store
+            .trust_project(server, &self.path, &self.digest)
+            .await?;
         self.trusted = true;
         Ok(())
     }
@@ -103,7 +100,10 @@ impl ProjectMcp {
             }
             Err(error) => return Err(error.into()),
         };
-        let mut plan = McpPlan::default();
+        let mut plan = McpPlan {
+            local_digest: local_digest(&local)?,
+            ..Default::default()
+        };
         if let Some(servers) = local.get("mcp_servers").and_then(toml::Value::as_table) {
             for (name, definition) in servers {
                 let mut settings = serde_json::to_value(definition)?;
@@ -201,4 +201,31 @@ fn validate(value: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn local_digest(config: &toml::Value) -> Result<String> {
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_vec(&config.get("mcp_servers"))?)
+    ))
+}
+
+impl McpPlan {
+    pub(crate) fn verify_local(&self, home: &Path) -> Result<()> {
+        let text = match std::fs::read_to_string(home.join("config.toml")) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => return Err(error.into()),
+        };
+        let config: toml::Value = toml::from_str(&text)
+            .map_err(|_| ClientError::Argument("local Codex configuration is invalid"))?;
+        if local_digest(&config)? != self.local_digest {
+            return Err(remote_codex_protocol::Fault::new(
+                "MCP_CHANGED",
+                "local MCP configuration changed; reopen the session to apply it",
+            )
+            .into());
+        }
+        Ok(())
+    }
 }

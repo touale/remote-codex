@@ -41,7 +41,7 @@ pub(super) async fn save(
     for (key, spelling, value) in layer.entries() {
         let (representation, raw) = match value {
             ConfigValue::Secret(reference) => {
-                let count = sqlx::query("UPDATE credentials SET state='active' WHERE id=?")
+                let count = sqlx::query("UPDATE credentials SET state='active' WHERE id=? AND state IN ('pending','active')")
                     .bind(reference.id())
                     .execute(&mut *connection)
                     .await?
@@ -64,7 +64,7 @@ pub(super) async fn save(
         .execute(&mut *connection)
         .await?;
     }
-    sqlx::query("UPDATE credentials SET state='retired' WHERE state='active' AND NOT EXISTS (SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
+    sqlx::query("UPDATE credentials SET state='retired' WHERE managed=1 AND state='active' AND NOT EXISTS (SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
         .execute(connection).await?;
     Ok(())
 }

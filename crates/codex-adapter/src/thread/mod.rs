@@ -143,11 +143,81 @@ impl Codex {
 }
 
 impl Thread {
+    pub fn settings_snapshot(&self) -> Value {
+        let mut settings = self.bootstrap.clone();
+        settings["sandboxPolicy"] = settings["sandbox"].clone();
+        settings["effort"] = settings["reasoningEffort"].clone();
+        settings
+    }
+
+    pub async fn restore_settings(
+        &mut self,
+        snapshot: &Value,
+        full_access: bool,
+    ) -> Result<bool, Fault> {
+        let params = settings::restore(snapshot, &self.binding, full_access)?;
+        let mut events = self.subscribe();
+        self.codex
+            .engine
+            .call("thread/settings/update", params)
+            .await?;
+        let confirmed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let event = events
+                    .recv()
+                    .await
+                    .map_err(|_| Fault::unknown("native settings confirmation lost"))?;
+                if event["method"] == "thread/settings/updated"
+                    && event["params"]["threadId"] == self.binding.session.id
+                {
+                    return Ok::<_, Fault>(event["params"]["threadSettings"].clone());
+                }
+            }
+        })
+        .await
+        .map_err(|_| Fault::unknown("native settings were not confirmed after recovery"))??;
+        if let Some(settings) = confirmed.as_object() {
+            for (key, value) in settings {
+                self.bootstrap[key] = value.clone();
+            }
+        }
+        self.bootstrap["sandbox"] = confirmed["sandboxPolicy"].clone();
+        self.bootstrap["reasoningEffort"] = confirmed["effort"].clone();
+        Ok(confirmed["sandboxPolicy"]["type"] == "dangerFullAccess")
+    }
+
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Value> {
         self.codex.engine.subscribe()
     }
+    pub async fn recovery_recorded(&self, episode: &str) -> Result<bool, Fault> {
+        let turns = self
+            .codex
+            .engine
+            .call(
+                "thread/turns/list",
+                json!({"threadId":self.binding.session.id,"limit":8}),
+            )
+            .await?;
+        let marker = format!("[remote-codex recovery {episode}]");
+        Ok(turns["data"].as_array().is_some_and(|turns| {
+            turns.iter().any(|turn| {
+                turn["items"].as_array().is_some_and(|items| {
+                    items.iter().any(|item| {
+                        item["type"] == "userMessage" && item.to_string().contains(&marker)
+                    })
+                })
+            })
+        }))
+    }
     pub fn send(&self, message: Value) -> Result<(), Fault> {
         self.codex.engine.send(message)
+    }
+    pub fn queue_interrupt(&self, turn: &str) -> Result<(), Fault> {
+        drop(self.codex.engine.begin(
+            "turn/interrupt",
+            crate::events::interrupt(&self.binding.session.id, turn),
+        )?);
+        Ok(())
     }
     pub async fn summary(&self) -> Result<Session, Fault> {
         let response = self

@@ -3,13 +3,7 @@ use crate::support::{TestResult, run};
 #[test]
 fn unknown_commands_fail_before_creating_state() -> TestResult {
     let root = tempfile::tempdir()?;
-    for args in [
-        vec!["conect"],
-        vec!["jobs"],
-        vec!["exec", "hello"],
-        vec!["shell", "init", "zsh"],
-        vec!["server", "status"],
-    ] {
+    for args in [vec!["unknown-command"], vec!["server", "unknown-command"]] {
         let result = run(root.path(), &args)?;
         assert_eq!(result.status.code(), Some(2));
         assert!(!root.path().join("state").exists());

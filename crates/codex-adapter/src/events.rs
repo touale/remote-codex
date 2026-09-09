@@ -213,6 +213,21 @@ pub fn prompt(thread: &str, text: &str) -> Value {
 pub fn interrupt(thread: &str, turn: &str) -> Value {
     json!({"threadId":thread,"turnId":turn})
 }
+
+/// The owning native backend has been stopped; close its visible turn before
+/// a replacement backend emits a new turn for the same stable thread.
+pub fn interrupted(thread: &str, turn: &str) -> Value {
+    json!({"method":"turn/completed","params":{"threadId":thread,"turn":{"id":turn,"items":[],"status":"interrupted","error":null}}})
+}
+
+pub fn warning(thread: &str, message: &str) -> Value {
+    json!({"method":"warning","params":{"threadId":thread,"message":message}})
+}
+
+pub fn resolved(thread: &str, id: &str) -> Result<Value, Fault> {
+    let id: Value = serde_json::from_str(id).map_err(|_| invalid())?;
+    Ok(json!({"method":"serverRequest/resolved","params":{"threadId":thread,"requestId":id}}))
+}
 fn invalid() -> Fault {
     Fault::new(
         "INVALID_NATIVE_EVENT",

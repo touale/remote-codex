@@ -23,7 +23,9 @@ pub(super) async fn check(path: &Path) -> Result<()> {
         .fetch_one(&mut connection)
         .await
         .checked("STORAGE_ERROR", "cannot inspect schema")?;
-        if (app == 0x52435356 && version == 1) || (app == 0 && version == 0 && tables == 0) {
+        if (app == 0x52435356 && (1..=2).contains(&version))
+            || (app == 0 && version == 0 && tables == 0)
+        {
             Ok(())
         } else {
             Err(Fault::new(

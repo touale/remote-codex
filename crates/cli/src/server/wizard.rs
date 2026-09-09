@@ -4,19 +4,11 @@ use crate::{
 };
 use remote_codex_client::{
     ClientError, Result,
-    application::Client,
-    config::{ConfigInput, ConfigKey, ConfigLayer, ConfigValue, resolve},
+    application::{AddServer, Client},
+    config::{ConfigInput, ConfigLayer},
 };
 
-pub(crate) struct Settings {
-    pub(crate) name: String,
-    pub(crate) address: String,
-    pub(crate) changes: Vec<(String, String)>,
-    pub(crate) install_key: bool,
-    pub(crate) port: Option<u16>,
-}
-
-pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Result<Settings> {
+pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Result<AddServer> {
     let interactive = ui::interactive() && !cli.json && !args.non_interactive;
     let name = match &cli.connection {
         Some(name) => name.clone(),
@@ -27,18 +19,7 @@ pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Resul
     let address = match &args.addr {
         Some(addr) => addr.clone(),
         None => match &existing {
-            Some(record) => {
-                let host = if record.endpoint.host().contains(':') {
-                    format!("[{}]", record.endpoint.host())
-                } else {
-                    record.endpoint.host().to_owned()
-                };
-                record
-                    .endpoint
-                    .user()
-                    .map(|u| format!("{u}@{host}"))
-                    .unwrap_or(host)
-            }
+            Some(record) => record.endpoint.destination(),
             None if interactive => ui::input("SSH address (user@host)")?,
             None => {
                 return Err(ClientError::Argument(
@@ -54,10 +35,6 @@ pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Resul
             None
         }
     });
-    let effective = match &existing {
-        Some(record) => client.config().effective(&record.name).await?,
-        None => resolve(&ConfigLayer::new())?,
-    };
     let mut changes = Vec::new();
     let mut mode = args.proxy_mode.clone();
     let mut proxy = args.proxy.clone();
@@ -85,21 +62,6 @@ pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Resul
     if let Some(mode) = mode {
         changes.push(("proxy.mode".into(), mode));
     }
-    if args.background {
-        changes.push(("background".into(), "true".into()));
-    } else if args.no_background {
-        changes.push(("background".into(), "false".into()));
-    } else if interactive && existing.is_none() {
-        let default = matches!(
-            effective.get(&ConfigKey::Background),
-            Some(ConfigValue::Boolean(true)),
-        );
-        let background = ui::confirm(
-            "Keep submitted commands running after you disconnect?",
-            default,
-        )?;
-        changes.push(("background".into(), background.to_string()));
-    }
     if let Some(mode) = &args.execution_mode {
         changes.push(("execution.mode".into(), mode.clone()));
     }
@@ -109,20 +71,37 @@ pub(crate) async fn collect(cli: &Cli, client: &Client, args: &AddArgs) -> Resul
             .ok_or(ClientError::Argument("--env expects NAME=VALUE"))?;
         changes.push((format!("env.{key}"), value.into()));
     }
-    let install_key = args.install_key
-        || (interactive
-            && existing.is_none()
-            && args.identity.is_none()
-            && ui::confirm(
-                "Install a dedicated SSH key? Existing SSH keys/agent can also be used.",
-                false,
-            )?);
-    Ok(Settings {
+    let mut save_password = args.save_password || args.password_stdin;
+    if interactive
+        && existing.is_none()
+        && args.identity.is_none()
+        && !args.install_key
+        && !save_password
+    {
+        save_password = ui::choose(
+            "SSH authentication",
+            &[
+                "Save password in macOS Keychain".into(),
+                "Use SSH keys or enter password when prompted".into(),
+            ],
+        )? == 0;
+    }
+    if save_password && !args.password_stdin && !interactive {
+        return Err(ClientError::Argument(
+            "saving an SSH password requires an interactive terminal or --password-stdin",
+        ));
+    }
+    let password = save_password
+        .then(|| super::authentication::password(args.password_stdin))
+        .transpose()?;
+    Ok(AddServer {
         name,
         address,
-        changes,
-        install_key,
+        settings: changes,
+        identity: args.identity.clone(),
+        install_key: args.install_key,
         port,
+        password,
     })
 }
 

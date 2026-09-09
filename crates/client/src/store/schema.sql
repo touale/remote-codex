@@ -21,7 +21,8 @@ CREATE TABLE settings (
 CREATE TABLE credentials (
     id TEXT NOT NULL PRIMARY KEY,
     state TEXT NOT NULL CHECK (state IN ('pending','active','retired')),
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    managed INTEGER NOT NULL DEFAULT 0 CHECK (managed IN (0,1))
 );
 CREATE TABLE server_access(
     server TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE,

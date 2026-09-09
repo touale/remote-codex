@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, path::Path};
 
 /// Maps enabled local Skill paths to verified assets in the selected environment.
-#[derive(Default)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub(crate) struct SkillMap(BTreeMap<String, String>);
 
 impl SkillMap {

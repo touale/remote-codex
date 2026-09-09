@@ -42,7 +42,7 @@ impl Channel {
             .command(&server.endpoint, Some(&command), false)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::null())
             .spawn()?;
         let writer = child.stdin.take().ok_or(ClientError::RemoteResponse)?;
         let reader = codec::Reader::new(BufReader::new(

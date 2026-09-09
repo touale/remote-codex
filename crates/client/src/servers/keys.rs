@@ -2,7 +2,7 @@ use crate::{
     ClientError, Result,
     connection::SshEndpoint,
     ssh::{SshTransport, quote},
-    store::{ServerAccess, private_directory},
+    store::{LocalStore, ServerAccess, private_directory},
 };
 use std::{path::Path, process::Stdio};
 use tokio::process::Command;
@@ -12,7 +12,7 @@ pub(crate) async fn install(
     endpoint: &SshEndpoint,
     directory: &Path,
     id: &str,
-    access: &mut ServerAccess,
+    store: &LocalStore,
 ) -> Result<()> {
     let root = directory.join("keys");
     private_directory(&root)?;
@@ -32,7 +32,7 @@ pub(crate) async fn install(
             return Err(ClientError::Argument("SSH key generation did not complete"));
         }
     }
-    let public = tokio::fs::read_to_string(key.with_extension("pub(crate)"))
+    let public = tokio::fs::read_to_string(key.with_extension("pub"))
         .await?
         .trim()
         .to_owned();
@@ -50,8 +50,7 @@ pub(crate) async fn install(
         include_str!("key.sh")
     );
     ssh.script(endpoint, &script).await?;
-    access.identity_file = Some(key.clone());
-    access.managed_public_key = Some(public);
+    store.set_managed_key(id, &key, &public).await?;
     if std::env::var_os("SSH_AUTH_SOCK").is_some() {
         let mut add = Command::new("ssh-add");
         #[cfg(target_os = "macos")]

@@ -9,12 +9,18 @@ use std::{collections::HashMap, sync::Mutex};
 use zeroize::Zeroizing;
 
 #[derive(Default)]
-struct MemoryVault {
-    values: Mutex<HashMap<String, String>>,
+pub(super) struct MemoryVault {
+    pub(super) values: Mutex<HashMap<String, String>>,
+    pub(super) fail_delete: std::sync::atomic::AtomicBool,
 }
 
 impl CredentialVault for MemoryVault {
-    async fn put(&self, reference: &SecretRef, value: &str) -> Result<()> {
+    async fn put(
+        &self,
+        reference: &SecretRef,
+        value: &str,
+        _permit: std::sync::Arc<crate::credentials::locking::WritePermit>,
+    ) -> Result<()> {
         self.values
             .lock()
             .map_err(|_| ClientError::Credentials)?
@@ -31,6 +37,9 @@ impl CredentialVault for MemoryVault {
             .ok_or(ClientError::Credentials)
     }
     async fn delete(&self, reference: &SecretRef) -> Result<()> {
+        if self.fail_delete.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(ClientError::Credentials);
+        }
         self.values
             .lock()
             .map_err(|_| ClientError::Credentials)?
@@ -46,8 +55,13 @@ struct RacingVault {
 }
 
 impl CredentialVault for RacingVault {
-    async fn put(&self, reference: &SecretRef, value: &str) -> Result<()> {
-        self.inner.put(reference, value).await?;
+    async fn put(
+        &self,
+        reference: &SecretRef,
+        value: &str,
+        _permit: std::sync::Arc<crate::credentials::locking::WritePermit>,
+    ) -> Result<()> {
+        self.inner.put(reference, value, _permit).await?;
         let server = &self.server;
         let revision = self.store.config_snapshot(server).await?.revision;
         self.store
@@ -90,6 +104,7 @@ async fn a_write_race_removes_the_uncommitted_vault_item()
     )
     .await;
     assert!(matches!(result, Err(ClientError::RevisionConflict)));
+    assert!(crate::credentials::cleanup(&store, &vault).await?);
     assert_eq!(
         vault
             .inner

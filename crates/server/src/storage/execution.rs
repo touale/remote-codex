@@ -30,12 +30,15 @@ impl Store {
         Ok(())
     }
     pub async fn create_channel(&self, id: &str, profile: &str, revision: i64) -> Result<()> {
+        self.retire_closed_evidence().await?;
         sqlx::query(
-            "INSERT INTO execution_channels(id,profile,revision,state) VALUES(?,?,?,'running')",
+            "INSERT INTO execution_channels(id,profile,revision,state,service_instance,boot_id) VALUES(?,?,?,'running',?,?)",
         )
         .bind(id)
         .bind(profile)
         .bind(revision)
+        .bind(&self.instance)
+        .bind(&self.boot_id)
         .execute(&self.pool)
         .await
         .checked("EXECUTION_CONFLICT", "execution channel already exists")?;
@@ -49,22 +52,12 @@ impl Store {
             .checked("STORAGE_ERROR", "cannot read execution owner")
     }
     pub async fn mark_channel_lost(&self, id: &str) -> Result<()> {
-        sqlx::query("UPDATE execution_channels SET state='lost' WHERE id=?")
+        sqlx::query("UPDATE execution_channels SET state='lost',lost_reason=coalesce(lost_reason,'executor_stopped') WHERE id=?")
             .bind(id)
             .execute(&self.pool)
             .await
             .checked("STORAGE_ERROR", "cannot close execution")?;
         sqlx::query("UPDATE jobs SET state='unknown',updated_at=unixepoch() WHERE channel=? AND state IN ('starting','running')").bind(id).execute(&self.pool).await.checked("STORAGE_ERROR","cannot reconcile execution")?;
-        sqlx::query("DELETE FROM operations WHERE id LIKE ?")
-            .bind(format!("{id}/%"))
-            .execute(&self.pool)
-            .await
-            .checked("STORAGE_ERROR", "cannot retire closed requests")?;
-        sqlx::query("DELETE FROM exec_events WHERE channel=?")
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .checked("STORAGE_ERROR", "cannot retire closed replay")?;
         Ok(())
     }
     pub async fn append_event(&self, channel: &str, value: &Value) -> Result<i64> {
@@ -80,9 +73,11 @@ impl Store {
                 .await
                 .checked("STORAGE_ERROR", "cannot inspect replay floor")?;
         if after < floor {
-            return Err(Fault::unknown(
-                "execution replay buffer expired; open a new local runtime and inspect retained jobs",
-            ));
+            return Err(Fault {
+                code: "EXECUTION_REPLAY_EXPIRED".into(),
+                message: "execution replay buffer expired; inspect retained jobs".into(),
+                outcome_unknown: true,
+            });
         }
         let rows:Vec<(i64,String)>=sqlx::query_as("SELECT cursor,record FROM exec_events WHERE channel=? AND cursor>? ORDER BY cursor LIMIT 64")
             .bind(channel).bind(after).fetch_all(&self.pool).await.checked("STORAGE_ERROR","cannot read execution responses")?;
@@ -130,9 +125,9 @@ impl Store {
     }
     pub async fn acknowledge_events(&self, channel: &str, cursor: i64) -> Result<()> {
         self.prune_acknowledged(channel, cursor).await?;
-        sqlx::query("UPDATE operations SET result='null' WHERE event_cursor<=? AND id LIKE ?")
+        sqlx::query("UPDATE operations SET result='null' WHERE event_cursor<=? AND substr(id,1,instr(id,'/')-1)=?")
             .bind(cursor)
-            .bind(format!("{channel}/%"))
+            .bind(channel)
             .execute(&self.pool)
             .await
             .checked(

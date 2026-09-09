@@ -1,19 +1,23 @@
 //! Application boundary shared by the CLI and future desktop clients.
+mod authentication;
 mod config;
 mod handle;
+mod notice;
 mod server;
 mod session;
 
+pub use crate::credentials::validate_password as validate_ssh_password;
 pub use crate::servers::status::ServerStatus;
 pub use config::ConfigService;
 pub use handle::{SessionHandle, TerminalAttachment};
+pub use notice::{ClientNotice, NoticeHandler};
 pub use remote_codex_core::session::{
     ApprovalDecision, CachedSession, HistoryPage, Session, SessionEvent, SessionSettings,
 };
 pub use server::{AddServer, ServerList, ServerService, ServerSummary};
 pub use session::{OpenSession, PreparedSession, ProjectTrust, SessionService};
 
-use crate::{Result, progress::PrepareEvent, store::LocalStore};
+use crate::{Result, progress::PrepareEvent, remote::Remote, store::LocalStore};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex, Weak},
@@ -34,6 +38,7 @@ pub struct ClientOptions {
     pub interactive: bool,
     pub service: ServiceBundle,
     pub progress: Option<Progress>,
+    pub notice: Option<NoticeHandler>,
 }
 
 #[derive(Clone)]
@@ -44,7 +49,9 @@ struct State {
     directory: PathBuf,
     options: ClientOptions,
     sessions: Mutex<Owners>,
+    connections: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<Weak<Remote>>>>>,
     shutdown: tokio::sync::OnceCell<()>,
+    cleanup_warned: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Default)]
@@ -61,13 +68,17 @@ impl Client {
             .map(Ok)
             .unwrap_or_else(crate::store::default_data_dir)?;
         let store = LocalStore::open(&directory).await?;
-        Ok(Self(Arc::new(State {
+        let client = Self(Arc::new(State {
             store,
             directory,
             options,
             sessions: Mutex::new(Owners::default()),
+            connections: Mutex::new(std::collections::HashMap::new()),
             shutdown: tokio::sync::OnceCell::new(),
-        })))
+            cleanup_warned: std::sync::atomic::AtomicBool::new(false),
+        }));
+        client.0.cleanup_credentials().await;
+        Ok(client)
     }
 
     pub fn servers(&self) -> ServerService {
@@ -148,6 +159,22 @@ impl State {
         &self,
         record: crate::store::ConnectionRecord,
     ) -> Result<Arc<crate::remote::Remote>> {
+        let slot = {
+            let mut connections = self
+                .connections
+                .lock()
+                .map_err(|_| crate::ClientError::RemoteResponse)?;
+            connections
+                .entry(record.id.clone())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(Weak::new())))
+                .clone()
+        };
+        let mut connection = slot.lock().await;
+        if let Some(remote) = connection.upgrade() {
+            remote.recover(false).await?;
+            remote.synchronize(&self.store).await?;
+            return Ok(remote);
+        }
         let remote = crate::servers::ensure(
             &self.store,
             &self.directory,
@@ -158,7 +185,12 @@ impl State {
             |event| self.progress(event),
         )
         .await?;
+        self.progress(PrepareEvent::Stage(
+            crate::progress::PrepareStage::Synchronize,
+        ));
         remote.synchronize(&self.store).await?;
-        Ok(Arc::new(remote))
+        let remote = Arc::new(remote);
+        *connection = Arc::downgrade(&remote);
+        Ok(remote)
     }
 }

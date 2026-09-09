@@ -48,17 +48,6 @@ impl LocalStore {
         })
     }
 
-    pub(crate) async fn save_access(&self, id: &str, access: &ServerAccess) -> Result<()> {
-        let mut tx = self.begin_write().await?;
-        sqlx::query("INSERT INTO server_access(server,identity_file,managed_public_key,ssh_config,remote_identity,service_executable,service_root,applied_revision,checked_at,health) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(server) DO UPDATE SET identity_file=excluded.identity_file,managed_public_key=excluded.managed_public_key,ssh_config=excluded.ssh_config,remote_identity=excluded.remote_identity,service_executable=excluded.service_executable,service_root=excluded.service_root,applied_revision=excluded.applied_revision,checked_at=excluded.checked_at,health=excluded.health")
-            .bind(id).bind(access.identity_file.as_ref().map(|p|p.to_string_lossy().into_owned())).bind(&access.managed_public_key)
-            .bind(access.ssh_config.as_ref().map(|p|p.to_string_lossy().into_owned())).bind(&access.remote_identity)
-            .bind(&access.service_executable).bind(&access.service_root).bind(access.applied_revision).bind(access.checked_at).bind(&access.health)
-            .execute(&mut *tx).await?;
-        tx.commit().await?;
-        Ok(())
-    }
-
     pub(crate) async fn remember_workspace(&self, server: &str, path: &str) -> Result<()> {
         if !path.starts_with('/') || path.chars().any(char::is_control) {
             return Err(ClientError::Argument(
@@ -85,6 +74,10 @@ impl LocalStore {
 
     pub(crate) async fn remove_server(&self, id: &str) -> Result<()> {
         let mut tx = self.begin_write().await?;
+        sqlx::query("UPDATE ssh_credentials SET state='retired' WHERE server=?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM local_sessions WHERE server=?")
             .bind(id)
             .execute(&mut *tx)
@@ -97,7 +90,7 @@ impl LocalStore {
             .bind(id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("UPDATE credentials SET state='retired' WHERE state='active' AND NOT EXISTS(SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
+        sqlx::query("UPDATE credentials SET state='retired' WHERE managed=1 AND state='active' AND NOT EXISTS(SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
             .execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(())

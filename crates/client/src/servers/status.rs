@@ -58,11 +58,9 @@ pub(crate) async fn refresh(
                         checked_at,
                     },
                 };
-                if let Ok(mut access) = store.server_access(&server_id).await {
-                    access.checked_at = Some(checked_at);
-                    access.health = result.status.clone();
-                    let _ = store.save_access(&server_id, &access).await;
-                }
+                let _ = store
+                    .mark_health(&server_id, &result.status, checked_at)
+                    .await;
                 result
             }
         })

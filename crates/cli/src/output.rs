@@ -8,6 +8,21 @@ use remote_codex_client::{
 };
 use serde::Serialize;
 
+pub(crate) fn notice(
+    writer: &mut impl std::io::Write,
+    notice: remote_codex_client::application::ClientNotice,
+    json: bool,
+) -> std::io::Result<()> {
+    if json {
+        let mut value = serde_json::to_value(notice)?;
+        value["level"] = serde_json::json!("warning");
+        value["message"] = serde_json::json!(notice.message());
+        writeln!(writer, "{value}")
+    } else {
+        writeln!(writer, "remote-codex: warning: {}", notice.message())
+    }
+}
+
 pub(crate) fn json(value: &impl Serialize) -> Result<()> {
     println!(
         "{}",

@@ -92,7 +92,7 @@ pub(crate) async fn connection(service: Arc<Service>, stream: UnixStream) -> Res
                     handle.send(Input::Execute{operation,message,approval,permissions})?;
                 }
                 Some(Frame::Ack{cursor:ack}) if ack<=cursor=>service.store.acknowledge_events(channel,ack).await?,
-                Some(Frame::Heartbeat)=>handle.send(Input::Touch)?,
+                Some(Frame::Heartbeat)=>{handle.send(Input::Touch)?;codec::write(&mut write, &Frame::Heartbeat).await.checked("CONNECTION_CLOSED", "cannot acknowledge heartbeat")?;},
                 Some(Frame::Detach)=>{handle.send(Input::Detached)?;return Ok(())},
                 None=>return Ok(()),
                 _=>return Err(Fault::new("INVALID_REQUEST","unexpected execution frame")),

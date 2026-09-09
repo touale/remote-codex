@@ -1,4 +1,5 @@
 mod actor;
+mod operations;
 mod policy;
 
 use crate::{Result, config::Runtime, paths, storage::Store};

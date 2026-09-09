@@ -14,10 +14,12 @@ pub(super) async fn run(
     stopped: &mut watch::Receiver<bool>,
     approvals: &crate::local::approvals::Approvals,
     permissions: &crate::local::permissions::Permissions,
+    recovery: &super::super::recovery::Recovery,
 ) -> Result<()> {
     let mut cursor = 0;
     let mut backend = attach(remote, id, cursor).await?;
     let mut outbox = BTreeMap::<String, Frame>::new();
+    let mut heard = tokio::time::Instant::now();
     let mut heartbeat = tokio::time::interval(Duration::from_secs(5));
     loop {
         let reconnect = tokio::select! {
@@ -42,7 +44,7 @@ pub(super) async fn run(
                     let operation = approval.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                     let frame = Frame::Execute {operation:operation.clone(), message, approval, permissions};
                     outbox.insert(operation, frame.clone());
-                    codec::write(&mut backend.writer, &frame).await.is_err()
+                    write(&mut backend, &frame).await.is_err()
                 }
                 Some(Ok(Message::Ping(_))) => { frontend.flush().await.map_err(|_| ClientError::RemoteResponse)?; false }
                 Some(Ok(Message::Pong(_))) => false,
@@ -51,6 +53,7 @@ pub(super) async fn run(
             },
             frame = backend.reader.next::<Frame>() => match frame {
                 Ok(Some(Frame::Event {cursor: next, message})) => {
+                    heard = tokio::time::Instant::now();
                     if next > cursor {
                         if message["method"] == "remoteCodex/operationAccepted" {
                             if let Some(operation) = message.pointer("/params/operation").and_then(Value::as_str) { outbox.remove(operation); }
@@ -59,26 +62,50 @@ pub(super) async fn run(
                         }
                         cursor = next;
                     }
-                    codec::write(&mut backend.writer, &Frame::Ack {cursor}).await.is_err()
+                    write(&mut backend, &Frame::Ack {cursor}).await.is_err()
                 }
+                Ok(Some(Frame::Heartbeat)) => { heard = tokio::time::Instant::now(); false },
                 Ok(Some(Frame::Error(fault))) => return Err(fault.into()),
                 Ok(None) | Err(_) => true,
                 _ => return Err(ClientError::RemoteResponse),
             },
-            _ = heartbeat.tick() => codec::write(&mut backend.writer, &Frame::Heartbeat).await.is_err(),
+            _ = heartbeat.tick() => !remote.ssh.healthy() || heard.elapsed() > Duration::from_secs(20) || write(&mut backend, &Frame::Heartbeat).await.is_err(),
         };
         if reconnect {
-            backend = tokio::select! {
-                result = reconnect_channel(remote, id, cursor) => result?,
-                _ = stopped.changed() => break,
-            };
-            for frame in outbox.values() {
-                codec::write(&mut backend.writer, frame).await?;
+            let mut attempt = 1;
+            loop {
+                let restored = tokio::select! {
+                    result = reconnect_channel(remote, id, cursor, recovery, attempt) => result,
+                    _ = stopped.changed() => return Ok(()),
+                };
+                backend = restored?;
+                let mut delivered = true;
+                for frame in outbox.values() {
+                    if write(&mut backend, frame).await.is_err() {
+                        delivered = false;
+                        break;
+                    }
+                }
+                if delivered {
+                    heard = tokio::time::Instant::now();
+                    recovery.publish(remote_codex_core::session::EnvironmentState::Ready);
+                    break;
+                }
+                attempt = attempt.saturating_add(1);
             }
         }
     }
-    let _ = codec::write(&mut backend.writer, &Frame::Detach).await;
+    let _ = write(&mut backend, &Frame::Detach).await;
     Ok(())
+}
+
+async fn write(channel: &mut Channel, frame: &Frame) -> std::io::Result<()> {
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        codec::write(&mut channel.writer, frame),
+    )
+    .await
+    .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "execution write timed out"))?
 }
 
 fn forwards_account_credentials(message: &Value) -> bool {
@@ -97,28 +124,65 @@ fn forwards_account_credentials(message: &Value) -> bool {
 
 async fn attach(remote: &Remote, channel: &str, after: i64) -> Result<Channel> {
     let mut stream = remote.channel().await?;
-    stream
-        .call(
+    tokio::time::timeout(
+        Duration::from_secs(15),
+        stream.call(
             &remote.profile,
             Request::AttachExecution {
                 channel: channel.into(),
                 after,
             },
-        )
-        .await?;
+        ),
+    )
+    .await
+    .map_err(|_| ClientError::Timeout)??;
     Ok(stream)
 }
 
-async fn reconnect_channel(remote: &Remote, id: &str, after: i64) -> Result<Channel> {
-    for delay in [1, 2, 4, 8] {
-        tokio::time::sleep(Duration::from_secs(delay)).await;
-        match tokio::time::timeout(Duration::from_secs(15), attach(remote, id, after)).await {
-            Ok(Ok(channel)) => return Ok(channel),
-            Ok(Err(error @ ClientError::RemoteFault(..))) => return Err(error),
-            _ => {}
+async fn reconnect_channel(
+    remote: &Remote,
+    id: &str,
+    after: i64,
+    recovery: &super::super::recovery::Recovery,
+    mut attempt: u32,
+) -> Result<Channel> {
+    let mut error = ClientError::Ssh(255);
+    loop {
+        recovery.wait(attempt, &error).await;
+        let result = async {
+            remote.recover(false).await?;
+            let status: remote_codex_protocol::ExecutionStatus = serde_json::from_value(
+                remote
+                    .call(Request::InspectExecution { channel: id.into() })
+                    .await?,
+            )?;
+            if status.state != "running" || after < status.replay_floor {
+                return Err(remote_codex_protocol::Fault {
+                    code: "EXECUTION_LOST".into(),
+                    message: status
+                        .reason
+                        .unwrap_or_else(|| "execution replay expired".into()),
+                    outcome_unknown: true,
+                }
+                .into());
+            }
+            attach(remote, id, after).await
         }
+        .await;
+        match result {
+            Ok(channel) => return Ok(channel),
+            Err(fault)
+                if matches!(
+                    fault.code(),
+                    "EXECUTION_LOST" | "EXECUTION_REPLAY_EXPIRED" | "OPERATION_OUTCOME_UNKNOWN"
+                ) =>
+            {
+                return Err(fault);
+            }
+            Err(fault) => error = fault,
+        }
+        attempt = attempt.saturating_add(1);
     }
-    Err(ClientError::RemoteFault("RECONNECT_FAILED".into(), "execution connection could not be restored; resume the local session to inspect jobs before retrying".into(), true))
 }
 
 #[cfg(test)]

@@ -56,6 +56,9 @@ pub enum ApprovalDecision {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionEvent {
+    EnvironmentChanged {
+        state: EnvironmentState,
+    },
     Message {
         item_id: String,
         text: String,
@@ -86,6 +89,16 @@ pub enum SessionEvent {
     Closed {
         reason: Option<String>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum EnvironmentState {
+    Ready,
+    Reconnecting { attempt: u32, retry_in_ms: u64 },
+    Recovering { reason: String },
+    ActionRequired { code: String, message: String },
+    Closed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

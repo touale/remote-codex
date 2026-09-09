@@ -1,6 +1,7 @@
 pub(crate) mod bridge;
 mod channel;
 mod configuration;
+pub(crate) mod recovery;
 
 use crate::{
     ClientError, Result,
@@ -17,6 +18,7 @@ pub(crate) struct Remote {
     pub(crate) access: ServerAccess,
     pub(crate) identity: Hello,
     pub(crate) profile: String,
+    reconnect: tokio::sync::Mutex<()>,
 }
 
 impl Remote {
@@ -61,6 +63,9 @@ impl Remote {
                 config: config.or_else(|| access.ssh_config.clone()),
                 identity_file: access.identity_file.clone(),
                 batch,
+                credentials: Some(crate::ssh::credentials::Credentials::saved(
+                    store, &server.id,
+                )),
             },
             &server.endpoint,
         )
@@ -99,6 +104,7 @@ impl Remote {
             access,
             identity,
             profile,
+            reconnect: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -106,6 +112,50 @@ impl Remote {
         let mut channel = Channel::open(&self.ssh, &self.server, &self.access).await?;
         channel.expected_identity = Some(self.identity.identity.clone());
         Ok(channel)
+    }
+
+    pub(crate) async fn recover(&self, interactive: bool) -> Result<Hello> {
+        let _guard = self.reconnect.lock().await;
+        self.ssh
+            .ensure_connected(&self.server.endpoint, interactive)
+            .await?;
+        // A healthy supervisor is never replaced as a side effect of reconnect.
+        let response = match self.call(Request::Hello).await {
+            Ok(value) => value,
+            Err(error) if recovery::transient(&error) => {
+                crate::servers::start::ensure(
+                    &self.ssh,
+                    &self.server.endpoint,
+                    self.access
+                        .service_executable
+                        .as_deref()
+                        .ok_or(ClientError::RemoteResponse)?,
+                    self.access
+                        .service_root
+                        .as_deref()
+                        .ok_or(ClientError::RemoteResponse)?,
+                )
+                .await?;
+                self.call(Request::Hello).await?
+            }
+            Err(error) => return Err(error),
+        };
+        let hello: Hello = serde_json::from_value(response)?;
+        if hello.identity != self.identity.identity {
+            return Err(remote_codex_protocol::Fault::new(
+                "REMOTE_IDENTITY_CHANGED",
+                "remote installation identity changed; verify the server before restoring work",
+            )
+            .into());
+        }
+        if !remote_codex_adapter::catalog::compatible_service(hello.protocol, &hello.capabilities) {
+            return Err(remote_codex_protocol::Fault::new(
+                "SERVICE_UPDATE_REQUIRED",
+                "running execution service does not support safe recovery",
+            )
+            .into());
+        }
+        Ok(hello)
     }
 
     pub(crate) async fn call(&self, request: Request) -> Result<serde_json::Value> {
@@ -122,17 +172,9 @@ impl Remote {
         let config = configuration::resolve(store, &self.server).await?;
         let revision = config.revision;
         self.call(Request::Configure(config)).await?;
-        let mut access = self.access.clone();
-        access.applied_revision = Some(revision);
-        access.remote_identity = Some(self.identity.identity.clone());
-        access.health = "ready".into();
-        access.checked_at = Some(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|_| ClientError::RemoteResponse)?
-                .as_secs() as i64,
-        );
-        store.save_access(&self.server.id, &access).await
+        store
+            .acknowledge_config(&self.server.id, revision, &self.identity.identity)
+            .await
     }
 
     pub(crate) async fn close(self) -> Result<()> {

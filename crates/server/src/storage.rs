@@ -1,6 +1,7 @@
 mod execution;
 mod jobs;
 mod preflight;
+mod recovery;
 mod retention;
 
 use crate::{Checked, Result, paths};
@@ -15,6 +16,8 @@ use std::{path::Path, time::Duration};
 pub struct Store {
     pub(crate) pool: SqlitePool,
     pub identity: String,
+    pub instance: String,
+    pub boot_id: String,
 }
 
 impl Store {
@@ -60,7 +63,7 @@ impl Store {
                 "database belongs to another application",
             ));
         }
-        if version > 1 {
+        if version > 2 {
             return Err(Fault::new(
                 "UNSUPPORTED_SCHEMA",
                 "remote service database requires a newer version",
@@ -75,7 +78,11 @@ impl Store {
             .execute(&mut *tx)
             .await
             .checked("STORAGE_ERROR", "cannot save remote identity")?;
-        sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=1;")
+        if version < 2 {
+            sqlx::raw_sql("ALTER TABLE execution_channels ADD COLUMN service_instance TEXT NOT NULL DEFAULT ''; ALTER TABLE execution_channels ADD COLUMN boot_id TEXT NOT NULL DEFAULT ''; ALTER TABLE execution_channels ADD COLUMN lost_reason TEXT;")
+                .execute(&mut *tx).await.checked("STORAGE_ERROR", "cannot migrate execution recovery metadata")?;
+        }
+        sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=2;")
             .execute(&mut *tx)
             .await
             .checked("STORAGE_ERROR", "cannot save schema version")?;
@@ -83,7 +90,9 @@ impl Store {
             .fetch_one(&mut *tx)
             .await
             .checked("STORAGE_ERROR", "cannot read remote identity")?;
-        sqlx::query("UPDATE execution_channels SET state='lost' WHERE state='running'")
+        let boot_id = recovery::boot_id()?;
+        sqlx::query("UPDATE execution_channels SET state='lost',lost_reason=CASE WHEN boot_id<>'' AND ?<>'' AND boot_id<>? THEN 'host_restarted' ELSE 'service_restarted' END WHERE state='running'")
+            .bind(&boot_id).bind(&boot_id)
             .execute(&mut *tx)
             .await
             .checked("STORAGE_ERROR", "cannot reconcile executors")?;
@@ -94,7 +103,12 @@ impl Store {
         tx.commit()
             .await
             .checked("STORAGE_ERROR", "cannot commit remote initialization")?;
-        Ok(Self { pool, identity })
+        Ok(Self {
+            pool,
+            identity,
+            instance: uuid::Uuid::new_v4().to_string(),
+            boot_id,
+        })
     }
 
     pub async fn save_config(&self, profile: &str, config: &RemoteConfig) -> Result<()> {

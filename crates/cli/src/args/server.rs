@@ -6,6 +6,15 @@ pub(crate) enum ServerCommand {
     Add(AddArgs),
     /// List saved servers and refresh their connection status.
     List,
+    /// Save or replace the server's SSH password in the local OS credential store.
+    Auth {
+        /// Remove the saved password without connecting to the server.
+        #[arg(long, conflicts_with = "password_stdin")]
+        forget: bool,
+        /// Read the password from standard input instead of prompting.
+        #[arg(long)]
+        password_stdin: bool,
+    },
     Remove {
         name: String,
         #[arg(long)]
@@ -21,10 +30,6 @@ pub(crate) struct AddArgs {
     pub(crate) addr: Option<String>,
     #[arg(short='p',long,value_parser=clap::value_parser!(u16).range(1..))]
     pub(crate) port: Option<u16>,
-    #[arg(long, conflicts_with = "no_background")]
-    pub(crate) background: bool,
-    #[arg(long)]
-    pub(crate) no_background: bool,
     #[arg(long,value_parser=["inherit","custom","direct"])]
     pub(crate) proxy_mode: Option<String>,
     #[arg(long)]
@@ -37,6 +42,12 @@ pub(crate) struct AddArgs {
     pub(crate) identity: Option<PathBuf>,
     #[arg(long, conflicts_with = "identity")]
     pub(crate) install_key: bool,
+    /// Prompt for an SSH password and save it in the local OS credential store.
+    #[arg(long, conflicts_with_all = ["identity", "install_key", "password_stdin", "non_interactive"])]
+    pub(crate) save_password: bool,
+    /// Read and save an SSH password from standard input; never pass passwords as arguments.
+    #[arg(long, conflicts_with_all = ["identity", "install_key"])]
+    pub(crate) password_stdin: bool,
     #[arg(long)]
     pub(crate) non_interactive: bool,
 }

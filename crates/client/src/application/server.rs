@@ -29,6 +29,8 @@ pub struct AddServer {
     pub settings: Vec<(String, String)>,
     pub identity: Option<PathBuf>,
     pub install_key: bool,
+    /// Save this password in the local OS vault after verifying it with SSH.
+    pub password: Option<zeroize::Zeroizing<String>>,
 }
 
 pub struct ServerService {
@@ -77,7 +79,7 @@ impl ServerService {
                 "service bundle missing; build this checkout with python3 tools/package.py",
             ));
         }
-        let remote = servers::add(
+        let prepared = servers::add(
             &state.store,
             &state.directory,
             servers::AddServer {
@@ -89,13 +91,22 @@ impl ServerService {
                 ssh_config: state.options.ssh_config.clone(),
                 install_key: request.install_key,
                 interactive: state.options.interactive,
+                password: request.password,
             },
             state.bundle(),
             |event| state.progress(event),
         )
-        .await?;
+        .await;
+        state.cleanup_credentials().await;
+        let remote = prepared?;
+        state.progress(crate::progress::PrepareEvent::Stage(
+            crate::progress::PrepareStage::Synchronize,
+        ));
+        let synchronized = remote.synchronize(&state.store).await;
         let record = summary(remote.server.clone());
-        remote.close().await?;
+        let closed = remote.close().await;
+        synchronized?;
+        closed?;
         Ok(record)
     }
 
@@ -114,7 +125,9 @@ impl ServerService {
             remote.close().await?;
             result?;
         }
-        state.store.remove_server(&record.id).await
+        state.store.remove_server(&record.id).await?;
+        state.cleanup_credentials().await;
+        Ok(())
     }
 
     pub async fn workspaces(&self, name: &str) -> Result<Vec<String>> {
@@ -150,6 +163,10 @@ impl ServerService {
                 config: state.options.ssh_config.clone().or(access.ssh_config),
                 identity_file: access.identity_file,
                 batch: false,
+                credentials: Some(crate::ssh::credentials::Credentials::saved(
+                    &state.store,
+                    &record.id,
+                )),
             },
             &record.endpoint,
         )

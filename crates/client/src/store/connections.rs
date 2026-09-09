@@ -98,22 +98,6 @@ impl LocalStore {
         self.connection_by_id(&id).await
     }
 
-    pub(crate) async fn record_runtime(
-        &self,
-        id: &str,
-        expected: i64,
-        runtime: &crate::runtime::RuntimeInfo,
-    ) -> Result<()> {
-        let mut tx = self.begin_write().await?;
-        let changed = sqlx::query("UPDATE connections SET runtime=? WHERE id=? AND EXISTS (SELECT 1 FROM server_revisions WHERE id=? AND revision=?)")
-            .bind(serde_json::to_string(runtime)?).bind(id).bind(id).bind(expected).execute(&mut *tx).await?.rows_affected();
-        if changed != 1 {
-            return Err(ClientError::RevisionConflict);
-        }
-        tx.commit().await?;
-        Ok(())
-    }
-
     pub(crate) async fn activate_runtime(
         &self,
         id: &str,

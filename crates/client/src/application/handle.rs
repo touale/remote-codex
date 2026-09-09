@@ -32,6 +32,16 @@ impl SessionHandle {
     pub fn events(&self) -> broadcast::Receiver<SessionEvent> {
         self.runtime.events()
     }
+    pub fn environment(&self) -> watch::Receiver<remote_codex_core::session::EnvironmentState> {
+        self.runtime.recovery.state.subscribe()
+    }
+    pub fn retry(&self) {
+        self.runtime.retry();
+    }
+    /// Invoke only while the frontend owns a safe interactive authentication surface.
+    pub async fn authenticate(&self) -> Result<()> {
+        self.runtime.authenticate().await
+    }
     pub async fn submit(&self, text: impl Into<String>) -> Result<String> {
         self.runtime.submit(text.into()).await
     }

@@ -1,3 +1,4 @@
+mod access;
 mod backup;
 mod codec;
 mod configuration;
@@ -7,6 +8,8 @@ mod initialization;
 mod schema;
 mod servers;
 mod sessions;
+mod ssh_credentials;
+mod trust;
 
 use serde::Serialize;
 use sqlx::{
@@ -29,7 +32,8 @@ pub(crate) use sessions::CachedSession;
 
 #[derive(Clone)]
 pub(crate) struct LocalStore {
-    pub(crate) pool: SqlitePool,
+    pool: SqlitePool,
+    pub(crate) directory: PathBuf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -83,7 +87,10 @@ impl LocalStore {
             pool.close().await;
             return Err(error);
         }
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            directory: directory.to_owned(),
+        })
     }
 
     pub(crate) async fn close(&self) {

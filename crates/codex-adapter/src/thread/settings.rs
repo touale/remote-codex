@@ -8,6 +8,46 @@ use std::path::Path;
 #[path = "settings_tests.rs"]
 mod tests;
 
+pub(crate) fn restore(
+    snapshot: &Value,
+    binding: &SessionBinding,
+    full_access: bool,
+) -> Result<Value, Fault> {
+    let mut params = json!({"threadId":binding.session.id});
+    for key in [
+        "model",
+        "effort",
+        "summary",
+        "serviceTier",
+        "personality",
+        "collaborationMode",
+        "approvalPolicy",
+        "approvalsReviewer",
+    ] {
+        if let Some(value) = snapshot
+            .get(key)
+            .filter(|v| !v.is_null() || key == "serviceTier")
+        {
+            params[key] = value.clone();
+        }
+    }
+    let policy = &snapshot["sandboxPolicy"];
+    match policy["type"].as_str() {
+        Some("dangerFullAccess") if full_access => {
+            params["permissions"] = json!(":danger-full-access")
+        }
+        Some("readOnly" | "workspaceWrite") => params["sandboxPolicy"] = policy.clone(),
+        _ => {
+            return Err(Fault::new(
+                "SETTINGS_UNCONFIRMED",
+                "execution permissions were not confirmed before interruption; review the session settings before continuing",
+            ));
+        }
+    }
+    prepare_thread("thread/settings/update", &params, binding)?;
+    Ok(params)
+}
+
 /// Native preferences may change while the environment's authority stays fixed.
 pub(crate) fn prepare_thread(
     method: &str,

@@ -1,7 +1,7 @@
 use super::Client;
 use crate::{
     ClientError, Result,
-    config::{ConfigInput, ConfigKey, ConfigReport, EffectiveConfig},
+    config::{ConfigInput, ConfigKey, ConfigReport},
     credentials::{NativeVault, set_secret},
 };
 
@@ -26,12 +26,6 @@ impl ConfigService {
         Ok(report)
     }
 
-    pub async fn effective(&self, name: &str) -> Result<EffectiveConfig> {
-        let state = &self.client.0;
-        let server = state.store.find_connection(name).await?;
-        Ok(state.store.config_snapshot(&server.id).await?.effective)
-    }
-
     pub async fn set(
         &self,
         name: &str,
@@ -46,15 +40,17 @@ impl ConfigService {
         if expected.is_some_and(|expected| expected != revision.saved) {
             return Err(ClientError::RevisionConflict);
         }
-        if secret {
+        let result = if secret {
             let vault = NativeVault::new(&state.store.installation_id().await?);
-            set_secret(&state.store, &vault, &server.id, key, value, revision).await?;
+            set_secret(&state.store, &vault, &server.id, key, value, revision).await
         } else {
             state
                 .store
                 .set_config(&server.id, key, ConfigInput::Plain(value), revision)
-                .await?;
-        }
+                .await
+        };
+        state.cleanup_credentials().await;
+        result?;
         self.synchronize(server).await;
         self.list(name, false).await
     }
@@ -71,7 +67,9 @@ impl ConfigService {
         if expected.is_some_and(|expected| expected != revision.saved) {
             return Err(ClientError::RevisionConflict);
         }
-        state.store.unset_config(&server.id, key, revision).await?;
+        let result = state.store.unset_config(&server.id, key, revision).await;
+        state.cleanup_credentials().await;
+        result?;
         self.synchronize(server).await;
         self.list(name, false).await
     }

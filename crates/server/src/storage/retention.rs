@@ -2,6 +2,36 @@ use super::Store;
 use crate::{Checked, Result};
 
 impl Store {
+    /// Keep replay/operation evidence for the most recent closed channels.
+    /// Job history has its own output bounds and remains available after this.
+    pub(super) async fn retire_closed_evidence(&self) -> Result<()> {
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .checked("STORAGE_ERROR", "cannot retire recovery evidence")?;
+        let channels: Vec<String> = sqlx::query_scalar("SELECT id FROM execution_channels WHERE state='lost' AND coalesce(lost_reason,'')<>'evidence_expired' ORDER BY created_at DESC,rowid DESC LIMIT -1 OFFSET 32")
+            .fetch_all(&mut *tx).await.checked("STORAGE_ERROR", "cannot inspect closed executions")?;
+        for channel in channels {
+            sqlx::query("DELETE FROM operations WHERE substr(id,1,instr(id,'/')-1)=?")
+                .bind(&channel)
+                .execute(&mut *tx)
+                .await
+                .checked("STORAGE_ERROR", "cannot retire closed operation evidence")?;
+            for table in ["exec_events", "execution_approvals", "session_permissions"] {
+                sqlx::query(&format!("DELETE FROM {table} WHERE channel=?"))
+                    .bind(&channel)
+                    .execute(&mut *tx)
+                    .await
+                    .checked("STORAGE_ERROR", "cannot retire closed execution evidence")?;
+            }
+            sqlx::query("UPDATE execution_channels SET lost_reason='evidence_expired',replay_bytes=0 WHERE id=?").bind(channel).execute(&mut *tx).await.checked("STORAGE_ERROR", "cannot record expired recovery evidence")?;
+        }
+        tx.commit()
+            .await
+            .checked("STORAGE_ERROR", "cannot commit recovery retention")
+    }
+
     /// Bounded replay is separate from retained job output. Crossing the replay
     /// floor makes a stale attachment fail explicitly; it never silently skips.
     pub(super) async fn append_record(&self, channel: &str, record: &str) -> Result<i64> {

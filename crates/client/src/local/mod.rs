@@ -3,47 +3,48 @@ pub(crate) mod approvals;
 mod binding;
 mod events;
 pub(crate) mod gateway;
+mod generation;
 pub(crate) mod history;
+mod intent;
 mod lease;
 pub(crate) mod permissions;
 mod recovery;
 mod route;
+mod supervisor;
 
 use crate::{
     ClientError, Result,
-    remote::{Remote, bridge::Bridge},
+    remote::{Remote, recovery::Recovery},
     store::LocalStore,
 };
-use remote_codex_adapter::thread::{Codex, OpenThread, Thread};
-use remote_codex_core::session::{SessionBinding, SessionEvent};
+use generation::{Generation, Recipe};
+use remote_codex_core::session::{EnvironmentState, SessionBinding, SessionEvent};
 use serde_json::Value;
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
     },
 };
 use tokio::sync::{broadcast, watch};
 
-/// Owns the local Codex process, execution channel and exclusive session lease.
+/// Stable session owner. Replacing a generation never releases this lease or frontend.
 pub(crate) struct LocalRuntime {
-    native: Thread,
+    generation: RwLock<Arc<Generation>>,
     pub(crate) binding: SessionBinding,
     pub(crate) remote: Arc<Remote>,
     store: LocalStore,
-    bridge: Bridge,
     lease: lease::Lease,
     has_history: AtomicBool,
-    skills: crate::extensions::skills::SkillMap,
-    approvals: Arc<approvals::Approvals>,
-    permissions: Arc<permissions::Permissions>,
+    recipe: Recipe,
+    pub(crate) recovery: Arc<Recovery>,
+    intent: Mutex<intent::Intent>,
+    turn_gate: tokio::sync::Mutex<()>,
     events: broadcast::Sender<SessionEvent>,
     native_events: broadcast::Sender<Value>,
-    pending_approvals: Mutex<HashMap<String, bool>>,
     closed: watch::Sender<Option<Option<String>>>,
-    event_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    event_task: Mutex<Vec<tokio::task::JoinHandle<()>>>,
     shutdown_once: tokio::sync::OnceCell<()>,
 }
 
@@ -63,17 +64,6 @@ impl LocalRuntime {
         remote: Arc<Remote>,
         options: OpenOptions<'_>,
     ) -> Result<Arc<Self>> {
-        let OpenOptions {
-            directory,
-            program,
-            path,
-            existing,
-            takeover,
-            mcp,
-            progress,
-        } = options;
-        use crate::progress::{PrepareEvent, PrepareStage};
-        let progress = progress.unwrap_or_else(|| Arc::new(|_| {}));
         let home = codex_home()?;
         let snapshot = store.config_snapshot(&remote.server.id).await?;
         let mode = match snapshot
@@ -83,111 +73,96 @@ impl LocalRuntime {
             Some(crate::config::ConfigValue::Text(mode)) => mode.clone(),
             _ => return Err(ClientError::RemoteResponse),
         };
-        if let Some(binding) = &existing {
+        if let Some(binding) = &options.existing {
             binding::validate(binding, &remote, &home, &mode)?;
         }
-        let lease_id = existing
+        let lease_id = options
+            .existing
             .as_ref()
             .map(|b| b.session.id.clone())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let lease = lease::Lease::acquire(directory, &lease_id, takeover).await?;
+        let lease = lease::Lease::acquire(options.directory, &lease_id, options.takeover).await?;
         let workspace = remote
-            .call(remote_codex_protocol::Request::Workspace { path: path.into() })
+            .call(remote_codex_protocol::Request::Workspace {
+                path: options.path.into(),
+            })
             .await?;
         let cwd = workspace["path"]
             .as_str()
-            .ok_or(ClientError::RemoteResponse)?;
-        progress(PrepareEvent::Stage(PrepareStage::ConnectExecution));
-        let approvals = Arc::new(approvals::Approvals::default());
-        let permissions = Arc::new(permissions::Permissions::default());
-        let bridge = Bridge::start(
-            remote.clone(),
-            snapshot.revision.saved,
-            mcp.commands,
-            approvals.clone(),
-            permissions.clone(),
-        )
-        .await?;
-        progress(PrepareEvent::Stage(PrepareStage::StartLocalCodex));
-        let codex = match Codex::start(program, &home).await {
-            Ok(codex) => codex,
-            Err(error) => {
-                bridge.detach().await;
-                return Err(error.into());
-            }
+            .ok_or(ClientError::RemoteResponse)?
+            .to_owned();
+        let project = remote
+            .call(remote_codex_protocol::Request::ProjectConfig { path: cwd.clone() })
+            .await?;
+        let recipe = Recipe {
+            program: options.program.into(),
+            home,
+            cwd,
+            mode,
+            revision: snapshot.revision.saved,
+            mcp: options.mcp,
+            config: snapshot.effective,
+            project,
         };
-        let environment = format!("rc_{}", remote.server.id.replace('-', ""));
-        let setup = async {
-            codex
-                .register_environment(&environment, &bridge.url)
-                .await?;
-            let skills =
-                crate::extensions::skills::SkillMap::prepare(&codex, &remote, &home, &*progress)
-                    .await?;
-            progress(PrepareEvent::Stage(PrepareStage::OpenLocalSession));
-            let opened = codex
-                .open(OpenThread {
-                    environment: &environment,
-                    directory: cwd,
-                    execution_mode: &mode,
-                    existing: existing.as_ref().map(|b| b.session.id.as_str()),
-                    mcp: mcp.config,
-                    instructions: skills.instructions(),
-                })
-                .await?;
-            let binding = SessionBinding {
-                server_id: remote.server.id.clone(),
-                remote_identity: remote.identity.identity.clone(),
-                environment_id: environment,
-                codex_home: home.to_string_lossy().into_owned(),
-                codex_version: remote_codex_adapter::catalog::VERSION.into(),
-                execution_mode: mode,
-                revision: snapshot.revision.saved,
-                session: opened.session.clone(),
-            };
-            let full_access = opened.full_access;
-            let native = codex.bind(opened, binding.clone(), existing.is_some())?;
-            permissions.restore(&bridge.channel, &binding.session.id, full_access)?;
-            let lease = if existing.is_none() {
-                lease::Lease::acquire(directory, &binding.session.id, false).await?
+        let recovery = Arc::new(Recovery::default());
+        let progress = options.progress.unwrap_or_else(|| Arc::new(|_| {}));
+        let (generation, binding) = recipe
+            .open(
+                remote.clone(),
+                options.existing.as_ref(),
+                recovery.clone(),
+                &*progress,
+                None,
+            )
+            .await?;
+        let prepared = async {
+            let lease = if options.existing.is_none() {
+                lease::Lease::acquire(options.directory, &binding.session.id, false).await?
             } else {
                 lease
             };
-            if existing.is_some() {
+            if options.existing.is_some() {
                 store.save_session(&binding).await?;
             }
-            store.remember_workspace(&remote.server.id, cwd).await?;
-            Ok::<_, ClientError>((native, binding, skills, lease))
+            store
+                .remember_workspace(&remote.server.id, &recipe.cwd)
+                .await?;
+            Ok::<_, ClientError>(lease)
         }
         .await;
-        let (native, binding, skills, lease) = match setup {
-            Ok(prepared) => prepared,
+        let lease = match prepared {
+            Ok(lease) => lease,
             Err(error) => {
-                bridge.detach().await;
-                codex.shutdown().await;
+                generation.close().await;
                 return Err(error);
             }
         };
         let runtime = Arc::new(Self {
-            native,
+            generation: RwLock::new(Arc::new(generation)),
             binding,
             remote,
             store: store.clone(),
-            bridge,
             lease,
-            skills,
-            approvals,
-            permissions,
-            has_history: AtomicBool::new(existing.is_some()),
+            recipe,
+            recovery,
+            has_history: AtomicBool::new(options.existing.is_some()),
+            intent: Mutex::new(intent::Intent::default()),
+            turn_gate: tokio::sync::Mutex::new(()),
             events: broadcast::channel(256).0,
             native_events: broadcast::channel(256).0,
-            pending_approvals: Mutex::new(HashMap::new()),
             closed: watch::channel(None).0,
-            event_task: Mutex::new(None),
+            event_task: Mutex::new(Vec::new()),
             shutdown_once: tokio::sync::OnceCell::new(),
         });
-        events::start(&runtime);
+        events::start(&runtime)?;
         Ok(runtime)
+    }
+
+    fn current(&self) -> Result<Arc<Generation>> {
+        self.generation
+            .read()
+            .map(|g| g.clone())
+            .map_err(|_| ClientError::RemoteResponse)
     }
 
     pub(crate) async fn shutdown(&self) {
@@ -203,19 +178,6 @@ impl LocalRuntime {
     }
 
     async fn finish_shutdown(&self) {
-        self.approvals.clear();
-        self.permissions.clear();
-        // Detach before native cleanup can terminate background commands.
-        self.bridge.detach().await;
-        if self.has_history.load(Ordering::Acquire)
-            && let Ok(session) = self.native.summary().await
-        {
-            let mut binding = self.binding.clone();
-            binding.session = session;
-            let _ = self.store.save_session(&binding).await;
-        }
-        self.native.shutdown().await;
-        self.lease.release();
         self.closed.send_if_modified(|state| {
             if state.is_none() {
                 *state = Some(None);
@@ -224,6 +186,19 @@ impl LocalRuntime {
                 false
             }
         });
+        self.recovery.publish(EnvironmentState::Closed);
+        if let Ok(generation) = self.current() {
+            generation.detach().await;
+            if self.has_history.load(Ordering::Acquire)
+                && let Ok(session) = generation.native.summary().await
+            {
+                let mut binding = self.binding.clone();
+                binding.session = session;
+                let _ = self.store.save_session(&binding).await;
+            }
+            generation.close().await;
+        }
+        self.lease.release();
     }
 }
 
@@ -246,12 +221,14 @@ pub(crate) fn codex_home() -> Result<PathBuf> {
 
 impl Drop for LocalRuntime {
     fn drop(&mut self) {
-        self.bridge.close();
-        self.native.stop();
-        if let Ok(mut task) = self.event_task.lock()
-            && let Some(task) = task.take()
-        {
-            task.abort();
+        if let Ok(generation) = self.generation.get_mut() {
+            generation.bridge.close();
+            generation.native.stop();
+        }
+        if let Ok(mut tasks) = self.event_task.lock() {
+            for task in tasks.drain(..) {
+                task.abort();
+            }
         }
     }
 }

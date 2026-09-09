@@ -18,6 +18,24 @@ fn bootstrap() -> Value {
 }
 
 #[test]
+fn recovery_preserves_read_only_policy_and_rejects_unconfirmed_full_access() -> TestResult {
+    let read_only = json!({"type":"readOnly", "networkAccess":false});
+    let snapshot = json!({"model":"gpt-6-astra", "effort":"low", "serviceTier":null,
+        "sandboxPolicy":read_only, "approvalPolicy":"on-request", "approvalsReviewer":"user"});
+    let restored = restore(&snapshot, &binding()?, false)?;
+    assert_eq!(restored["sandboxPolicy"], read_only);
+    assert!(restored.get("permissions").is_none());
+    assert!(restored.get("serviceTier").is_some_and(Value::is_null));
+    let full = json!({"sandboxPolicy":{"type":"dangerFullAccess"}});
+    assert!(restore(&full, &binding()?, false).is_err());
+    assert_eq!(
+        restore(&full, &binding()?, true)?["permissions"],
+        ":danger-full-access"
+    );
+    Ok(())
+}
+
+#[test]
 fn model_changes_preserve_native_fields_and_null_service_tier() -> TestResult {
     let params = json!({"threadId":"thread", "model":"gpt-6-astra", "effort":"xhigh",
         "serviceTier":null, "collaborationMode":{"mode":"default", "settings":{

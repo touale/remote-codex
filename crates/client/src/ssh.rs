@@ -11,13 +11,17 @@ use tokio::{
 
 use crate::{ClientError, Result, connection::SshEndpoint};
 
+mod askpass;
 mod capture;
+pub(crate) mod credentials;
+mod master;
+pub(crate) mod target;
 mod transfer;
 
 pub(crate) struct SshTransport {
     options: ConnectOptions,
     socket_dir: tempfile::TempDir,
-    master: tokio::process::Child,
+    master: tokio::sync::Mutex<master::Master>,
 }
 
 #[derive(Clone, Default)]
@@ -25,9 +29,14 @@ pub(crate) struct ConnectOptions {
     pub(crate) config: Option<PathBuf>,
     pub(crate) identity_file: Option<PathBuf>,
     pub(crate) batch: bool,
+    pub(crate) credentials: Option<credentials::Credentials>,
 }
 
 impl SshTransport {
+    pub(crate) fn saved_credentials(&mut self, store: &crate::store::LocalStore, server: &str) {
+        self.options.credentials = Some(credentials::Credentials::saved(store, server));
+    }
+
     pub(crate) async fn connect_with(
         options: ConnectOptions,
         endpoint: &SshEndpoint,
@@ -38,53 +47,51 @@ impl SshTransport {
             .tempdir_in("/tmp")?;
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(socket_dir.path(), std::fs::Permissions::from_mode(0o700))?;
-        let socket = socket_dir.path().join("control");
-        let mut command = base_command(&options, endpoint);
-        command
-            .args([
-                "-M",
-                "-N",
-                "-o",
-                "ControlPersist=no",
-                "-o",
-                "ForkAfterAuthentication=no",
-            ])
-            .arg("-S")
-            .arg(&socket)
-            .arg("--")
-            .arg(endpoint.host())
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true);
-        let mut master = command.spawn()?;
-        let deadline =
-            tokio::time::Instant::now() + Duration::from_secs(if options.batch { 10 } else { 120 });
-        loop {
-            if let Some(status) = master.try_wait()? {
-                return Err(ClientError::Ssh(status.code().unwrap_or(255)));
-            }
-            if socket.try_exists()? {
-                break;
-            }
-            if tokio::time::Instant::now() >= deadline {
-                master.kill().await?;
-                return Err(ClientError::Timeout);
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+        let master = master::start(
+            &options,
+            endpoint,
+            &socket_dir.path().join("control"),
+            !options.batch,
+        )
+        .await?;
         Ok(Self {
             options,
             socket_dir,
-            master,
+            master: tokio::sync::Mutex::new(master),
         })
     }
 
-    pub(crate) async fn close(mut self) -> Result<()> {
-        if self.master.try_wait()?.is_none() {
-            self.master.kill().await?;
+    pub(crate) async fn ensure_connected(
+        &self,
+        endpoint: &SshEndpoint,
+        interactive: bool,
+    ) -> Result<()> {
+        let mut current = self.master.lock().await;
+        let socket = self.socket_dir.path().join("control");
+        if current.alive()? && socket.try_exists()? {
+            return Ok(());
         }
+        current.stop().await?;
+        match std::fs::remove_file(&socket) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let mut options = self.options.clone();
+        options.batch = !interactive;
+        *current = master::start(&options, endpoint, &socket, interactive).await?;
         Ok(())
+    }
+
+    pub(crate) fn healthy(&self) -> bool {
+        self.master
+            .try_lock()
+            .is_ok_and(|mut master| master.alive().unwrap_or(false))
+            && self.socket_dir.path().join("control").exists()
+    }
+
+    pub(crate) async fn close(self) -> Result<()> {
+        self.master.into_inner().close().await
     }
 
     pub(crate) async fn script(&self, endpoint: &SshEndpoint, script: &str) -> Result<String> {
@@ -174,7 +181,14 @@ impl SshTransport {
         command
             .arg("-S")
             .arg(self.socket_dir.path().join("control"))
-            .args(["-o", "ControlMaster=no", "-o", "BatchMode=yes"]);
+            .args([
+                "-o",
+                "ControlMaster=no",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ProxyCommand=false",
+            ]);
         if terminal {
             command.arg("-tt");
         }
@@ -205,7 +219,7 @@ fn base_command(options: &ConnectOptions, endpoint: &SshEndpoint) -> Command {
     if let Some(config) = &options.config {
         command.arg("-F").arg(config);
     }
-    if options.batch {
+    if options.batch && options.credentials.is_none() {
         command.args(["-o", "BatchMode=yes"]);
     }
     if let Some(identity) = &options.identity_file {

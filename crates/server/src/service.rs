@@ -69,9 +69,15 @@ impl Service {
                     remote_codex_protocol::COMMAND_APPROVAL_CAPABILITY.into(),
                     remote_codex_protocol::SESSION_PERMISSIONS_CAPABILITY.into(),
                     remote_codex_protocol::IDLE_RETIREMENT_CAPABILITY.into(),
+                    remote_codex_protocol::EXECUTION_RECOVERY_CAPABILITY.into(),
                 ],
                 build_id: self.build_id.clone(),
+                service_instance: self.store.instance.clone(),
+                boot_id: self.store.boot_id.clone(),
             }),
+            Request::InspectExecution { channel } => {
+                encode(self.store.inspect_execution(&call.profile, channel).await?)
+            }
             Request::PrepareUpdate => {
                 for execution in self.executions.lock().await.values() {
                     let _ = execution.send(Input::RetireIdle);

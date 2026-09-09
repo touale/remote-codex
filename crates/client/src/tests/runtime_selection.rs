@@ -16,8 +16,9 @@ async fn runtime_selection_advances_revision_once_and_rejects_stale_changes()
         reused: false,
     };
     store
-        .record_runtime(&server.id, server.saved_revision, &previous)
+        .activate_runtime(&server.id, server.saved_revision, &previous)
         .await?;
+    let server = store.connection_by_id(&server.id).await?;
     let selected = RuntimeInfo {
         version: "validated".into(),
         executable: "/runtimes/codex/validated/bin/codex".into(),
@@ -43,6 +44,12 @@ async fn runtime_selection_advances_revision_once_and_rejects_stale_changes()
         Err(ClientError::RevisionConflict)
     ));
     let unchanged = store.connection_by_id(&server.id).await?;
+    let (snapshot, runtime) = store.sync_snapshot(&server.id).await?;
+    assert_eq!(snapshot.revision.saved, updated.saved_revision);
+    assert_eq!(
+        runtime.ok_or("missing runtime snapshot")?.executable,
+        selected.executable
+    );
     assert_eq!(unchanged.saved_revision, updated.saved_revision);
     assert_eq!(
         unchanged.runtime.ok_or("missing runtime")?.executable,

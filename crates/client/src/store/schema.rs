@@ -3,7 +3,7 @@ use sqlx::{Connection, SqliteConnection, SqlitePool, sqlite::SqliteConnectOption
 use crate::{ClientError, Result};
 
 const APPLICATION_ID: i64 = 0x52434458;
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 10;
 
 pub(super) async fn preflight(path: &std::path::Path) -> Result<()> {
     let mut connection =
@@ -74,9 +74,22 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
         sqlx::query("DROP TABLE IF EXISTS retained_legacy_credentials")
             .execute(&mut *tx)
             .await?;
-        sqlx::query("ALTER TABLE connections DROP COLUMN phase")
-            .execute(&mut *tx)
-            .await?;
+        if version < 8 {
+            sqlx::query("ALTER TABLE connections DROP COLUMN phase")
+                .execute(&mut *tx)
+                .await?;
+        }
+        if version < 9 {
+            sqlx::raw_sql(include_str!("ssh_credentials.sql"))
+                .execute(&mut *tx)
+                .await?;
+        }
+        // Only current execution settings prove ownership of old vault entries.
+        // Unreferenced historical Agent entries remain outside automatic cleanup.
+        sqlx::query("ALTER TABLE credentials ADD COLUMN managed INTEGER NOT NULL DEFAULT 0 CHECK (managed IN (0,1))")
+            .execute(&mut *tx).await?;
+        sqlx::query("UPDATE credentials SET managed=1 WHERE EXISTS (SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
+            .execute(&mut *tx).await?;
         validate_migration(&mut tx).await?;
         sqlx::query(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))
             .execute(&mut *tx)
@@ -93,6 +106,9 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
         return Err(ClientError::Schema);
     }
     sqlx::raw_sql(include_str!("schema.sql"))
+        .execute(&mut *tx)
+        .await?;
+    sqlx::raw_sql(include_str!("ssh_credentials.sql"))
         .execute(&mut *tx)
         .await?;
     sqlx::query("INSERT INTO installation(id) VALUES (?)")

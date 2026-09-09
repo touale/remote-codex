@@ -21,6 +21,10 @@ pub struct Hello {
     pub capabilities: Vec<String>,
     #[serde(default)]
     pub build_id: String,
+    #[serde(default)]
+    pub service_instance: String,
+    #[serde(default)]
+    pub boot_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,4 +56,19 @@ pub struct SkillFile {
 pub struct ExecutionCommand {
     pub argv: Vec<String>,
     pub cwd: String,
+}
+
+pub const EXECUTION_RECOVERY_CAPABILITY: &str = "execution-recovery-v1";
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExecutionStatus {
+    pub channel: String,
+    pub service_instance: String,
+    pub boot_id: String,
+    pub state: String,
+    pub reason: Option<String>,
+    pub replay_floor: i64,
+    pub unknown_operations: i64,
+    #[serde(default)]
+    pub evidence_available: bool,
 }

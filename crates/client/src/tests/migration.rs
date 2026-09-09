@@ -27,6 +27,18 @@ async fn fixture(state: &Path, version: i64) -> TestResult<SqliteConnection> {
         .execute(&mut db)
         .await?;
     }
+    if version >= 8 {
+        sqlx::raw_sql("DELETE FROM settings WHERE key='codex.update_policy'; DROP TABLE retained_legacy_credentials; ALTER TABLE connections DROP COLUMN phase; PRAGMA user_version=8;")
+            .execute(&mut db).await?;
+    }
+    if version == 9 {
+        sqlx::raw_sql(include_str!("../store/ssh_credentials.sql"))
+            .execute(&mut db)
+            .await?;
+        sqlx::query("PRAGMA user_version=9")
+            .execute(&mut db)
+            .await?;
+    }
     Ok(db)
 }
 
@@ -43,14 +55,25 @@ async fn version(db: &mut SqliteConnection) -> TestResult<i64> {
 #[tokio::test]
 async fn imports_supported_versions_without_changing_identity_access_or_native_bindings()
 -> TestResult {
-    for source in [6, 7] {
+    for source in [6, 7, 8, 9] {
         let root = tempfile::tempdir()?;
         let state = root.path().join("state");
         let mut db = fixture(&state, source).await?;
         let binding = query(&mut db, "SELECT record FROM local_sessions").await?;
         let store = LocalStore::open(&state).await?;
-        assert_eq!(version(&mut db).await?, 8);
+        assert_eq!(version(&mut db).await?, 10);
         assert_eq!(store.installation_id().await?, "execution-install");
+        let ownership: Vec<(String, i64)> =
+            sqlx::query_as("SELECT id,managed FROM credentials ORDER BY id")
+                .fetch_all(&mut db)
+                .await?;
+        assert_eq!(
+            ownership,
+            vec![
+                ("legacy-reference".into(), 0),
+                ("service-reference".into(), 1)
+            ]
+        );
         assert_eq!(
             store.session_binding("thread-id").await?.session.cwd,
             "/workspace/project"

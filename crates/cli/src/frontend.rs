@@ -1,3 +1,4 @@
+mod authentication;
 use crate::{args::Cli, ui};
 use remote_codex_client::{ClientError, Result, application::SessionHandle};
 use std::{ffi::OsString, process::Stdio};
@@ -31,6 +32,9 @@ async fn attach(
     arguments: &[OsString],
     interrupt: &mut tokio::signal::unix::Signal,
 ) -> Result<()> {
+    let terminal = authentication::Terminal::capture();
+    let mut environment = runtime.environment();
+    let mut auth_attempted = false;
     let mut gateway = runtime.terminal(arguments).await?;
     let mut closed = gateway.closed.clone();
     let mut child = gateway
@@ -40,18 +44,36 @@ async fn attach(
         .stderr(Stdio::inherit())
         .kill_on_drop(true)
         .spawn()?;
-    let status = tokio::select! {
-        result=child.wait()=>result?,
-        _=closed.changed()=>{let _=child.kill().await;child.wait().await?},
-        _=interrupt.recv()=>{
-            if let Some(pid) = child.id().and_then(|pid| i32::try_from(pid).ok()) {
-                let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), nix::sys::signal::Signal::SIGINT);
-            }
-            match tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
-                Ok(status) => status?,
-                Err(_) => { child.kill().await?; child.wait().await? },
-            }
-        },
+    let status = loop {
+        tokio::select! {
+          result=child.wait()=>break result?,
+          _=closed.changed()=>{let _=child.kill().await;break child.wait().await?},
+          _=interrupt.recv()=>{
+              if let Some(pid) = child.id().and_then(|pid| i32::try_from(pid).ok()) {
+                  let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), nix::sys::signal::Signal::SIGINT);
+              }
+              break match tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
+                  Ok(status) => status?,
+                  Err(_) => { child.kill().await?; child.wait().await? },
+              }
+          },
+          changed=environment.changed()=>{
+              if changed.is_err() { continue; }
+              let state = environment.borrow_and_update().clone();
+              if matches!(&state, remote_codex_client::session::EnvironmentState::Ready) { auth_attempted = false; }
+              if matches!(&state, remote_codex_client::session::EnvironmentState::ActionRequired { code, .. } if code == "SSH_AUTH_REQUIRED") && !auth_attempted {
+                  auth_attempted = true;
+                  if let Some(pid) = child.id() && let Some(_suspended) = terminal.suspend(pid)? {
+                      eprintln!("\nSSH authentication is required to restore this session.");
+                      let result = tokio::select! {
+                          result=runtime.authenticate()=>result,
+                          _=interrupt.recv()=>Err(ClientError::Argument("authentication cancelled")),
+                      };
+                      if let Err(error) = result { eprintln!("{error}. Exit and resume this session to try again."); }
+                  }
+              }
+          },
+        }
     };
     gateway.finish().await?;
     if !status.success() {
