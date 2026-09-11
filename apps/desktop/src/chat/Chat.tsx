@@ -9,12 +9,14 @@ import { Composer } from './composer/Composer';
 import { Conversation, Working } from './Conversation';
 import { Questions } from './Questions';
 import { SessionStatus } from './SessionStatus';
+import type { PlanChoice } from './MessageView';
 import type { ChatState, ChatUpdate, Message } from './state';
 export function Chat({
   chat,
   update,
   onAction,
   onResume,
+  onFreshPlan,
   onHistory,
   onDiff,
   report,
@@ -23,6 +25,7 @@ export function Chat({
   update: ChatUpdate;
   onAction: (action: SessionAction) => Promise<void>;
   onResume: () => void;
+  onFreshPlan: (chat: ChatState, plan: Message) => Promise<void>;
   onHistory: () => void;
   onDiff: (change: FileChange) => void;
   report: (error: unknown) => void;
@@ -39,7 +42,10 @@ export function Chat({
   }, []);
   const latest = useRef(chat);
   latest.current = chat;
-  const [implementing, setImplementing] = useState(false);
+  // Reject a second click before React renders the disabled controls.
+  const pendingPlan = useRef(false);
+  const [choosingPlan, setChoosingPlan] = useState(false);
+  const [revisingPlan, setRevisingPlan] = useState<string | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
   useLayoutEffect(() => {
     const element = scroll.current;
@@ -57,21 +63,35 @@ export function Chat({
     };
   }, [chat?.session.id, update, follow]);
   useEffect(follow, [chat?.messages, chat?.questions, chat?.turns, follow]);
-  const implement = useCallback(
-    (message: Message) => {
+  const choosePlan = useCallback(
+    async (message: Message, choice: PlanChoice) => {
       const current = latest.current;
-      if (!current || current.turn || current.closed || current.environment.status !== 'ready') return;
-      setImplementing(true);
-      nearBottom.current = true;
-      void changeMode(current, 'code', onAction)
-        .then(() => {
-          update({ composerMode: 'code' });
-          return onAction({ action: 'submit', text: `Implement this plan:\n\n${message.text}` });
-        })
-        .catch(report)
-        .finally(() => setImplementing(false));
+      if (!current || current.turn || current.closed || current.environment.status !== 'ready' || pendingPlan.current)
+        return;
+      pendingPlan.current = true;
+      setChoosingPlan(true);
+      try {
+        if (choice === 'fresh') {
+          await onFreshPlan(current, message);
+          return;
+        }
+        const mode = choice === 'revise' ? 'plan' : 'code';
+        await changeMode(current, mode, onAction);
+        update({ composerMode: mode });
+        if (choice === 'revise') {
+          setRevisingPlan(message.id);
+        } else {
+          nearBottom.current = true;
+          await onAction({ action: 'submit', text: 'Implement the plan.' });
+        }
+      } catch (error) {
+        report(error);
+      } finally {
+        pendingPlan.current = false;
+        setChoosingPlan(false);
+      }
     },
-    [onAction, update, report],
+    [onAction, onFreshPlan, update, report],
   );
   const execute = useCallback(
     async (action: SessionAction) => {
@@ -88,6 +108,10 @@ export function Chat({
   const showStatus = useCallback(() => setStatusOpen(true), []);
   if (!chat) return null;
   const ready = chat.environment.status === 'ready';
+  const latestPlan = chat.messages.filter((message) => message.plan || message.role === 'user').at(-1);
+  const revision = Boolean(
+    latestPlan?.plan && latestPlan.id === revisingPlan && chat.composerMode === 'plan' && !chat.turn,
+  );
   return (
     <section className="chat" aria-label="Conversation">
       <div
@@ -110,9 +134,11 @@ export function Chat({
           <Conversation
             messages={chat.messages}
             turns={chat.turns}
+            activePlan={latestPlan?.plan ? latestPlan.id : undefined}
+            revisingPlan={revision}
             onDiff={onDiff}
             report={report}
-            onImplement={chat.turn || implementing || chat.closed || !ready ? undefined : implement}
+            onPlan={chat.turn || choosingPlan || chat.closed || !ready ? undefined : choosePlan}
           />
           {chat.plan && (
             <details className="plan-steps" open>
@@ -157,6 +183,8 @@ export function Chat({
         </div>
       ) : (
         <Composer
+          preparing={choosingPlan}
+          onCancelPlanRevision={revision ? () => setRevisingPlan(null) : undefined}
           chat={{ ...chat, ready }}
           setDraft={(draft, expected) =>
             update((current) => ({

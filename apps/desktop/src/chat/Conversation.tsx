@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import type { TurnState } from '../bridge/session';
 import type { FileChange } from '../files/useFiles';
 import { IconButton } from '../ui/controls';
-import { MessageView } from './MessageView';
+import { MessageView, type PlanChoice } from './MessageView';
 import type { Message } from './state';
 import { clockTime, duration, fullTime } from './time';
 
@@ -11,13 +11,17 @@ export const Conversation = memo(function Conversation({
   messages,
   turns,
   onDiff,
-  onImplement,
+  onPlan,
+  activePlan,
+  revisingPlan,
   report,
 }: {
   messages: Message[];
   turns: Record<string, TurnState>;
   onDiff: (change: FileChange) => void;
-  onImplement?: (message: Message) => void;
+  onPlan?: (message: Message, choice: PlanChoice) => void;
+  activePlan?: string;
+  revisingPlan?: boolean;
   report: (error: unknown) => void;
 }) {
   const groups = useMemo(() => {
@@ -44,7 +48,9 @@ export const Conversation = memo(function Conversation({
                 message={message}
                 onDiff={onDiff}
                 report={report}
-                onImplement={message.plan ? onImplement : undefined}
+                activePlan={message.plan && message.id === activePlan}
+                revisingPlan={revisingPlan && message.id === activePlan}
+                onPlan={onPlan}
               />
             ))}
             {turn && turn.status !== 'inProgress' && (

@@ -132,11 +132,10 @@ export function useNavigation(
             : current,
         ),
     );
-  const newSession = (server: string, path: string) => {
+  const newSession = (server: string, path: string, key = drafts.ensure({ server, path })) => {
     ++selection.current;
     setOpening(null);
     const target = { server, path };
-    const key = drafts.ensure(target);
     activeDraft.current = key;
     setLocation({ kind: 'draft', key, target });
     setBusy(false);

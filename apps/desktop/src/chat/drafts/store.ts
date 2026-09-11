@@ -32,8 +32,7 @@ export class DraftStore {
   private values = new Map<string, Draft>();
   private listeners = new Map<string, Set<() => void>>();
   get = (key: string) => this.values.get(key);
-  ensure(target: WorkspaceTarget) {
-    const key = workspaceKey(target);
+  ensure(target: WorkspaceTarget, key = workspaceKey(target)) {
     if (!this.values.has(key))
       this.values.set(key, {
         target,

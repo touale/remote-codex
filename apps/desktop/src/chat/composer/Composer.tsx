@@ -1,4 +1,4 @@
-import { Activity, ArrowUp, Square } from 'lucide-react';
+import { Activity, ArrowUp, ListTodo, Square, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { failure } from '../../bridge/client';
@@ -16,6 +16,7 @@ export function Composer({
   preparing = false,
   ownsSubmissionDraft = false,
   focusRequest,
+  onCancelPlanRevision,
   errorMessage,
   details,
   onAction,
@@ -27,6 +28,7 @@ export function Composer({
   preparing?: boolean;
   ownsSubmissionDraft?: boolean;
   focusRequest?: number;
+  onCancelPlanRevision?: () => void;
   errorMessage?: string | null;
   details?: ReactNode;
   onAction: (action: SessionAction) => Promise<void>;
@@ -44,9 +46,10 @@ export function Composer({
   const ready = chat.ready;
   const settingDisabled = busy || preparing || Boolean(chat.turn) || !ready;
   const newGoal = chat.composerMode === 'goal' && (!chat.goal || chat.goal.status === 'complete');
+  const revisingPlan = Boolean(onCancelPlanRevision);
   useLayoutEffect(() => {
-    if (focusRequest !== undefined) input.current?.focus();
-  }, [focusRequest]);
+    if (focusRequest !== undefined || revisingPlan) input.current?.focus();
+  }, [focusRequest, revisingPlan]);
   useLayoutEffect(() => {
     const element = input.current;
     if (!element) return;
@@ -119,6 +122,18 @@ export function Composer({
         />
       )}
       <div className="composer">
+        {onCancelPlanRevision && (
+          <div className="plan-revision" role="status">
+            <ListTodo size={15} />
+            <span>
+              <strong>Refine this plan</strong>
+              <small>Describe what you’d like to change.</small>
+            </span>
+            <IconButton label="Cancel plan revision" onClick={onCancelPlanRevision}>
+              <X size={14} />
+            </IconButton>
+          </div>
+        )}
         {available.length > 0 && (
           <div className="slash-menu" role="listbox" id="composer-commands" aria-label="Commands">
             {available.map((item, index) => (
@@ -145,13 +160,15 @@ export function Composer({
           aria-label="Message Codex"
           rows={1}
           placeholder={
-            newGoal
-              ? 'Describe a goal…'
-              : chat.composerMode === 'plan'
-                ? 'What would you like to plan?'
-                : chat.turn
-                  ? 'Ask for follow-up changes…'
-                  : 'Ask Codex to build, fix or explore…'
+            revisingPlan
+              ? 'What would you like to change in the plan?'
+              : newGoal
+                ? 'Describe a goal…'
+                : chat.composerMode === 'plan'
+                  ? 'What would you like to plan?'
+                  : chat.turn
+                    ? 'Ask for follow-up changes…'
+                    : 'Ask Codex to build, fix or explore…'
           }
           aria-controls={available.length ? 'composer-commands' : undefined}
           aria-expanded={available.length > 0}
@@ -218,7 +235,15 @@ export function Composer({
             {(!chat.turn || chat.draft.trim()) && (
               <IconButton
                 className="send"
-                label={chat.turn ? 'Send follow-up' : newGoal ? 'Start goal' : 'Send message'}
+                label={
+                  chat.turn
+                    ? 'Send follow-up'
+                    : revisingPlan
+                      ? 'Send plan changes'
+                      : newGoal
+                        ? 'Start goal'
+                        : 'Send message'
+                }
                 disabled={busy || preparing || !chat.draft.trim() || (!ready && !commandInput(chat.draft))}
                 onClick={() => {
                   void submit().catch(() => {});

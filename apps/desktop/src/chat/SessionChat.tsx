@@ -2,19 +2,21 @@ import { useCallback, useSyncExternalStore } from 'react';
 import type { SessionAction } from '../bridge/session';
 import type { FileChange } from '../files/useFiles';
 import { Chat } from './Chat';
-import type { ChatUpdate } from './state';
+import type { ChatState, ChatUpdate, Message } from './state';
 import type { useChats } from './useChats';
 
 export function SessionChat({
   id,
   controller,
   onResume,
+  onFreshPlan,
   onDiff,
   report,
 }: {
   id: string | null;
   controller: Pick<ReturnType<typeof useChats>, 'store' | 'update' | 'action' | 'loadHistory'>;
   onResume: () => void;
+  onFreshPlan: (chat: ChatState, plan: Message) => Promise<void>;
   onDiff: (change: FileChange) => void;
   report: (error: unknown) => void;
 }) {
@@ -44,6 +46,7 @@ export function SessionChat({
       update={change}
       onAction={execute}
       onResume={onResume}
+      onFreshPlan={onFreshPlan}
       onHistory={history}
       onDiff={onDiff}
       report={report}

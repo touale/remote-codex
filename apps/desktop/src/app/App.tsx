@@ -3,6 +3,7 @@ import { Tooltip } from 'radix-ui';
 import { useState } from 'react';
 import type { Server } from '../bridge/types';
 import { ConversationLoading } from '../chat/ConversationLoading';
+import { preparePlanDraft } from '../chat/drafts/plan';
 import { DraftChat } from '../chat/drafts/DraftChat';
 import { SessionChat } from '../chat/SessionChat';
 import { useChats } from '../chat/useChats';
@@ -167,6 +168,11 @@ export default function App() {
                   <SessionChat
                     id={nav.selected}
                     controller={chats}
+                    onFreshPlan={async (chat, plan) => {
+                      const { key, action } = preparePlanDraft(nav.drafts, chat, plan);
+                      nav.newSession(chat.server, chat.session.cwd, key);
+                      if (action) await nav.submitDraft(key, action);
+                    }}
                     onResume={() => {
                       if (selected) run(nav.openSession(selected.server, selected.session.id, selected.session.cwd));
                     }}

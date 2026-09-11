@@ -5,10 +5,38 @@
 }
 .plan-card .plan-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
   margin-top: 10px;
+}
+.plan-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.plan-choices button {
+  font-size: 12px;
+}
+.plan-revision {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.plan-revision > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.plan-revision strong {
+  color: var(--text);
+  font-weight: 500;
 }
 .plan-steps {
   margin: 8px 0;

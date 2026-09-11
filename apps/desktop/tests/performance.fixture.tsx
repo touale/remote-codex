@@ -254,7 +254,14 @@ function Fixture() {
         {nav.draftKey ? (
           <DraftChat draftKey={nav.draftKey} store={nav.drafts} submit={nav.submitDraft} />
         ) : (
-          <SessionChat id={session.id} controller={chats} onResume={noop} onDiff={noop} report={report} />
+          <SessionChat
+            id={session.id}
+            controller={chats}
+            onFreshPlan={async () => {}}
+            onResume={noop}
+            onDiff={noop}
+            report={report}
+          />
         )}
         <TransferButton actions={transfers} report={report} />
         {result && <pre data-performance-result>{result}</pre>}
