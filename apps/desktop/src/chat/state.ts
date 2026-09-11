@@ -6,6 +6,7 @@ import {
   type SessionStatus,
   type TurnState,
 } from '../bridge/session';
+import { mergeTool } from './toolState';
 import type {
   AsyncQuestion,
   Environment,
@@ -202,7 +203,7 @@ export function reduceEvent(state: ChatState, event: SessionEvent): ChatState {
           id: event.item.id,
           role: 'assistant',
           text: '',
-          tool: event.item,
+          tool: mergeTool(state.messages.find((m) => m.id === event.item.id)?.tool, event.item),
           turn: event.turn_id || state.turn || undefined,
         }),
       };

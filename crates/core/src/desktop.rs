@@ -37,6 +37,17 @@ pub struct ToolItem {
     pub output: String,
     pub status: String,
     pub changes: Vec<FileChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<ToolLink>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ToolLink {
+    pub title: String,
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FileChange {

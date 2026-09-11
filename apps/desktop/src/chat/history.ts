@@ -1,5 +1,6 @@
 import type { HistoryPage } from '../bridge/types';
 import type { ChatState, Message } from './state';
+import { mergeTool } from './toolState';
 
 function historyMessages(page: HistoryPage): Message[] {
   return [...page.turns]
@@ -41,7 +42,12 @@ export function mergeHistory(chat: ChatState, page: HistoryPage): ChatState {
     if (!current) return item;
     const source =
       item.complete || item.text.length > current.text.length ? { ...current, ...item } : { ...item, ...current };
-    return { ...source, id: item.id, sentAt: current.sentAt ?? item.sentAt };
+    return {
+      ...source,
+      id: item.id,
+      sentAt: current.sentAt ?? item.sentAt,
+      tool: item.tool ? mergeTool(current.tool, item.tool) : source.tool,
+    };
   });
   const ids = new Set(items.flatMap((item) => [item.id, item.clientId]));
   return {

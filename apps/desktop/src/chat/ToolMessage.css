@@ -1,0 +1,120 @@
+.tool {
+  margin: 3px 0;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tool-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.tool-heading:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.tool-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tool-heading > svg,
+.tool-status {
+  flex: none;
+}
+.tool-status {
+  font-size: 10px;
+}
+.tool[data-status='failed'] .tool-status,
+.tool[data-status='declined'] .tool-status {
+  color: var(--danger);
+}
+.tool[data-status='inProgress'] .tool-status {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.tool-chevron {
+  transition: transform 120ms ease;
+}
+.tool-heading[aria-expanded='true'] .tool-chevron {
+  transform: rotate(90deg);
+}
+.tool-details {
+  margin: 3px 8px 9px 14px;
+  padding: 3px 0 3px 15px;
+  border-left: 1px solid var(--border);
+  color: var(--text);
+}
+.tool-details section + section,
+.tool-details section + .tool-links {
+  margin-top: 12px;
+}
+.tool-details h3 {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 5px;
+}
+.tool-details pre {
+  overflow: auto;
+  max-height: 280px;
+  padding: 9px 11px;
+  margin: 0;
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-links {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+}
+.tool-links li + li {
+  margin-top: 12px;
+}
+.tool-links a {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.tool-url {
+  display: block;
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  margin-top: 3px;
+}
+.tool-links p {
+  margin: 4px 0 0;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.tool-reasoning {
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.diff-link {
+  font-size: 11px;
+  border: none;
+  background: none;
+  width: 100%;
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
+  text-align: left;
+}

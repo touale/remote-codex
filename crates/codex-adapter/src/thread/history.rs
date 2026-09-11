@@ -102,7 +102,12 @@ fn turn(value: &Value) -> HistoryTurn {
                 text: item_text(item),
                 delivery: item["delivery"].as_str().map(str::to_owned),
                 questions: questions(item),
-                tool: crate::desktop::tool(item),
+                tool: crate::desktop::tool(item).map(|mut tool| {
+                    if tool.status.is_empty() && value["status"] == "completed" {
+                        tool.status = "completed".into();
+                    }
+                    tool
+                }),
             })
             .collect(),
     }
@@ -178,6 +183,43 @@ impl super::Thread {
 mod tests {
     use super::*;
     use remote_codex_core::session::SessionEvent;
+
+    #[test]
+    fn tool_details_and_completion_survive_live_and_history_projection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let item = json!({"id":"search","type":"webSearch","query":"Rust async",
+            "action":{"type":"search","queries":["Rust async"]},
+            "results":[{"title":"Rust","url":"https://www.rust-lang.org/"}]});
+        for (method, expected) in [
+            ("item/started", "inProgress"),
+            ("item/completed", "completed"),
+        ] {
+            let event = crate::events::public_event(&json!({"method":method,
+                "params":{"turnId":"turn","item":item}}))
+            .ok_or("missing event")?;
+            let SessionEvent::ToolChanged { item: live, .. } = event else {
+                return Err("expected tool event".into());
+            };
+            assert_eq!(live.status, expected);
+            if method == "item/completed" {
+                let history = turn(&json!({"id":"turn","status":"completed","items":[item]}));
+                assert_eq!(
+                    serde_json::to_value(&history.items[0].tool)?,
+                    serde_json::to_value(live)?
+                );
+            }
+        }
+        let history = turn(&json!({"id":"turn","status":"interrupted","items":[item]}));
+        assert!(
+            history.items[0]
+                .tool
+                .as_ref()
+                .ok_or("missing tool")?
+                .status
+                .is_empty()
+        );
+        Ok(())
+    }
 
     #[test]
     fn asynchronous_choices_survive_live_and_history_projection()

@@ -1,7 +1,5 @@
 use crate::{engine::Engine, thread::Thread};
-use remote_codex_core::desktop::{
-    AccountStatus, ConfirmedSettings, FileChange, McpStatus, ModelOption, ToolItem,
-};
+use remote_codex_core::desktop::{AccountStatus, ConfirmedSettings, McpStatus, ModelOption};
 use remote_codex_protocol::Fault;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -97,56 +95,7 @@ pub fn settings(value: &Value) -> ConfirmedSettings {
         reviewer: value["approvalsReviewer"].as_str().unwrap_or("user").into(),
     }
 }
-pub fn tool(value: &Value) -> Option<ToolItem> {
-    let kind = value["type"].as_str()?;
-    if !matches!(
-        kind,
-        "commandExecution"
-            | "fileChange"
-            | "mcpToolCall"
-            | "webSearch"
-            | "dynamicToolCall"
-            | "reasoning"
-    ) {
-        return None;
-    }
-    Some(ToolItem {
-        id: text(value, "id"),
-        kind: kind.into(),
-        title: value["command"]
-            .as_str()
-            .or_else(|| value["tool"].as_str())
-            .unwrap_or(kind)
-            .into(),
-        output: value["aggregatedOutput"]
-            .as_str()
-            .map(str::to_owned)
-            .unwrap_or_else(|| {
-                ["result", "error", "summary"]
-                    .iter()
-                    .find_map(|k| {
-                        value.get(k).filter(|v| !v.is_null()).map(|v| {
-                            if let Some(s) = v.as_str() {
-                                s.into()
-                            } else {
-                                v.to_string()
-                            }
-                        })
-                    })
-                    .unwrap_or_default()
-            }),
-        status: text(value, "status"),
-        changes: value["changes"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|c| FileChange {
-                path: text(c, "path"),
-                diff: text(c, "diff"),
-            })
-            .collect(),
-    })
-}
+pub use crate::tools::project as tool;
 fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().into()
 }

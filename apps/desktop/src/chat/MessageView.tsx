@@ -1,8 +1,7 @@
-import { ChevronDown, FileDiff, Terminal, Pencil } from 'lucide-react';
-import { memo, useState, type ReactNode } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { openLink } from '../bridge/client';
+import { Pencil } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
+import { MarkdownBody } from './MarkdownBody';
+import { ToolMessage } from './ToolMessage';
 import type { FileChange } from '../files/useFiles';
 import type { Message } from './state';
 import { AsyncQuestions } from './AsyncQuestions';
@@ -31,26 +30,7 @@ export const MessageView = memo(function MessageView({
   onDiff: (change: FileChange) => void;
   report: (error: unknown) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  if (message.tool)
-    return (
-      <details className="tool" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
-        <summary>
-          <Terminal size={14} />
-          <span>{message.tool.title}</span>
-          <small>{message.tool.status}</small>
-          <ChevronDown size={14} />
-        </summary>
-        {expanded && message.tool.output && <pre>{message.tool.output}</pre>}
-        {expanded &&
-          message.tool.changes.map((change) => (
-            <button key={change.path} className="diff-link" onClick={() => onDiff(change)}>
-              <FileDiff size={14} />
-              {change.path}
-            </button>
-          ))}
-      </details>
-    );
+  if (message.tool) return <ToolMessage tool={message.tool} onDiff={onDiff} report={report} />;
   if (editor) return <article className="message user editing-message">{editor}</article>;
   if (message.delivery === 'async' && message.questions?.length)
     return <AsyncQuestions message={message} answered={answered} onAnswer={onAnswer} />;
@@ -96,30 +76,5 @@ export const MessageView = memo(function MessageView({
         </time>
       )}
     </article>
-  );
-});
-
-const MarkdownBody = memo(function MarkdownBody({ text, report }: { text: string; report: (error: unknown) => void }) {
-  return (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      skipHtml
-      components={{
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            onClick={(event) => {
-              event.preventDefault();
-              if (href) void openLink(href).catch(report);
-            }}
-          >
-            {children}
-          </a>
-        ),
-        img: () => null,
-      }}
-    >
-      {text}
-    </Markdown>
   );
 });

@@ -17,5 +17,6 @@ pub mod goals;
 
 pub mod status;
 
+mod tools;
 mod usage;
 mod usage_history;

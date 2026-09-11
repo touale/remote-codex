@@ -81,6 +81,8 @@ export interface ToolItem {
   output: string;
   status: string;
   changes: { path: string; diff: string }[];
+  input?: string;
+  links?: { title: string; url: string; description?: string }[];
 }
 interface InputField {
   id: string;

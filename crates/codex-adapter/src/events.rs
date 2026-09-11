@@ -121,15 +121,23 @@ pub fn public_event(event: &Value) -> Option<SessionEvent> {
     if let Some(event) = crate::status::event(event).or_else(|| crate::goals::event(event)) {
         return Some(event);
     }
-    match event["method"].as_str()? {
-        "item/started" | "item/completed"
-            if crate::desktop::tool(&event["params"]["item"]).is_some() =>
-        {
-            crate::desktop::tool(&event["params"]["item"]).map(|item| SessionEvent::ToolChanged {
-                item,
-                turn_id: text("/params/turnId"),
-            })
+    if let Some(method @ ("item/started" | "item/completed")) = event["method"].as_str()
+        && let Some(mut item) = crate::desktop::tool(&event["params"]["item"])
+    {
+        if item.status.is_empty() {
+            item.status = if method == "item/started" {
+                "inProgress"
+            } else {
+                "completed"
+            }
+            .into();
         }
+        return Some(SessionEvent::ToolChanged {
+            item,
+            turn_id: text("/params/turnId"),
+        });
+    }
+    match event["method"].as_str()? {
         "warning" | "error" => Some(SessionEvent::Warning {
             message: event["params"]["message"]
                 .as_str()

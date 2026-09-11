@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { invokeWindow } from './invoke';
 import { edgeScrollbar, holdScrollbar, openSelect, pointerAt } from './scroll-controls';
+import { toolRecords } from './tool-records';
 
 describe('Shared controls in native WebKit', () => {
   let main: string;
@@ -159,5 +160,8 @@ describe('Shared controls in native WebKit', () => {
     await edgeScrollbar('.conflict-editor .modified .monaco-scrollable-element', 'y');
     await browser.saveScreenshot(path.resolve('../../.artifacts/desktop-e2e/scrolling-diff.png'));
     await $('[role="dialog"] button[aria-label="Close"]').click();
+  });
+  it('expands tool records with actual details and keeps them open during updates', async () => {
+    await toolRecords((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });
 });
