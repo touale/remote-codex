@@ -10,6 +10,17 @@ mod transfer_grants;
 use tauri::Manager;
 
 pub fn run() {
+    let context = tauri::generate_context!();
+    #[cfg(feature = "e2e")]
+    let context = {
+        let mut context = context;
+        // Native rendering assertions must also run when another app covers the test window.
+        for window in &mut context.config_mut().app.windows {
+            window.background_throttling =
+                Some(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+        }
+        context
+    };
     let builder = tauri::Builder::default();
     #[cfg(feature = "e2e")]
     let builder = builder
@@ -93,7 +104,7 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .build(tauri::generate_context!());
+        .build(context);
     match application {
         Ok(app) => app.run(|app, event| {
             if let tauri::RunEvent::ExitRequested {

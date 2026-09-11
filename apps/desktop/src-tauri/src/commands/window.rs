@@ -128,7 +128,7 @@ pub(crate) async fn new_window(
             .map_err(|_| unavailable())?
             .insert(label.clone(), workspace.clone());
     }
-    let built = tauri::WebviewWindowBuilder::new(
+    let builder = tauri::WebviewWindowBuilder::new(
         window.app_handle(),
         label.clone(),
         tauri::WebviewUrl::App("index.html".into()),
@@ -143,8 +143,11 @@ pub(crate) async fn new_window(
     .inner_size(1440.0, 900.0)
     .min_inner_size(900.0, 600.0)
     .title_bar_style(tauri::TitleBarStyle::Overlay)
-    .hidden_title(true)
-    .build();
+    .hidden_title(true);
+    #[cfg(feature = "e2e")]
+    let builder =
+        builder.background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+    let built = builder.build();
     if let Err(error) = built {
         state
             .startup_workspaces
