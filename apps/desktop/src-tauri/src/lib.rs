@@ -85,6 +85,7 @@ pub fn run() {
             commands::session_controls::session_history,
             commands::session_controls::session_close,
             commands::session_controls::session_metadata,
+            commands::session_controls::session_revert,
             commands::session_controls::session_mcp,
             commands::session_controls::session_snapshot,
             commands::session_controls::session_status,

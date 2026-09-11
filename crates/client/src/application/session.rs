@@ -59,6 +59,7 @@ impl SessionService {
         let binding = self.client.0.store.session_binding(id).await?;
         let mut page = crate::local::history::read(&program, &binding, cursor).await?;
         self.client.0.store.message_times(&mut page).await?;
+        self.client.0.store.save_summary(&page.session).await?;
         Ok(page)
     }
 

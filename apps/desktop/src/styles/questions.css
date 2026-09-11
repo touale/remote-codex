@@ -1,0 +1,42 @@
+.question-choice {
+  padding: 0;
+  margin: 16px 0;
+  border: 0;
+  min-width: 0;
+}
+.question-choice legend {
+  font-size: 13px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 5px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.question-option:has(input:checked) {
+  background: var(--surface);
+  border-color: var(--muted);
+}
+.question-option input {
+  width: auto;
+  margin-top: 3px;
+  accent-color: var(--text);
+}
+.question-choice > input {
+  width: 100%;
+  font-size: 12px;
+  margin-top: 5px;
+}
+.async-questions details {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}

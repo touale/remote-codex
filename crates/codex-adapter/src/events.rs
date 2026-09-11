@@ -151,6 +151,8 @@ pub fn public_event(event: &Value) -> Option<SessionEvent> {
             })
         }
         "item/agentMessage/delta" => Some(SessionEvent::Message {
+            delivery: None,
+            questions: Vec::new(),
             turn_id: text("/params/turnId"),
             phase: event["params"]["item"]["phase"].as_str().map(str::to_owned),
             item_id: text("/params/itemId"),
@@ -162,6 +164,10 @@ pub fn public_event(event: &Value) -> Option<SessionEvent> {
                 == Some("agentMessage") =>
         {
             Some(SessionEvent::Message {
+                delivery: event["params"]["item"]["delivery"]
+                    .as_str()
+                    .map(str::to_owned),
+                questions: crate::thread::history::questions(&event["params"]["item"]),
                 turn_id: text("/params/turnId"),
                 phase: event["params"]["item"]["phase"].as_str().map(str::to_owned),
                 item_id: text("/params/item/id"),

@@ -209,7 +209,7 @@ impl LocalRuntime {
             return Err(error);
         }
         if self.has_history.load(Ordering::Acquire) {
-            self.store.save_session(&self.binding).await?;
+            self.refresh_summary(&generation).await?;
         }
         Ok(Arc::new(generation))
     }

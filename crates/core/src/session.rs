@@ -57,6 +57,9 @@ pub enum ApprovalDecision {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionEvent {
+    SessionUpdated {
+        session: Session,
+    },
     ActivityChanged {
         activity: String,
         active_flags: Vec<String>,
@@ -111,6 +114,8 @@ pub enum SessionEvent {
         phase: Option<String>,
         text: String,
         complete: bool,
+        delivery: Option<String>,
+        questions: Vec<AsyncQuestion>,
     },
     ToolOutput {
         item_id: String,
@@ -188,8 +193,19 @@ pub struct HistoryItem {
     pub phase: Option<String>,
     pub kind: String,
     pub text: String,
+    #[serde(default)]
+    pub delivery: Option<String>,
+    #[serde(default)]
+    pub questions: Vec<AsyncQuestion>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool: Option<crate::desktop::ToolItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AsyncQuestion {
+    pub title: String,
+    #[serde(default)]
+    pub options: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

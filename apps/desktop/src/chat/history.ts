@@ -18,13 +18,15 @@ function historyMessages(page: HistoryPage): Message[] {
           sentAt: sentAt ?? undefined,
           phase: item.phase ?? undefined,
           text: item.text,
+          delivery: item.delivery ?? undefined,
+          questions: item.questions,
           tool: item.tool,
           plan: item.kind === 'plan',
           complete: turn.status !== 'inProgress',
         };
       });
     })
-    .filter((item) => item.text || item.tool);
+    .filter((item) => item.text || item.tool || item.questions?.length);
 }
 export function mergeHistory(chat: ChatState, page: HistoryPage): ChatState {
   const items = historyMessages(page);
@@ -59,4 +61,24 @@ export function mergeHistory(chat: ChatState, page: HistoryPage): ChatState {
     },
     messages: [...history, ...chat.messages.filter((m) => !ids.has(m.id) && !(m.clientId && ids.has(m.clientId)))],
   };
+}
+
+/** A revert replaces history; normal pagination only merges it. */
+export function replaceHistory(chat: ChatState, page: HistoryPage, removed: string[] = []): ChatState {
+  return mergeHistory(
+    {
+      ...chat,
+      messages: [],
+      turns: {},
+      turn: null,
+      plan: null,
+      questions: [],
+      status: { ...chat.status, usage: null },
+      warning: null,
+      nextCursor: null,
+      historyReady: true,
+      discardedTurns: [...new Set([...chat.discardedTurns, ...removed])],
+    },
+    page,
+  );
 }

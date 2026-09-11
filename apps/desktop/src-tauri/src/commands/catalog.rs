@@ -63,7 +63,11 @@ pub(crate) async fn catalog(
         .values()
         .map(|s| {
             Ok(LiveSession {
-                session: s.session().clone(),
+                session: sessions
+                    .iter()
+                    .find(|entry| entry.session.id == s.session().id)
+                    .map(|entry| entry.session.clone())
+                    .unwrap_or_else(|| s.session().clone()),
                 server: s.server().into(),
                 settings: s.current_settings()?,
             })

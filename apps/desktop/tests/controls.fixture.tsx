@@ -1,5 +1,6 @@
 // Test-build-only surfaces composed from the production controls and renderers.
 import { Terminal } from '@xterm/xterm';
+import '@xterm/xterm/css/xterm.css';
 import { Tooltip } from 'radix-ui';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { Root } from 'react-dom/client';

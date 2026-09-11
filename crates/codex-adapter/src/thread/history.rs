@@ -47,36 +47,41 @@ pub async fn read(
     cursor: Option<&str>,
 ) -> Result<HistoryPage, Fault> {
     let codex = Codex::start(program, Path::new(&bound.codex_home)).await?;
-    let result = async {
-        let summary = codex
-            .engine
-            .call(
-                "thread/read",
-                json!({"threadId":bound.session.id,"includeTurns":false}),
-            )
-            .await?;
-        let turns = codex
-            .engine
-            .call(
-                "thread/turns/list",
-                json!({"threadId":bound.session.id,"cursor":cursor,"itemsView":"full","limit":20}),
-            )
-            .await?;
-        let entries = turns["data"].as_array().ok_or_else(|| {
-            Fault::new(
-                "INVALID_NATIVE_HISTORY",
-                "native history did not contain turns",
-            )
-        })?;
-        Ok(HistoryPage {
-            session: binding::session(&summary["thread"], &bound.session.cwd)?,
-            turns: entries.iter().map(turn).collect(),
-            next_cursor: turns["nextCursor"].as_str().map(str::to_owned),
-        })
-    }
-    .await;
+    let result = page(&codex, bound, cursor).await;
     codex.shutdown().await;
     result
+}
+
+pub(super) async fn page(
+    codex: &Codex,
+    bound: &SessionBinding,
+    cursor: Option<&str>,
+) -> Result<HistoryPage, Fault> {
+    let summary = codex
+        .engine
+        .call(
+            "thread/read",
+            json!({"threadId":bound.session.id,"includeTurns":false}),
+        )
+        .await?;
+    let turns = codex
+        .engine
+        .call(
+            "thread/turns/list",
+            json!({"threadId":bound.session.id,"cursor":cursor,"itemsView":"full","limit":20}),
+        )
+        .await?;
+    let entries = turns["data"].as_array().ok_or_else(|| {
+        Fault::new(
+            "INVALID_NATIVE_HISTORY",
+            "native history did not contain turns",
+        )
+    })?;
+    Ok(HistoryPage {
+        session: binding::session(&summary["thread"], &bound.session.cwd)?,
+        turns: entries.iter().map(turn).collect(),
+        next_cursor: turns["nextCursor"].as_str().map(str::to_owned),
+    })
 }
 
 fn turn(value: &Value) -> HistoryTurn {
@@ -95,6 +100,8 @@ fn turn(value: &Value) -> HistoryTurn {
                 phase: item["phase"].as_str().map(str::to_owned),
                 kind: text(item, "type"),
                 text: item_text(item),
+                delivery: item["delivery"].as_str().map(str::to_owned),
+                questions: questions(item),
                 tool: crate::desktop::tool(item),
             })
             .collect(),
@@ -126,4 +133,81 @@ pub(crate) fn item_text(item: &Value) -> String {
 
 fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().into()
+}
+
+pub(crate) fn questions(item: &Value) -> Vec<remote_codex_core::session::AsyncQuestion> {
+    item["questions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|question| {
+            Some(remote_codex_core::session::AsyncQuestion {
+                title: question["title"].as_str()?.into(),
+                options: question["options"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect(),
+            })
+        })
+        .collect()
+}
+
+impl super::Thread {
+    pub async fn history(&self) -> Result<HistoryPage, Fault> {
+        page(&self.codex, &self.binding, None).await
+    }
+
+    pub async fn revert(&self, before_turn: &str) -> Result<(), Fault> {
+        self.codex
+            .engine
+            .call(
+                "thread/revert",
+                json!({
+                    "threadId": self.binding.session.id, "beforeTurnId": before_turn
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use remote_codex_core::session::SessionEvent;
+
+    #[test]
+    fn asynchronous_choices_survive_live_and_history_projection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let item = json!({"type":"agentMessage","id":"question","text":"Choose a scope",
+            "delivery":"async","questions":[{"title":"Which scope?","options":["Research","Implementation"]}]});
+        let history = turn(&json!({"id":"turn","items":[item]}));
+        let event = crate::events::public_event(&json!({"method":"item/completed",
+            "params":{"turnId":"turn","item":item}}))
+        .ok_or("expected projected event")?;
+        let SessionEvent::Message {
+            delivery,
+            questions,
+            ..
+        } = event
+        else {
+            return Err("expected a message".into());
+        };
+        assert_eq!(delivery.as_deref(), Some("async"));
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0].options, ["Research", "Implementation"]);
+        assert_eq!(
+            serde_json::to_value(questions)?,
+            serde_json::to_value(&history.items[0].questions)?
+        );
+        assert!(super::questions(&json!({"questions":null})).is_empty());
+        let free =
+            super::questions(&json!({"questions":[{"title":"Your budget?","options":null}]}));
+        assert_eq!(free.len(), 1);
+        assert!(free[0].options.is_empty());
+        Ok(())
+    }
 }

@@ -29,9 +29,12 @@ export function ConnectionTree(
   };
   const sessions = useMemo(() => {
     const sessions = catalog.sessions.filter((item) => !item.session.archived);
-    for (const chat of Object.values(props.chats))
-      if (!sessions.some((c) => c.session.id === chat.session.id) && !chat.session.archived)
-        sessions.push({ server_id: '', server: chat.server, session: chat.session });
+    for (const chat of Object.values(props.chats)) {
+      if (chat.session.archived) continue;
+      const index = sessions.findIndex((c) => c.session.id === chat.session.id);
+      if (index < 0) sessions.push({ server_id: '', server: chat.server, session: chat.session });
+      else if (!chat.closed) sessions[index] = { ...sessions[index], session: chat.session };
+    }
     return sessions;
   }, [catalog.sessions, props.chats]);
   const trees = useMemo(() => {

@@ -163,3 +163,19 @@ pub(crate) async fn session_status(
 ) -> Result<SessionSnapshot> {
     Ok(state.window(&window)?.session(&id)?.status().await?)
 }
+
+#[tauri::command]
+pub(crate) async fn session_revert(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    id: String,
+    before_turn_id: String,
+) -> Result<RevertedSession> {
+    let result = state
+        .window(&window)?
+        .session(&id)?
+        .revert(&before_turn_id)
+        .await?;
+    state.changed();
+    Ok(result)
+}

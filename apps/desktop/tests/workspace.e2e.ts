@@ -7,6 +7,7 @@ import { conversationLoading } from './conversation-loading';
 import { draftModes, immediateDraft, usagePreferences } from './draft-controls';
 import { fileCreation } from './experience-controls';
 import { directoryLoading, editorLoading } from './file-loading';
+import { messageEditing, sessionTitle } from './message-editing';
 import { fileTransfers } from './file-transfers';
 import { firstMessage } from './first-message';
 import { activateTree, composerInput } from './interaction-controls';
@@ -131,6 +132,7 @@ describe('A real SSH workspace in the native desktop', () => {
       await $('.working').waitForExist({ reverse: true });
       const catalog = await invoke<Catalog>('catalog', { archived: false });
       session = catalog.live[0].session.id;
+      await sessionTitle(invoke, session);
       await $('button[aria-label="Permissions"]').click();
       await $('.permissions-menu').$('button*=Full Access').click();
       await $('button=Cancel').click();
@@ -221,6 +223,7 @@ describe('A real SSH workspace in the native desktop', () => {
     await step('applies Plan and Goal selections before the first submission', async () => {
       await draftModes(invoke, session);
     });
+    await step('answers structured plan questions and edits a previous message', () => messageEditing(invoke, session));
     await step('isolates other windows and refuses removal while this workspace is owned', async () => {
       const directory = await invoke<string>('directory_open', {
         operationId: crypto.randomUUID(),

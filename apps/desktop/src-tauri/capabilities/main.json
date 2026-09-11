@@ -42,6 +42,7 @@
     "allow-session-trust",
     "allow-session-action",
     "allow-session-history",
+    "allow-session-revert",
     "allow-session-close",
     "allow-session-metadata",
     "allow-session-mcp",

@@ -25,10 +25,9 @@ pub(crate) fn session(thread: &Value, cwd: &str) -> Result<Session, Fault> {
             .into(),
         title: thread["name"]
             .as_str()
-            .or_else(|| thread["preview"].as_str())
-            .filter(|s| !s.is_empty())
-            .unwrap_or("New session")
-            .into(),
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| preview(thread["preview"].as_str().unwrap_or_default())),
         cwd: cwd.into(),
         created_at: thread["createdAt"].as_i64().unwrap_or(0),
         updated_at: thread["updatedAt"].as_i64().unwrap_or(0),
@@ -43,4 +42,32 @@ pub(crate) fn session(thread: &Value, cwd: &str) -> Result<Session, Fault> {
 
 pub(crate) fn full_access(mode: &str) -> bool {
     mode == "unrestricted"
+}
+
+fn preview(text: &str) -> String {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.is_empty() {
+        return "New session".into();
+    }
+    if text.chars().count() > 80 {
+        format!("{}…", text.chars().take(79).collect::<String>())
+    } else {
+        text
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn title_uses_a_nonempty_name_then_a_compact_unicode_preview() -> Result<(), Fault> {
+        let mut thread = json!({"id":"test","name":" ","preview":"  Plan\n this  task  "});
+        assert_eq!(session(&thread, "/")?.title, "Plan this task");
+        thread["name"] = json!("My title");
+        assert_eq!(session(&thread, "/")?.title, "My title");
+        assert_eq!(preview("\n"), "New session");
+        assert_eq!(preview(&"目".repeat(90)), format!("{}…", "目".repeat(79)));
+        Ok(())
+    }
 }

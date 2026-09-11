@@ -66,6 +66,10 @@ impl SessionHandle {
         self.runtime.message(text, client_id, expected_turn).await
     }
 
+    pub async fn revert(&self, before_turn: &str) -> Result<super::RevertedSession> {
+        self.runtime.revert(before_turn).await
+    }
+
     pub async fn status(&self) -> Result<super::SessionSnapshot> {
         self.runtime.status().await
     }

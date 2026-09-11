@@ -8,6 +8,8 @@ import { changeMode } from './composer/actions';
 import { Composer } from './composer/Composer';
 import { Conversation, Working } from './Conversation';
 import { Questions } from './Questions';
+import { MessageEditor, startEdit } from './MessageEditor';
+import { questionReplyId } from './AsyncQuestions';
 import { SessionStatus } from './SessionStatus';
 import type { PlanChoice } from './MessageView';
 import type { ChatState, ChatUpdate, Message } from './state';
@@ -18,6 +20,8 @@ export function Chat({
   onResume,
   onFreshPlan,
   onHistory,
+  onRevert,
+  onReloadEdit,
   onDiff,
   report,
 }: {
@@ -27,6 +31,8 @@ export function Chat({
   onResume: () => void;
   onFreshPlan: (chat: ChatState, plan: Message) => Promise<void>;
   onHistory: () => void;
+  onRevert: (turn: string) => Promise<void>;
+  onReloadEdit: () => Promise<void>;
   onDiff: (change: FileChange) => void;
   report: (error: unknown) => void;
 }) {
@@ -107,6 +113,17 @@ export function Chat({
   );
   const showStatus = useCallback(() => setStatusOpen(true), []);
   if (!chat) return null;
+  const editReady = chat.environment.status === 'ready' && !chat.closed && !chat.turn && chat.goal?.status !== 'active';
+  const editor = chat.edit ? (
+    <MessageEditor
+      edit={chat.edit}
+      update={update}
+      enabled={editReady}
+      onRevert={onRevert}
+      onReload={onReloadEdit}
+      onSend={(text, clientId) => execute({ action: 'submit', text, client_id: clientId })}
+    />
+  ) : null;
   const ready = chat.environment.status === 'ready';
   const latestPlan = chat.messages.filter((message) => message.plan || message.role === 'user').at(-1);
   const revision = Boolean(
@@ -124,7 +141,7 @@ export function Chat({
       >
         <div className="messages">
           {chat.nextCursor && (
-            <button className="subtle load-history" onClick={onHistory}>
+            <button className="subtle load-history" disabled={!!chat.edit} onClick={onHistory}>
               Load earlier messages
             </button>
           )}
@@ -133,13 +150,32 @@ export function Chat({
           )}
           <Conversation
             messages={chat.messages}
+            editing={chat.edit?.id}
+            editor={editor}
+            onEdit={
+              editReady && !chat.edit ? (message) => update((current) => startEdit(current, message.id)) : undefined
+            }
+            onAnswer={
+              ready && !chat.closed && !chat.edit
+                ? async (message, text) => {
+                    const current = latest.current;
+                    if (!current) return;
+                    await execute(
+                      current.turn
+                        ? { action: 'steer', turn: current.turn, text, client_id: questionReplyId(message.id) }
+                        : { action: 'submit', text, client_id: questionReplyId(message.id) },
+                    );
+                  }
+                : undefined
+            }
             turns={chat.turns}
             activePlan={latestPlan?.plan ? latestPlan.id : undefined}
             revisingPlan={revision}
             onDiff={onDiff}
             report={report}
-            onPlan={chat.turn || choosingPlan || chat.closed || !ready ? undefined : choosePlan}
+            onPlan={chat.turn || choosingPlan || chat.closed || chat.edit || !ready ? undefined : choosePlan}
           />
+          {chat.edit && !chat.messages.some((m) => m.id === chat.edit?.id) && editor}
           {chat.plan && (
             <details className="plan-steps" open>
               <summary>Plan progress</summary>
@@ -183,7 +219,7 @@ export function Chat({
         </div>
       ) : (
         <Composer
-          preparing={choosingPlan}
+          preparing={choosingPlan || Boolean(chat.edit)}
           onCancelPlanRevision={revision ? () => setRevisingPlan(null) : undefined}
           chat={{ ...chat, ready }}
           setDraft={(draft, expected) =>

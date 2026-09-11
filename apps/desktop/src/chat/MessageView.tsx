@@ -1,14 +1,19 @@
-import { ChevronDown, FileDiff, Terminal } from 'lucide-react';
-import { memo, useState } from 'react';
+import { ChevronDown, FileDiff, Terminal, Pencil } from 'lucide-react';
+import { memo, useState, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { openLink } from '../bridge/client';
 import type { FileChange } from '../files/useFiles';
 import type { Message } from './state';
+import { AsyncQuestions } from './AsyncQuestions';
 import { clockTime, fullTime } from './time';
 export type PlanChoice = 'implement' | 'fresh' | 'revise';
 export const MessageView = memo(function MessageView({
   message,
+  onEdit,
+  editor,
+  onAnswer,
+  answered = false,
   onDiff,
   report,
   onPlan,
@@ -16,6 +21,10 @@ export const MessageView = memo(function MessageView({
   revisingPlan,
 }: {
   message: Message;
+  onEdit?: (message: Message) => void;
+  editor?: ReactNode;
+  onAnswer?: (message: Message, text: string) => Promise<void>;
+  answered?: boolean;
   onPlan?: (message: Message, choice: PlanChoice) => void;
   activePlan?: boolean;
   revisingPlan?: boolean;
@@ -42,6 +51,9 @@ export const MessageView = memo(function MessageView({
           ))}
       </details>
     );
+  if (editor) return <article className="message user editing-message">{editor}</article>;
+  if (message.delivery === 'async' && message.questions?.length)
+    return <AsyncQuestions message={message} answered={answered} onAnswer={onAnswer} />;
   return (
     <article className={`message ${message.role} ${message.plan ? 'plan-card' : ''}`}>
       <div className="message-body">
@@ -68,6 +80,11 @@ export const MessageView = memo(function MessageView({
             </div>
           )}
         </div>
+      )}
+      {onEdit && message.role === 'user' && message.turn && (
+        <button className="edit-message" aria-label="Edit message" title="Edit message" onClick={() => onEdit(message)}>
+          <Pencil size={13} />
+        </button>
       )}
       {message.role === 'user' && message.sentAt != null && (
         <time

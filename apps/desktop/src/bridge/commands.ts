@@ -103,6 +103,7 @@ export interface Commands {
   >;
   session_trust: Command<Operation & { preparation: string; accept: boolean }, SessionOpened | null>;
   session_action: Command<Id & { action: NativeAction }, Submission | null>;
+  session_revert: Command<Id & { beforeTurnId: string }, { history: HistoryPage; snapshot: SessionSnapshot }>;
   session_history: Command<Id & { cursor: string | null }, HistoryPage>;
   session_close: Command<Id>;
   session_metadata: Command<Id & { name: string | null; archived: boolean | null }>;

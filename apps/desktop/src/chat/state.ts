@@ -7,6 +7,7 @@ import {
   type TurnState,
 } from '../bridge/session';
 import type {
+  AsyncQuestion,
   Environment,
   Goal,
   Interaction,
@@ -22,6 +23,8 @@ export interface Message {
   id: string;
   clientId?: string;
   role: 'user' | 'assistant';
+  delivery?: string;
+  questions?: AsyncQuestion[];
   turn?: string;
   text: string;
   sentAt?: number;
@@ -35,6 +38,17 @@ export interface Question {
   id: string;
   description?: string;
   interaction?: Interaction;
+}
+export interface MessageEdit {
+  id: string;
+  clientId: string;
+  turn: string;
+  text: string;
+  removedTurns: string[];
+  reverted?: boolean;
+  uncertain?: boolean;
+  busy?: boolean;
+  error?: string;
 }
 export interface ChatState {
   goal: Goal | null;
@@ -51,12 +65,14 @@ export interface ChatState {
   composerMode: ComposerMode;
   environment: Environment;
   draft: string;
+  edit?: MessageEdit;
   scroll: number | null;
   closed: boolean;
   warning: string | null;
   nextCursor: string | null;
   // Native ownership can be established before the first history read succeeds.
   historyReady: boolean;
+  discardedTurns: string[];
 }
 export function initialChat(session: Session, server: string, settings: Settings, models: Model[]): ChatState {
   return {
@@ -79,6 +95,7 @@ export function initialChat(session: Session, server: string, settings: Settings
     warning: null,
     nextCursor: null,
     historyReady: true,
+    discardedTurns: [],
   };
 }
 export function applySnapshot(
@@ -86,25 +103,41 @@ export function applySnapshot(
   snapshot: SessionSnapshot,
   usageAtRequest = chat.status.usage,
 ): ChatState {
-  const current = snapshot.current_turn;
+  const discarded = !!snapshot.current_turn && chat.discardedTurns.includes(snapshot.current_turn.id);
+  const current = discarded ? null : snapshot.current_turn;
   return snapshot.pending.reduce(reduceEvent, {
     ...chat,
     goal: snapshot.goal,
-    plan: snapshot.plan,
+    plan: snapshot.plan && !chat.discardedTurns.includes(snapshot.plan.turn) ? snapshot.plan : null,
     settings: snapshot.settings,
     environment: snapshot.environment,
     status: {
       ...snapshot.status,
-      usage: chat.status.usage !== usageAtRequest ? chat.status.usage : (snapshot.status.usage ?? chat.status.usage),
+      usage: discarded
+        ? null
+        : chat.status.usage !== usageAtRequest
+          ? chat.status.usage
+          : (snapshot.status.usage ?? chat.status.usage),
     },
-    turn: snapshot.turn,
+    turn: snapshot.turn && !chat.discardedTurns.includes(snapshot.turn) ? snapshot.turn : null,
     turns: current ? { ...chat.turns, [current.id]: current } : chat.turns,
     closed: snapshot.closed,
     questions: [],
   });
 }
 export function reduceEvent(state: ChatState, event: SessionEvent): ChatState {
+  const turnId =
+    'turn_id' in event
+      ? event.turn_id
+      : event.type === 'plan_changed'
+        ? event.plan.turn
+        : event.type === 'turn_started' || event.type === 'turn_completed'
+          ? event.id
+          : undefined;
+  if (turnId && state.discardedTurns.includes(turnId)) return state;
   switch (event.type) {
+    case 'session_updated':
+      return { ...state, session: event.session };
     case 'activity_changed':
       return { ...state, status: { ...state.status, activity: event.activity, active_flags: event.active_flags } };
     case 'usage_changed':
@@ -155,6 +188,8 @@ export function reduceEvent(state: ChatState, event: SessionEvent): ChatState {
           turn: event.turn_id || previous?.turn || state.turn || undefined,
           phase: event.type === 'message' ? (event.phase ?? previous?.phase) : undefined,
           plan: event.type === 'plan_message',
+          delivery: event.type === 'message' ? (event.delivery ?? previous?.delivery) : undefined,
+          questions: event.type === 'message' && event.complete ? event.questions : previous?.questions,
           complete: event.complete,
           text: event.complete ? event.text : (previous?.text ?? '') + event.text,
         }),

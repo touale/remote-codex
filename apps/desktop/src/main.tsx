@@ -4,6 +4,7 @@ if (import.meta.env.MODE === 'e2e') {
 import { createRoot } from 'react-dom/client';
 import App from './app/App';
 import './styles/chat.css';
+import './styles/questions.css';
 import './styles/composer.css';
 import './styles/controls.css';
 import './styles/editor.css';

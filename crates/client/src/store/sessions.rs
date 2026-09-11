@@ -5,6 +5,18 @@ use remote_codex_core::session::SessionBinding;
 pub(crate) use remote_codex_core::session::CachedSession;
 
 impl LocalStore {
+    pub(crate) async fn save_summary(
+        &self,
+        session: &remote_codex_core::session::Session,
+    ) -> Result<bool> {
+        let mut tx = self.begin_write().await?;
+        let value = serde_json::to_string(session)?;
+        let changed = sqlx::query("UPDATE local_sessions SET record=json_set(record,'$.session',json(?)),updated_at=unixepoch() WHERE id=? AND json_extract(record,'$.session')<>json(?)")
+            .bind(&value).bind(&session.id).bind(&value).execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(changed.rows_affected() > 0)
+    }
+
     pub(crate) async fn save_session(&self, binding: &SessionBinding) -> Result<()> {
         let mut tx = self.begin_write().await?;
         let updated = sqlx::query("INSERT INTO local_sessions(id,server,record) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET record=excluded.record,updated_at=unixepoch() WHERE local_sessions.server=excluded.server")

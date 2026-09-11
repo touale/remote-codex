@@ -3,7 +3,7 @@ import { call, failure, listen } from '../bridge/client';
 import { restoredMode, type SessionAction } from '../bridge/session';
 import type { SessionEvent, SessionOpened } from '../bridge/types';
 import type { Ask } from '../ui/useDialog';
-import { mergeHistory } from './history';
+import { mergeHistory, replaceHistory } from './history';
 import { applySnapshot, initialChat, reduceEvent } from './state';
 import { ChatStore } from './store';
 
@@ -12,19 +12,22 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
   const chats = useSyncExternalStore(store.subscribeSummaries, store.getSummaries);
   const pending = useRef(new Map<string, SessionEvent[]>());
   const update = store.update;
+  const historyEpoch = useRef(new Map<string, number>());
   const historyRequests = useRef(new Map<string, Promise<void>>());
   const loadHistory = useCallback(
     (id: string, cursor: string | null = null) => {
-      const key = JSON.stringify([id, cursor]);
+      const epoch = historyEpoch.current.get(id) ?? 0;
+      const key = JSON.stringify([id, cursor, epoch]);
       const existing = historyRequests.current.get(key);
       if (existing) return existing;
       const task = call('session_history', { id, cursor })
-        .then((page) =>
-          update(id, (chat) => ({
-            ...mergeHistory(chat, page),
-            historyReady: cursor === null || chat.historyReady,
-          })),
-        )
+        .then((page) => {
+          if ((historyEpoch.current.get(id) ?? 0) === epoch)
+            update(id, (chat) => ({
+              ...mergeHistory(chat, page),
+              historyReady: cursor === null || chat.historyReady,
+            }));
+        })
         .finally(() => historyRequests.current.delete(key));
       historyRequests.current.set(key, task);
       return task;
@@ -66,6 +69,12 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
           messages: previous.messages,
           turns: { ...previous.turns, ...chat.turns },
           draft: previous.draft,
+          edit: previous.edit && {
+            ...previous.edit,
+            busy: false,
+            uncertain: previous.edit.uncertain || previous.edit.busy,
+          },
+          discardedTurns: previous.discardedTurns,
           scroll: previous.scroll,
         };
       for (const event of [...opened.snapshot.pending, ...(pending.current.get(id) ?? [])])
@@ -78,7 +87,7 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
   const action = useCallback(
     async (id: string, action: SessionAction) => {
       const message = action.action === 'submit' || action.action === 'steer' ? action : null;
-      const clientId = message ? crypto.randomUUID() : null;
+      const clientId = message ? (message.client_id ?? crypto.randomUUID()) : null;
       if (message && clientId) {
         update(id, (chat) => ({
           ...chat,
@@ -102,7 +111,7 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
         if (message && clientId)
           update(id, (chat) => ({
             ...chat,
-            draft: chat.draft.trim() === message.text ? '' : chat.draft,
+            draft: chat.edit?.clientId !== clientId && chat.draft.trim() === message.text ? '' : chat.draft,
             messages: chat.messages.map((item) =>
               item.clientId === clientId
                 ? { ...item, turn: receipt?.turn_id ?? item.turn, sentAt: receipt?.sent_at ?? item.sentAt }
@@ -132,6 +141,33 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
       }
       if (action.action === 'approve' || action.action === 'interact')
         update(id, (chat) => ({ ...chat, questions: chat.questions.filter((q) => q.id !== action.request) }));
+    },
+    [update],
+  );
+  const revert = useCallback(
+    async (id: string, turn: string) => {
+      historyEpoch.current.set(id, (historyEpoch.current.get(id) ?? 0) + 1);
+      const result = await call('session_revert', { id, beforeTurnId: turn });
+      update(id, (chat) => ({
+        ...applySnapshot(replaceHistory(chat, result.history, chat.edit?.removedTurns), result.snapshot),
+        edit: chat.edit && { ...chat.edit, reverted: true, uncertain: false },
+      }));
+    },
+    [update],
+  );
+  const reloadEdit = useCallback(
+    async (id: string) => {
+      historyEpoch.current.set(id, (historyEpoch.current.get(id) ?? 0) + 1);
+      const page = await call('session_history', { id, cursor: null });
+      const snapshot = await call('session_snapshot', { id });
+      update(id, (chat) => {
+        const submitted = page.turns.some((t) => t.items.some((i) => i.client_id === chat.edit?.clientId));
+        const reverted = !page.turns.some((t) => chat.edit?.removedTurns.includes(t.id));
+        return {
+          ...applySnapshot(replaceHistory(chat, page, reverted ? chat.edit?.removedTurns : []), snapshot),
+          edit: !submitted && chat.edit ? { ...chat.edit, reverted, uncertain: false } : undefined,
+        };
+      });
     },
     [update],
   );
@@ -182,5 +218,5 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
       }));
   };
   useEffect(() => () => store.dispose(), [store]);
-  return { chats, store, register, update, action, close, loadHistory, metadata };
+  return { chats, store, register, update, action, close, loadHistory, metadata, revert, reloadEdit };
 }

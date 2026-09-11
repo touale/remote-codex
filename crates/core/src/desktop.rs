@@ -109,3 +109,9 @@ pub struct SessionSnapshot {
     pub pending: Vec<crate::session::SessionEvent>,
     pub closed: bool,
 }
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RevertedSession {
+    pub history: crate::session::HistoryPage,
+    pub snapshot: SessionSnapshot,
+}

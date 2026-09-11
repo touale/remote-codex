@@ -114,7 +114,12 @@ export interface Plan {
   explanation: string | null;
   steps: { step: string; status: string }[];
 }
+export interface AsyncQuestion {
+  title: string;
+  options: string[];
+}
 export type SessionEvent =
+  | { type: 'session_updated'; session: Session }
   | { type: 'activity_changed'; activity: string; active_flags: string[] }
   | { type: 'usage_changed'; usage: TokenUsage }
   | { type: 'rate_limits_changed'; limits: RateLimit[] }
@@ -122,7 +127,16 @@ export type SessionEvent =
   | { type: 'goal_changed'; goal: Goal | null }
   | { type: 'plan_changed'; plan: Plan }
   | { type: 'plan_message'; item_id: string; turn_id: string; text: string; complete: boolean }
-  | { type: 'message'; item_id: string; turn_id: string; phase: string | null; text: string; complete: boolean }
+  | {
+      type: 'message';
+      item_id: string;
+      turn_id: string;
+      phase: string | null;
+      text: string;
+      complete: boolean;
+      delivery?: string | null;
+      questions?: AsyncQuestion[];
+    }
   | { type: 'tool_output'; item_id: string; turn_id: string; text: string }
   | { type: 'tool_changed'; item: ToolItem; turn_id: string }
   | { type: 'approval_requested'; request_id: string; description: string }
@@ -197,6 +211,8 @@ export interface HistoryPage {
       client_id: string | null;
       phase: string | null;
       sent_at: number | null;
+      delivery?: string | null;
+      questions?: AsyncQuestion[];
     }[];
   }[];
   next_cursor: string | null;

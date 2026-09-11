@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyTiming } from '../bridge/session';
 import type { HistoryPage } from '../bridge/types';
-import { mergeHistory } from './history';
+import { mergeHistory, replaceHistory } from './history';
 import { initialChat, reduceEvent } from './state';
 const session = {
   id: 'thread',
@@ -14,6 +14,60 @@ const session = {
 };
 const settings = { mode: 'agent' as const, model: 'model-a', effort: 'medium', full_access: false, reviewer: 'user' };
 describe('native session projection', () => {
+  it('replaces reverted turns without resurrecting late messages and retains async choices', () => {
+    let state = initialChat(session, 'dev', settings, []);
+    state.draft = 'Keep the composer draft';
+    state = reduceEvent(state, {
+      type: 'message',
+      turn_id: 'removed',
+      item_id: 'old',
+      text: 'Old answer',
+      phase: null,
+      complete: true,
+    });
+    const questions = [{ title: 'Which scope?', options: ['Research', 'Implementation'] }];
+    state = replaceHistory(
+      state,
+      {
+        session,
+        next_cursor: 'earlier',
+        turns: [
+          {
+            id: 'kept',
+            status: 'completed',
+            timing: emptyTiming(),
+            items: [
+              {
+                id: 'question',
+                client_id: null,
+                phase: null,
+                kind: 'agentMessage',
+                text: '',
+                sent_at: null,
+                delivery: 'async',
+                questions,
+              },
+            ],
+          },
+        ],
+      },
+      ['removed'],
+    );
+    state = reduceEvent(state, {
+      type: 'message',
+      turn_id: 'removed',
+      item_id: 'late',
+      text: 'Late answer',
+      phase: null,
+      complete: true,
+    });
+    expect(state.messages).toHaveLength(1);
+    expect(state.messages[0]).toMatchObject({ delivery: 'async', questions });
+    expect(state.draft).toBe('Keep the composer draft');
+    expect(state.nextCursor).toBe('earlier');
+    state = reduceEvent(state, { type: 'session_updated', session: { ...session, title: 'Updated title' } });
+    expect(state.session.title).toBe('Updated title');
+  });
   it('replaces a streamed message with its acknowledged complete content', () => {
     let state = initialChat(session, 'dev', settings, []);
     state = reduceEvent(state, {
@@ -155,4 +209,8 @@ it('preserves known usage across empty snapshots and ignores restoration overtak
   const older = { ...snapshot, status: { ...snapshot.status, usage: recorded } };
   expect(applySnapshot(live, older, recorded).status.usage).toEqual(compacted);
   expect(applySnapshot(state, older).status.usage).toEqual(recorded);
+  const reverted = { ...state, discardedTurns: ['removed'] };
+  const stale = { ...older, current_turn: { id: 'removed', status: 'completed', timing: emptyTiming() } };
+  expect(applySnapshot(reverted, stale).turns).toEqual({});
+  expect(applySnapshot(reverted, stale).status.usage).toBeNull();
 });

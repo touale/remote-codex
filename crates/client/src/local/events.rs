@@ -208,7 +208,14 @@ async fn process(
         }
         let _ = runtime.events.send(public);
     }
+    let summary_needed = completed || event_summary_needed(&event);
     let _ = runtime.native_events.send(event);
+    if summary_needed
+        && runtime.recovery.ready().is_ok()
+        && let Err(error) = runtime.refresh_summary(generation).await
+    {
+        runtime.announce(&format!("Session title could not be refreshed: {error}"));
+    }
     if completed && runtime.recovery.ready().is_ok() {
         runtime.continue_interrupted(false).await?;
         runtime.restore_goal().await?;
@@ -241,4 +248,9 @@ impl LocalRuntime {
         }
         Ok(generation.native.send(value)?)
     }
+}
+
+fn event_summary_needed(event: &Value) -> bool {
+    event["method"] == "thread/name/updated"
+        || (event["method"] == "item/completed" && event["params"]["item"]["type"] == "userMessage")
 }

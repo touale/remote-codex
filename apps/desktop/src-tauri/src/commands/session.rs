@@ -90,7 +90,12 @@ pub(crate) async fn session_open(
                 names: trust.names,
             });
         }
-        register(&context, prepared.open(false).await?).await
+        register(
+            &context,
+            prepared.open(false).await?,
+            window.app_handle().clone(),
+        )
+        .await
     })
     .await
 }
@@ -114,7 +119,12 @@ pub(crate) async fn session_trust(
     }
     operation(&context, operation_id, async {
         Ok(Some(
-            register(&context, prepared.session.open(true).await?).await?,
+            register(
+                &context,
+                prepared.session.open(true).await?,
+                window.app_handle().clone(),
+            )
+            .await?,
         ))
     })
     .await
@@ -130,6 +140,7 @@ async fn opened(handle: &SessionHandle) -> Result<SessionOpened> {
 async fn register(
     context: &Arc<crate::state::WindowState>,
     handle: SessionHandle,
+    app: tauri::AppHandle,
 ) -> Result<SessionOpened> {
     let mut receiver = handle.events();
     let id = handle.session().id.clone();
@@ -155,6 +166,9 @@ async fn register(
             };
             match received {
                 Ok(event) => {
+                    if matches!(event, SessionEvent::SessionUpdated { .. }) {
+                        app.state::<AppState>().changed();
+                    }
                     let closed = matches!(event, SessionEvent::Closed { .. });
                     if !context
                         .deliver(Event::Session {

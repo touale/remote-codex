@@ -1,14 +1,19 @@
 import { Check, Copy } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { TurnState } from '../bridge/session';
 import type { FileChange } from '../files/useFiles';
 import { IconButton } from '../ui/controls';
+import { questionReplyId } from './AsyncQuestions';
 import { MessageView, type PlanChoice } from './MessageView';
 import type { Message } from './state';
 import { clockTime, duration, fullTime } from './time';
 
 export const Conversation = memo(function Conversation({
   messages,
+  onEdit,
+  onAnswer,
+  editing,
+  editor,
   turns,
   onDiff,
   onPlan,
@@ -17,6 +22,10 @@ export const Conversation = memo(function Conversation({
   report,
 }: {
   messages: Message[];
+  onEdit?: (message: Message) => void;
+  onAnswer?: (message: Message, text: string) => Promise<void>;
+  editing?: string;
+  editor?: ReactNode;
   turns: Record<string, TurnState>;
   onDiff: (change: FileChange) => void;
   onPlan?: (message: Message, choice: PlanChoice) => void;
@@ -36,6 +45,7 @@ export const Conversation = memo(function Conversation({
     for (const turn of Object.values(turns)) if (!groups.has(turn.id)) groups.set(turn.id, []);
     return groups;
   }, [messages, turns]);
+  const answered = new Set(messages.filter((m) => m.role === 'user').map((m) => m.clientId));
   return (
     <>
       {[...groups].map(([id, messages]) => {
@@ -46,6 +56,10 @@ export const Conversation = memo(function Conversation({
               <MessageView
                 key={message.id}
                 message={message}
+                editor={editing === message.id ? editor : undefined}
+                onEdit={message === messages.find((m) => m.role === 'user') ? onEdit : undefined}
+                onAnswer={onAnswer}
+                answered={answered.has(questionReplyId(message.id))}
                 onDiff={onDiff}
                 report={report}
                 activePlan={message.plan && message.id === activePlan}

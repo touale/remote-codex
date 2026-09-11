@@ -1,6 +1,7 @@
 mod actions;
 pub(crate) mod approvals;
 mod binding;
+mod editing;
 mod events;
 pub(crate) mod gateway;
 mod generation;
@@ -8,6 +9,7 @@ mod goals;
 pub(crate) mod history;
 mod intent;
 pub(crate) mod lease;
+mod metadata;
 pub(crate) mod permissions;
 mod recovery;
 mod route;
