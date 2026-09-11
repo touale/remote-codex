@@ -160,6 +160,7 @@ export type Progress =
   | { type: 'stage'; data: string }
   | { type: 'transfer'; data: { kind: string; transferred_bytes: number; total_bytes: number | null } };
 export type AppEvent =
+  | { kind: 'file_relocated'; server: string; source: string; destination: string; context: string }
   | { kind: 'transfer'; transfer: import('./files').Transfer }
   | { kind: 'files_dropped'; token: string; names: string[]; x: number; y: number }
   | { kind: 'app_preferences_changed'; preferences: import('./preferences').AppPreferences }

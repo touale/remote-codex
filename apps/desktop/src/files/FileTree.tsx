@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
+import { MoveDialog } from './MoveDialog';
+import { useFileMoveDrag } from './useFileMoveDrag';
 import type { Granted } from '../bridge/files';
 import { useFileDrop } from '../transfers/useFileDrop';
 
@@ -25,6 +28,7 @@ export function FileTree({
   onConnect,
   onCreate,
   onRename,
+  onMove,
   onRemove,
   onUpload,
   onDownload,
@@ -45,6 +49,7 @@ export function FileTree({
   onConnect?: () => void;
   onCreate: (directory: boolean, parent: string) => Promise<boolean>;
   onRename: (entry: Entry) => void;
+  onMove: (entry: Entry, parent: string) => Promise<void>;
   onRemove: (entry: Entry) => void;
   onUpload: (parent: string, folder: boolean) => void;
   onDownload: (path: string) => void;
@@ -52,7 +57,23 @@ export function FileTree({
   report: (error: unknown) => void;
 }) {
   const drop = useFileDrop(Boolean(context), onDrop, report);
-  const { pages, expanded, states, load, toggle, reveal } = useFileTree(context, cacheKey, refresh, root, server);
+  const { pages, expanded, states, load, reload, revealed, toggle, reveal } = useFileTree(
+    context,
+    cacheKey,
+    refresh,
+    root,
+    server,
+  );
+  const [moving, setMoving] = useState<Entry | null>(null);
+  const scroll = useRef<HTMLDivElement>(null);
+  const drag = useFileMoveDrag(context, onMove, report);
+  useEffect(() => setMoving(null), [context]);
+  useEffect(() => {
+    if (revealed)
+      scroll.current
+        ?.querySelector<HTMLElement>(`[data-path="${CSS.escape(revealed)}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+  }, [revealed, pages]);
   const create = async (directory: boolean, parent = '') => {
     if (await onCreate(directory, parent)) await reveal(parent);
   };
@@ -68,7 +89,7 @@ export function FileTree({
     ...(onConnect ? [{ label: 'Connect files', action: onConnect }] : []),
     ...creationItems(''),
     ...uploadItems(''),
-    { label: 'Refresh', action: () => void load(''), disabled: !context },
+    { label: 'Refresh', action: reload, disabled: !context },
   ];
   const branch = (path: string, depth: number): React.ReactNode => {
     const state = states[path];
@@ -84,7 +105,9 @@ export function FileTree({
         )}
         {!pages[path] && state?.status !== 'failed' && <FileTreeSkeleton depth={depth} path={path} />}
         {rows(path, depth)}
-        {pages[path]?.entries.length === 0 && <div className="tree-hint">This directory is empty.</div>}
+        {pages[path]?.entries.length === 0 && state?.status === 'ready' && (
+          <div className="tree-hint">This directory is empty.</div>
+        )}
         {pages[path]?.truncated && (
           <div className="tree-hint">Directory listing is limited. Open a subfolder to see more.</div>
         )}
@@ -98,6 +121,7 @@ export function FileTree({
         { label: 'Download…', action: () => onDownload(entry.path), disabled: entry.symlink },
         ...uploadItems(parent),
         ...(entry.directory ? creationItems(entry.path) : []),
+        { label: 'Move to…', action: () => setMoving(entry) },
         { label: 'Rename…', action: () => onRename(entry) },
         { label: 'Delete…', action: () => onRemove(entry), danger: true },
       ];
@@ -106,8 +130,14 @@ export function FileTree({
           <RowMenu items={items}>
             <div
               className="tree-row file-row"
+              data-path={entry.path}
+              data-revealed={entry.path === revealed}
+              draggable={!!context}
+              onDragStart={(event) => drag.start(event, entry)}
+              onDragEnd={drag.end}
+              data-move-target={entry.directory && !entry.symlink ? entry.path : undefined}
               data-upload-target={parent}
-              data-drop-target={entry.directory && drop.target === entry.path}
+              data-drop-target={entry.directory && (drop.target === entry.path || drag.target === entry.path)}
               style={{ paddingLeft: 8 + depth * 14 }}
             >
               <button
@@ -143,61 +173,80 @@ export function FileTree({
       );
     });
   return (
-    <RowMenu items={backgroundItems} className="tree-context-area">
-      <section
-        ref={drop.area}
-        className="file-tree"
-        aria-label="Remote files"
-        data-server={server}
-        data-dropping={drop.target !== null}
-      >
-        {drop.target !== null && (
-          <div className="file-drop-hint" role="status">
-            {context ? `Upload to ${drop.target || root || 'workspace'}` : 'Connect files to upload'}
+    <>
+      {moving && context && root && (
+        <MoveDialog context={context} root={root} entry={moving} onMove={onMove} onClose={() => setMoving(null)} />
+      )}
+      <RowMenu items={backgroundItems} className="tree-context-area">
+        <section
+          ref={drop.area}
+          className="file-tree"
+          aria-label="Remote files"
+          data-server={server}
+          data-dropping={drop.target !== null || drag.target !== null}
+        >
+          {drag.target !== null && (
+            <div className="file-drop-hint" role="status">
+              Move to {drag.target || root}
+            </div>
+          )}
+          {drop.target !== null && (
+            <div className="file-drop-hint" role="status">
+              {context ? `Upload to ${drop.target || root || 'workspace'}` : 'Connect files to upload'}
+            </div>
+          )}
+          <div className="section-heading">
+            <button className="section-title" aria-expanded={!collapsed} onClick={onCollapsed}>
+              {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}Files
+            </button>
+            <div className="spacer" />
+            <IconButton label="New file" disabled={!context} onClick={() => void create(false)}>
+              <FilePlus2 size={14} />
+            </IconButton>
+            <IconButton label="New folder" disabled={!context} onClick={() => void create(true)}>
+              <FolderPlus size={14} />
+            </IconButton>
+            <IconButton label="Refresh files" disabled={!context} onClick={reload}>
+              <RefreshCw size={14} className={states['']?.status === 'loading' ? 'spinning' : undefined} />
+            </IconButton>
           </div>
-        )}
-        <div className="section-heading">
-          <button className="section-title" aria-expanded={!collapsed} onClick={onCollapsed}>
-            {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}Files
-          </button>
-          <div className="spacer" />
-          <IconButton label="New file" disabled={!context} onClick={() => void create(false)}>
-            <FilePlus2 size={14} />
-          </IconButton>
-          <IconButton label="New folder" disabled={!context} onClick={() => void create(true)}>
-            <FolderPlus size={14} />
-          </IconButton>
-          <IconButton label="Refresh files" disabled={!context} onClick={() => void load('')}>
-            <RefreshCw size={14} className={states['']?.status === 'loading' ? 'spinning' : undefined} />
-          </IconButton>
-        </div>
-        {!collapsed && (
-          <>
-            <div className="workspace-path" title={root ?? ''}>
-              {root ?? 'No location selected'}
-            </div>
-            <div className="tree-scroll" role="tree" aria-label="Files" onKeyDown={navigateTree}>
-              <ErrorText message={connectionError} />
-              {connectionError && (
-                <button className="tree-retry" onClick={onRetry}>
-                  Retry
-                </button>
-              )}
-              {loading && !context && <FileTreeSkeleton />}
-              {context ? (
-                branch('', 0)
-              ) : loading || connectionError ? null : (
-                <Empty
-                  title={onConnect ? 'Files are not connected' : 'Choose a server or workspace'}
-                  detail={onConnect ? 'Connect to browse this workspace.' : 'Its remote files appear here.'}
-                >
-                  {onConnect && <button onClick={onConnect}>Connect files</button>}
-                </Empty>
-              )}
-            </div>
-          </>
-        )}
-      </section>
-    </RowMenu>
+          {!collapsed && (
+            <>
+              <div className="workspace-path" title={root ?? ''}>
+                {root ?? 'No location selected'}
+              </div>
+              <div
+                ref={scroll}
+                className="tree-scroll"
+                onDragOver={drag.over}
+                onDragLeave={drag.leave}
+                onDrop={drag.drop}
+                role="tree"
+                aria-label="Files"
+                onKeyDown={navigateTree}
+              >
+                <ErrorText message={connectionError} />
+                {connectionError && (
+                  <button className="tree-retry" onClick={onRetry}>
+                    Retry
+                  </button>
+                )}
+                {loading && !context && <FileTreeSkeleton />}
+                {context ? (
+                  branch('', 0)
+                ) : loading || connectionError ? null : (
+                  <Empty
+                    title={onConnect ? 'Files are not connected' : 'Choose a server or workspace'}
+                    detail={onConnect ? 'Connect to browse this workspace.' : 'Its remote files appear here.'}
+                  >
+                    {onConnect && <button onClick={onConnect}>Connect files</button>}
+                  </Empty>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      </RowMenu>
+    </>
   );
 }

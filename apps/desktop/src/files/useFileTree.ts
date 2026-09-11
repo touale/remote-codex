@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, failure, listen } from '../bridge/client';
 import type { DirectoryPage } from '../bridge/types';
-import { overlaps, remotePath } from './context';
+import { overlaps, remotePath, movedPath, relativePath } from './context';
 interface Tree {
   pages: Record<string, DirectoryPage>;
   expanded: Set<string>;
@@ -15,6 +15,10 @@ export function useFileTree(
   root: string | null,
   server: string | null,
 ) {
+  const [revision, setRevision] = useState(0);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  useEffect(() => setRevealed(null), [cacheKey]);
+  const reload = useCallback(() => setRevision((n) => n + 1), []);
   const cache = useRef(new Map<string, Tree>());
   const requests = useRef(new Map<string, symbol>());
   const active = useRef(cacheKey);
@@ -66,7 +70,15 @@ export function useFileTree(
     } catch {
       /* An invalid UI preference does not block a workspace. */
     }
-    const snapshot = cache.current.get(cacheKey) ?? emptyTree(saved);
+    const previous = cache.current.get(cacheKey) ?? emptyTree(saved);
+    const snapshot = {
+      ...previous,
+      states: Object.fromEntries(['', ...previous.expanded].map((path) => [path, { status: 'loading' as const }])),
+      pages: Object.fromEntries(
+        Object.entries(previous.pages).filter(([path]) => !path || previous.expanded.has(path)),
+      ),
+    };
+    requests.current.clear();
     cache.current.set(cacheKey, snapshot);
     setTree(snapshot);
     let cancelled = false;
@@ -88,7 +100,7 @@ export function useFileTree(
           states: Object.fromEntries(Object.entries(latest.states).filter(([, state]) => state.status !== 'loading')),
         });
     };
-  }, [cacheKey, load, refresh]);
+  }, [cacheKey, load, refresh, revision]);
   useEffect(() => {
     const refreshed = new Set<string>();
     return listen((event) => {
@@ -113,6 +125,30 @@ export function useFileTree(
       })();
     });
   }, [cacheKey, load, root, server]);
+  useEffect(
+    () =>
+      listen((event) => {
+        if (event.kind !== 'file_relocated' || event.server !== server || !root) return;
+        if (!overlaps(root, event.source) && !overlaps(root, event.destination)) return;
+        const previous = cache.current.get(cacheKey) ?? emptyTree();
+        const expanded = new Set(
+          [...previous.expanded].flatMap((path) => {
+            const next = relativePath(root, movedPath(remotePath(root, path), event.source, event.destination));
+            return next ? [next] : [];
+          }),
+        );
+        const destination = relativePath(root, event.destination);
+        if (context === event.context && destination !== undefined) {
+          const parts = destination.split('/');
+          for (let i = 1; i < parts.length; i++) expanded.add(parts.slice(0, i).join('/'));
+          setRevealed(destination);
+        }
+        cache.current.set(cacheKey, { ...previous, expanded });
+        localStorage.setItem(`file-tree:${cacheKey}`, JSON.stringify([...expanded]));
+        reload();
+      }),
+    [context, cacheKey, root, server, reload],
+  );
   const toggle = async (path: string) => {
     const previous = cache.current.get(cacheKey) ?? tree;
     const expanded = new Set(previous.expanded);
@@ -137,6 +173,8 @@ export function useFileTree(
   };
   return {
     ...tree,
+    reload,
+    revealed,
     load,
     toggle,
     reveal,

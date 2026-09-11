@@ -54,7 +54,16 @@ pub(crate) async fn file_change(
     match change {
         FileChange::Directory { path } => handle.create_directory(&path).await?,
         FileChange::Remove { path } => handle.remove(&path).await?,
-        FileChange::Rename { path, destination } => handle.rename(&path, &destination).await?,
+        FileChange::Rename { path, destination } => {
+            handle.rename(&path, &destination).await?;
+            let absolute = |path: &str| format!("{}/{}", handle.path().trim_end_matches('/'), path);
+            state.broadcast(crate::events::Event::FileRelocated {
+                server: handle.server().into(),
+                source: absolute(&path),
+                destination: absolute(&destination),
+                context,
+            });
+        }
     }
     Ok(())
 }

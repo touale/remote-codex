@@ -67,7 +67,13 @@ export function EditorHeader({
         {active && !diff && (
           <IconButton
             label="Save file (⌘S)"
-            disabled={active.status !== 'ready' || active.saving || active.text === active.original}
+            disabled={
+              active.status !== 'ready' ||
+              !active.context ||
+              !!active.pendingMove ||
+              active.saving ||
+              active.text === active.original
+            }
             onClick={() => onSave(active.key)}
           >
             <Save size={14} />

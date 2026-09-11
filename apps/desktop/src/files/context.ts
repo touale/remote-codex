@@ -17,3 +17,14 @@ export function fileUri(file: { server: string; root: string; path: string }) {
   const path = remotePath(file.root, file.path).split('/').map(encodeURIComponent).join('/');
   return `remote:///${encodeURIComponent(file.server)}${path}`;
 }
+
+export function relativePath(root: string, absolute: string): string | undefined {
+  const base = remotePath(root);
+  return within(base, absolute) ? absolute.slice(base === '/' ? 1 : base.length + 1) : undefined;
+}
+export function movedPath(path: string, source: string, destination: string) {
+  return within(source, path) ? destination + path.slice(source.length) : path;
+}
+export function validName(name: string) {
+  return !!name.trim() && name !== '.' && name !== '..' && !/[/\\\x00-\x1f]/.test(name);
+}

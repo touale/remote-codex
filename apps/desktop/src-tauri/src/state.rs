@@ -52,9 +52,12 @@ impl AppState {
             .ok_or_else(unavailable)
     }
     pub(crate) fn changed(&self) {
+        self.broadcast(Event::CatalogChanged);
+    }
+    pub(crate) fn broadcast(&self, event: Event) {
         if let Ok(windows) = self.windows.lock() {
             for window in windows.values() {
-                window.send(Event::CatalogChanged);
+                window.send(event.clone());
             }
         }
     }

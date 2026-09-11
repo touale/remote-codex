@@ -4,6 +4,12 @@ use serde::Serialize;
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum Event {
+    FileRelocated {
+        server: String,
+        source: String,
+        destination: String,
+        context: String,
+    },
     Transfer {
         transfer: Transfer,
     },

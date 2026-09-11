@@ -15,7 +15,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import { useEffect } from 'react';
 import { useTransferLock } from '../transfers/store';
-import { Modal } from '../ui/controls';
+import { ErrorText, Modal } from '../ui/controls';
 import { EditorSkeleton } from './FileLoading';
 import { fileUri } from './context';
 import type { Buffer } from './tabs';
@@ -38,11 +38,13 @@ export default function EditorSurface({
   active,
   dark,
   onSave,
+  onRetry,
   onChange,
   onDismissConflict,
   onDiscardConflict,
 }: {
   active: Buffer;
+  onRetry: (key: string) => void;
   dark: boolean;
   onSave: (key: string, resolve?: boolean) => void;
   onChange: (key: string, text: string) => void;
@@ -77,6 +79,12 @@ export default function EditorSurface({
   const theme = dark ? 'remote-dark' : 'remote-light';
   return (
     <>
+      {active.pendingMove && (
+        <div className="editor-status">
+          <ErrorText message={active.locationError} />
+          <button onClick={() => onRetry(active.key)}>Retry move</button>
+        </div>
+      )}
       <div className="monaco-surface">
         <Editor
           loading={<EditorSkeleton />}
@@ -90,13 +98,25 @@ export default function EditorSurface({
       <div className="editor-status">
         <span>UTF-8</span>
         <span>
-          {uploading
-            ? 'Upload in progress · Read only'
-            : active.saving
-              ? 'Saving…'
-              : active.text === active.original
-                ? 'Saved'
-                : 'Unsaved changes'}
+          {active.pendingMove ? (
+            'Move conflict · Changes kept'
+          ) : !active.context ? (
+            active.locationError ? (
+              <button title={active.locationError} onClick={() => onRetry(active.key)}>
+                Reconnect file
+              </button>
+            ) : (
+              'Connecting file…'
+            )
+          ) : uploading ? (
+            'Upload in progress · Read only'
+          ) : active.saving ? (
+            'Saving…'
+          ) : active.text === active.original ? (
+            'Saved'
+          ) : (
+            'Unsaved changes'
+          )}
         </span>
       </div>
       {active.conflict && (
@@ -121,7 +141,11 @@ export default function EditorSurface({
           </div>
           <div className="actions">
             <button onClick={() => onDiscardConflict(active.key)}>Discard my edits</button>
-            <button className="primary" disabled={active.saving} onClick={() => onSave(active.key, true)}>
+            <button
+              className="primary"
+              disabled={active.saving || !!active.pendingMove}
+              onClick={() => onSave(active.key, true)}
+            >
               Save my version
             </button>
           </div>

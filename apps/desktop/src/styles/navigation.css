@@ -289,3 +289,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.file-row[data-revealed='true'] {
+  background: var(--hover);
+}

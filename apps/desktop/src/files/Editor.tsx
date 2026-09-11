@@ -67,7 +67,7 @@ export default function EditorPane({
         <EditorSkeleton />
       ) : active?.status === 'failed' ? (
         <Empty title="Could not open file">
-          <ErrorText message={active.error} />
+          <ErrorText message={active.locationError ?? active.error} />
           <div className="actions">
             <button onClick={() => onClose(active.key)}>Close file</button>
             <button onClick={() => onRetry(active.key)}>Retry</button>
@@ -77,6 +77,7 @@ export default function EditorPane({
         <Suspense fallback={<EditorSkeleton />}>
           <EditorSurface
             active={active}
+            onRetry={onRetry}
             dark={dark}
             onSave={onSave}
             onChange={onChange}

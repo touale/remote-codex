@@ -50,7 +50,7 @@ export function Sidebar({
     | 'retryFiles'
     | 'connectFiles'
   >;
-  fileActions: Pick<ReturnType<typeof useFileActions>, 'create' | 'change'>;
+  fileActions: Pick<ReturnType<typeof useFileActions>, 'create' | 'change' | 'move'>;
   resources: Pick<ReturnType<typeof useResourceActions>, 'removeWorkspace' | 'removeServer'>;
   chats: Pick<ReturnType<typeof useChats>, 'chats' | 'metadata'>;
   files: Pick<ReturnType<typeof useFiles>, 'open'>;
@@ -165,6 +165,7 @@ export function Sidebar({
                   return false;
                 })
               }
+              onMove={fileActions.move}
               onRename={(entry) => run(fileActions.change(entry, false))}
               onRemove={(entry) => run(fileActions.change(entry, true))}
             />

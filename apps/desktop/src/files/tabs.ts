@@ -1,6 +1,6 @@
 import { failure } from '../bridge/client';
 import type { TextFile } from '../bridge/types';
-import { remotePath } from './context';
+import { movedPath, relativePath, remotePath, within } from './context';
 
 interface FileIdentity {
   key: string;
@@ -8,6 +8,8 @@ interface FileIdentity {
   server: string;
   root: string;
   path: string;
+  locationError?: string;
+  pendingMove?: string;
 }
 export interface Buffer extends FileIdentity, TextFile {
   original: string;
@@ -19,6 +21,8 @@ export type FileTab =
   | (FileIdentity & { status: 'failed'; error: string })
   | (Buffer & { status: 'ready' });
 const isReady = (tab: FileTab): tab is Buffer & { status: 'ready' } => tab.status === 'ready';
+const protectedTab = (tab: FileTab) =>
+  Boolean(tab.pendingMove || (isReady(tab) && (tab.saving || tab.text !== tab.original)));
 export const fileKey = (server: string, root: string, path: string) => JSON.stringify([server, remotePath(root, path)]);
 
 // Owns read lifetimes independently of tabs: closing a tab invalidates its result,
@@ -49,6 +53,85 @@ export class FileTabs {
   close = (key: string) => {
     this.generations.delete(key);
     this.publish(this.tabs.filter((tab) => tab.key !== key));
+  };
+  bind = (key: string, context: string) => {
+    this.publish(
+      this.tabs.map((tab) =>
+        tab.key === key && !tab.pendingMove ? { ...tab, context, locationError: undefined } : tab,
+      ),
+    );
+  };
+  locationFailed = (key: string, error: string) => {
+    this.publish(this.tabs.map((tab) => (tab.key === key ? { ...tab, locationError: error } : tab)));
+  };
+  assertWritable = (key: string) => {
+    const tab = this.get(key);
+    if (tab?.pendingMove) throw new Error(tab.locationError);
+  };
+  assertCanMove = (server: string, source: string, destination: string) => {
+    if (
+      this.tabs.some((tab) => {
+        const path = tab.pendingMove ?? remotePath(tab.root, tab.path);
+        return tab.server === server && !within(source, path) && within(destination, path) && protectedTab(tab);
+      })
+    )
+      throw new Error('Resolve unsaved changes in the destination tab before moving this file.');
+  };
+  relocate = (server: string, source: string, destination: string) => {
+    const keys = new Map<string, string>();
+    let tabs = [...this.tabs];
+    // Move actual file bindings first, then the drafts waiting for those bindings.
+    for (const tab of [...this.tabs].sort((a, b) => Number(!!a.pendingMove) - Number(!!b.pendingMove))) {
+      const absolute = tab.pendingMove ?? remotePath(tab.root, tab.path);
+      const next = movedPath(absolute, source, destination);
+      if (
+        tab.server !== server ||
+        !within(source, absolute) ||
+        (!tab.pendingMove && next === absolute) ||
+        !tabs.includes(tab)
+      )
+        continue;
+      this.generations.delete(tab.key);
+      const relative = relativePath(tab.root, next);
+      const root = relative === undefined ? '/' : tab.root;
+      const path = relative ?? next.slice(1);
+      const key = fileKey(server, root, path);
+      const target = tabs.find((other) => other !== tab && other.key === key);
+      const waiting =
+        tab.status === 'ready' ? { saving: false } : { status: 'failed' as const, error: 'Opening the moved file…' };
+      if (target && protectedTab(target)) {
+        tabs = tabs.map((current) =>
+          current === tab
+            ? {
+                ...tab,
+                ...waiting,
+                pendingMove: next,
+                locationError: `This file moved to ${next}. Close the conflicting destination tab, then retry.`,
+              }
+            : current,
+        );
+        continue;
+      }
+      if (target) {
+        this.generations.delete(target.key);
+        tabs = tabs.filter((current) => current !== target);
+      }
+      const file = {
+        ...tab,
+        ...waiting,
+        root,
+        path,
+        context: relative === undefined ? '' : tab.context,
+        key,
+        pendingMove: undefined,
+        locationError: undefined,
+        ...(isReady(tab) ? { conflict: tab.conflict && { ...tab.conflict, path } } : {}),
+      };
+      keys.set(tab.key, file.key);
+      tabs = tabs.map((current) => (current === tab ? file : current));
+    }
+    this.publish(tabs);
+    return keys;
   };
   retainedContexts = () =>
     new Set([...this.tabs.map((tab) => tab.context), ...[...this.requests.values()].map((request) => request.context)]);

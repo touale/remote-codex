@@ -7,6 +7,7 @@ import { conversationLoading } from './conversation-loading';
 import { draftModes, immediateDraft, usagePreferences } from './draft-controls';
 import { fileCreation } from './experience-controls';
 import { directoryLoading, editorLoading } from './file-loading';
+import { fileRelocation } from './file-relocation';
 import { messageEditing, sessionTitle } from './message-editing';
 import { fileTransfers } from './file-transfers';
 import { firstMessage } from './first-message';
@@ -121,6 +122,7 @@ describe('A real SSH workspace in the native desktop', () => {
       await workspaceGroups(invoke, workspace, remote);
       await fileTransfers(invoke, workspace, remote);
     });
+    await step('refreshes nested folders and relocates dirty editor buffers', () => fileRelocation(invoke, workspace));
     await step('streams a local Codex conversation and acknowledges native settings', async () => {
       await immediateDraft(invoke);
       await $('textarea[aria-label="Message Codex"]').waitForDisplayed({ timeout: 60000 });
