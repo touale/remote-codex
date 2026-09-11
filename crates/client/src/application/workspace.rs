@@ -40,7 +40,4 @@ impl WorkspaceHandle {
     pub fn close(&self) {
         self.0.close();
     }
-    pub async fn terminal(&self, columns: u16, rows: u16) -> Result<super::ShellHandle> {
-        self.0.terminal(columns, rows).await
-    }
 }

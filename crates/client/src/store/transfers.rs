@@ -4,6 +4,19 @@ use crate::{
     transfers::model::{Item, Task},
 };
 impl LocalStore {
+    pub(crate) async fn transfer_remove_finished(&self, ids: &[String]) -> Result<Vec<String>> {
+        let mut tx = self.begin_write().await?;
+        let mut removed = Vec::new();
+        for id in ids {
+            if let Some(id) = sqlx::query_scalar::<_, String>("DELETE FROM transfer_tasks WHERE id=? AND json_extract(record,'$.view.status') IN ('completed','cancelled') RETURNING id")
+                .bind(id).fetch_optional(&mut *tx).await? {
+                removed.push(id);
+            }
+        }
+        tx.commit().await?;
+        Ok(removed)
+    }
+
     pub(crate) async fn transfer_skipped(
         &self,
         id: &str,

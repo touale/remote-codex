@@ -19,7 +19,7 @@ export async function sharedAppearanceAndUsage() {
   );
   await browser.saveScreenshot(path.resolve('../../.artifacts/desktop-e2e/settings-general-light.png'));
   await $('[role=dialog] button[aria-label=Close]').click();
-  const label = await invoke<string>('new_window', { workspace: null });
+  const label = await invoke<string>('new_window', { target: null });
   await browser.waitUntil(async () => (await browser.getWindowHandles()).length === 2);
   const other = (await browser.getWindowHandles()).find((id) => id !== main)!;
   await browser.switchToWindow(other);

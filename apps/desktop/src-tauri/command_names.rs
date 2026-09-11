@@ -4,6 +4,7 @@ pub(crate) const COMMANDS: &[&str] = &[
     "transfer_download",
     "transfer_discard_grant",
     "transfer_list",
+    "transfer_remove",
     "transfer_run",
     "transfer_action",
     "transfer_skipped",

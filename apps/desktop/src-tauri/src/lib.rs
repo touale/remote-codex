@@ -46,6 +46,7 @@ pub fn run() {
             commands::transfer_selection::transfer_download,
             commands::transfer_selection::transfer_discard_grant,
             commands::transfers::transfer_list,
+            commands::transfers::transfer_remove,
             commands::transfers::transfer_run,
             commands::transfers::transfer_action,
             commands::transfers::transfer_skipped,

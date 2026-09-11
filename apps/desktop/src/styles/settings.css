@@ -130,6 +130,12 @@ button.setting-switch {
 button.setting-switch[data-state='checked'] {
   background: var(--primary);
 }
+button.setting-switch:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--selected) 80%, var(--muted));
+}
+button.setting-switch[data-state='checked']:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
 .switch-thumb {
   display: block;
   width: 15px;

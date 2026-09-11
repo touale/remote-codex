@@ -1,11 +1,11 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type { Commands } from './commands';
-import type { AppEvent, Failure } from './types';
+import type { AppEvent, Failure, WindowTarget } from './types';
 
 const listeners = new Set<(event: AppEvent) => void | Promise<void>>();
-let attachment: Promise<[string, string] | null> | undefined;
-export function attach(): Promise<[string, string] | null> {
+let attachment: Promise<WindowTarget | null> | undefined;
+export function attach(): Promise<WindowTarget | null> {
   if (!attachment) {
     const channel = new Channel<AppEvent>();
     channel.onmessage = (message) => {

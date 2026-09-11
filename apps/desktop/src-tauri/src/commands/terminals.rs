@@ -11,7 +11,7 @@ use tauri::{State, WebviewWindow};
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum TerminalTarget {
     Server { server: String },
-    Workspace { workspace: String },
+    Files { context: String },
 }
 #[derive(Serialize)]
 pub(crate) struct OpenedTerminal {
@@ -33,11 +33,8 @@ pub(crate) async fn terminal_open(
     let terminal = Arc::new(
         operation(&context, operation_id, async {
             Ok(match target {
-                TerminalTarget::Workspace { workspace } => {
-                    context
-                        .workspace(&workspace)?
-                        .terminal(columns, rows)
-                        .await?
+                TerminalTarget::Files { context: id } => {
+                    context.files(&id)?.terminal(columns, rows).await?
                 }
                 TerminalTarget::Server { server } => {
                     context

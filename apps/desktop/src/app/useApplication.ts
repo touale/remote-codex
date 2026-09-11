@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { attach, call, failure, listen } from '../bridge/client';
-import type { AuthPrompt, Catalog, Preferences, Progress } from '../bridge/types';
+import type { AuthPrompt, Catalog, Preferences, Progress, WindowTarget } from '../bridge/types';
 
 import { acceptPreferences, useAppPreferences } from '../settings/preferences';
 
@@ -21,9 +21,15 @@ const defaults: Preferences = {
 export function useApplication() {
   const appearance = useAppPreferences();
   const [ready, setReady] = useState(false);
-  const [startupWorkspace, setStartupWorkspace] = useState<[string, string] | null>(null);
+  const [startupTarget, setStartupTarget] = useState<WindowTarget | null>(null);
   const [error, setError] = useState('');
-  const [catalog, setCatalog] = useState<Catalog>({ servers: [], workspaces: [], sessions: [], live: [] });
+  const [catalog, setCatalog] = useState<Catalog>({
+    servers: [],
+    workspaces: [],
+    sessions: [],
+    live: [],
+    open_session_ids: [],
+  });
   const [preferences, setPreferences] = useState(defaults);
   const [systemDark, setSystemDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches);
   const [prompts, setPrompts] = useState<{ id: string; prompt: AuthPrompt }[]>([]);
@@ -73,13 +79,13 @@ export function useApplication() {
       if (event.kind === 'close_requested') closeHandler.current();
     });
     void attach()
-      .then(async (requestedWorkspace) => {
+      .then(async (requestedTarget) => {
         acceptPreferences(await call('app_preferences', { patch: null }));
         const preferences = await call('preferences', { value: null });
         setPreferences(preferences);
         await refresh();
         loaded.current = true;
-        setStartupWorkspace(requestedWorkspace);
+        setStartupTarget(requestedTarget);
         setReady(true);
       })
       .catch(report);
@@ -122,7 +128,7 @@ export function useApplication() {
   };
   return {
     ready,
-    startupWorkspace,
+    startupTarget,
     error,
     setError,
     report,

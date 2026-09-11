@@ -54,6 +54,10 @@ export function useTransfers(
   };
   return {
     upload,
+    remove: async (ids: string[]) => {
+      await call('transfer_remove', { ids });
+      await transferStore.refresh();
+    },
     pick: async (workspace: FileContext, destination: string, folder: boolean) => {
       const grant = await call('transfer_pick', { folder });
       if (grant) await upload(workspace, destination, grant);

@@ -40,3 +40,29 @@ it('resolves MCP conflicts by error code even when the message changes', async (
   expect(register).toHaveBeenCalledOnce();
   store.dispose();
 });
+
+it('does not offer takeover when resuming a new-window target that became occupied', async () => {
+  vi.mocked(call).mockReset().mockRejectedValueOnce({ code: 'SESSION_IN_USE', message: 'Already open.' });
+  const store = new ChatStore();
+  const ask = vi.fn();
+  await expect(
+    prepareSession(
+      {
+        connect: async () => ({ id: 'workspace', server: 'dev', path: '/project' }),
+        chats: { store, register: vi.fn(), loadHistory: vi.fn() },
+        dialog: { ask },
+        finishOperation: vi.fn(),
+        refresh: async () => {},
+        report: vi.fn(),
+      },
+      'dev',
+      'session',
+      '/project',
+      vi.fn(),
+      false,
+    ),
+  ).rejects.toMatchObject({ code: 'SESSION_IN_USE' });
+  expect(ask).not.toHaveBeenCalled();
+  expect(call).toHaveBeenCalledOnce();
+  store.dispose();
+});

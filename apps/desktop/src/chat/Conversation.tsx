@@ -45,28 +45,33 @@ export const Conversation = memo(function Conversation({
     for (const turn of Object.values(turns)) if (!groups.has(turn.id)) groups.set(turn.id, []);
     return groups;
   }, [messages, turns]);
-  const answered = new Set(messages.filter((m) => m.role === 'user').map((m) => m.clientId));
+  const replies = new Map(messages.filter((m) => m.role === 'user').map((m) => [m.clientId, m.text]));
+  const questions = new Set(
+    messages.filter((m) => m.delivery === 'async' && m.questions?.length).map((m) => questionReplyId(m.id)),
+  );
   return (
     <>
       {[...groups].map(([id, messages]) => {
         const turn = turns[id];
         return (
           <section className="conversation-turn" key={id} data-turn-id={turn ? id : undefined}>
-            {messages.map((message) => (
-              <MessageView
-                key={message.id}
-                message={message}
-                editor={editing === message.id ? editor : undefined}
-                onEdit={message === messages.find((m) => m.role === 'user') ? onEdit : undefined}
-                onAnswer={onAnswer}
-                answered={answered.has(questionReplyId(message.id))}
-                onDiff={onDiff}
-                report={report}
-                activePlan={message.plan && message.id === activePlan}
-                revisingPlan={revisingPlan && message.id === activePlan}
-                onPlan={onPlan}
-              />
-            ))}
+            {messages
+              .filter((m) => !(m.role === 'user' && m.clientId && questions.has(m.clientId)))
+              .map((message) => (
+                <MessageView
+                  key={message.id}
+                  message={message}
+                  editor={editing === message.id ? editor : undefined}
+                  onEdit={message === messages.find((m) => m.role === 'user') ? onEdit : undefined}
+                  onAnswer={onAnswer}
+                  questionReply={replies.get(questionReplyId(message.id))}
+                  onDiff={onDiff}
+                  report={report}
+                  activePlan={message.plan && message.id === activePlan}
+                  revisingPlan={revisingPlan && message.id === activePlan}
+                  onPlan={onPlan}
+                />
+              ))}
             {turn && turn.status !== 'inProgress' && (
               <TurnFooter turn={turn} answer={answerText(messages)} report={report} />
             )}

@@ -228,6 +228,8 @@ function Fixture() {
         <ConnectionTree
           catalog={app.catalog}
           serverHome={null}
+          openSessions={[]}
+          onSelectDirectory={noop}
           onSelectServer={noop}
           chats={chats.chats}
           selected={null}

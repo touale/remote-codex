@@ -4,6 +4,8 @@ import type { Transfer } from '../bridge/files';
 
 import { remotePath, within } from '../files/context';
 let tasks: Transfer[] = [];
+let changedDuringRefresh: Set<string> | null = null;
+let refreshing: Promise<void> | null = null;
 const subscribers = new Set<() => void>();
 const speeds = new Map<string, { bytes: number; time: number; speed: number }>();
 const subscribe = (listener: () => void) => {
@@ -13,6 +15,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 export function accept(task: Transfer) {
+  changedDuringRefresh?.add(task.id);
   const old = speeds.get(task.id);
   const now = performance.now();
   if (!old || now - old.time >= 500)
@@ -26,14 +29,33 @@ export function accept(task: Transfer) {
 }
 listen((event) => {
   if (event.kind === 'transfer') accept(event.transfer);
+  if (event.kind === 'transfers_removed') {
+    tasks = tasks.filter((t) => !event.ids.includes(t.id));
+    for (const id of event.ids) {
+      changedDuringRefresh?.add(id);
+      speeds.delete(id);
+    }
+    for (const subscriber of subscribers) subscriber();
+  }
 });
 export const transferStore = {
   subscribe,
   snapshot: () => tasks,
   speed: (id: string) => speeds.get(id)?.speed ?? 0,
-  refresh: async () => {
-    tasks = await call('transfer_list');
-    for (const subscriber of subscribers) subscriber();
+  refresh: (): Promise<void> => {
+    if (refreshing) return refreshing;
+    const changed = new Set<string>();
+    changedDuringRefresh = changed;
+    refreshing = (async () => {
+      const list = await call('transfer_list');
+      // Events received during the read are newer than the returned snapshot.
+      tasks = [...tasks.filter((t) => changed.has(t.id)), ...list.filter((t) => !changed.has(t.id))];
+      for (const subscriber of subscribers) subscriber();
+    })().finally(() => {
+      changedDuringRefresh = null;
+      refreshing = null;
+    });
+    return refreshing;
   },
   locked: (server: string, root: string, path: string) =>
     tasks.some(

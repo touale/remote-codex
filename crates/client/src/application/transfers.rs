@@ -16,6 +16,20 @@ pub struct TransferService {
     pub(super) client: Client,
 }
 impl TransferService {
+    pub async fn remove_finished(&self, ids: &[String]) -> Result<Vec<String>> {
+        let state = &self.client.0;
+        state.ensure_open()?;
+        let mut removable = Vec::new();
+        let mut leases = Vec::new();
+        for id in ids.iter().collect::<std::collections::BTreeSet<_>>() {
+            if let Some(lease) = Lease::try_acquire(&state.directory, id)? {
+                leases.push(lease);
+                removable.push(id.clone());
+            }
+        }
+        state.store.transfer_remove_finished(&removable).await
+    }
+
     pub fn is_running(&self, id: &str) -> bool {
         self.client.0.transfers.owns(id)
     }

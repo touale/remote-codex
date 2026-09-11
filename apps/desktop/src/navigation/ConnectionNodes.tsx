@@ -21,6 +21,7 @@ export function ServerNode({
   const address = `${host}:${server.endpoint.port ?? 22}`;
   const expanded = !collapsed.has(server.id);
   const items: MenuItem[] = [
+    { label: 'Open in New Window', action: () => actions.onWindow({ kind: 'server', server: server.name }) },
     { label: 'Add workspace…', action: () => actions.onAddWorkspace(server) },
     { label: 'Refresh', action: actions.onRefresh, disabled: actions.refreshing },
     { label: 'Server settings…', action: () => actions.onEditServer(server) },

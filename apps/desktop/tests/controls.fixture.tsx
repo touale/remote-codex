@@ -130,6 +130,7 @@ function Fixture() {
               servers: [],
               sessions: [],
               live: [],
+              open_session_ids: [],
               workspaces: choices.map((choice) => ({
                 server: choice.label.split(' · ')[0],
                 server_id: choice.value,

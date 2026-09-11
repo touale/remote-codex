@@ -42,6 +42,7 @@ export function Sidebar({
     | 'selected'
     | 'selectServer'
     | 'openWorkspace'
+    | 'openDirectory'
     | 'openSession'
     | 'newSession'
     | 'fileRoot'
@@ -90,6 +91,7 @@ export function Sidebar({
           <div className={styles.area}>
             <ConnectionTree
               catalog={app.catalog}
+              openSessions={app.catalog.open_session_ids}
               chats={chats.chats}
               serverHome={nav.serverHome?.id ?? null}
               onSelectServer={(server) => nav.selectServer(server.id)}
@@ -101,6 +103,7 @@ export function Sidebar({
               onHidden={() => app.changePreferences({ workspaces_collapsed: !p.workspaces_collapsed })}
               collapsed={p.collapsed_nodes}
               onCollapsed={(collapsed_nodes) => app.changePreferences({ collapsed_nodes })}
+              onSelectDirectory={(t) => nav.openDirectory(t.server, t.path)}
               onSelectWorkspace={(w) => run(nav.openWorkspace(w.server, w.path))}
               onSelectSession={(server, id, path) => run(nav.openSession(server, id, path))}
               onNew={(w) => nav.newSession(w.server, w.path)}
@@ -113,7 +116,7 @@ export function Sidebar({
                 run(chats.metadata(id, action, app.catalog.sessions.find((c) => c.session.id === id)?.session.title))
               }
               onTerminal={onTerminal}
-              onWindow={(w) => run(call('new_window', { workspace: { server: w.server, path: w.path } }))}
+              onWindow={(target) => run(call('new_window', { target }))}
               report={app.report}
             />
           </div>

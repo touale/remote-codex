@@ -1,6 +1,7 @@
 import type { CachedSession, Server, Workspace } from '../bridge/types';
 
 export interface PathNode {
+  server: string;
   key: string;
   path: string;
   label: string;
@@ -53,6 +54,7 @@ export function buildWorkspaceTree(
       node = child;
     }
     return {
+      server: server.name,
       key: node.workspace ? `${server.id}:${node.path}` : directoryKey(server.id, node.path),
       path: node.path,
       label: parent === null ? node.path : node.path.slice(parent === '/' ? 1 : parent.length + 1),

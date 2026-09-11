@@ -35,8 +35,22 @@
   font-size: 12px;
   margin-top: 5px;
 }
-.async-questions details {
+.question-result dl {
+  margin: 12px 0 0;
   font-size: 12px;
+  line-height: 1.5;
+}
+.question-result dl > div + div {
+  margin-top: 12px;
+}
+.question-result dt {
   color: var(--muted);
-  margin-top: 8px;
+}
+.question-result dd {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.question-response-text {
+  white-space: pre-wrap;
+  font-size: 12px;
 }

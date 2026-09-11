@@ -6,7 +6,7 @@ import { DraftStore } from '../chat/drafts/store';
 import { submitDraft, type DraftSubmission } from '../chat/drafts/submit';
 import type { useChats } from '../chat/useChats';
 import type { useFiles } from '../files/useFiles';
-import { useServerFiles } from '../files/useServerFiles';
+import { useDirectoryFiles } from '../files/useDirectoryFiles';
 import { workspaceAncestorKeys } from '../navigation/workspaceTree';
 import type { useDialog } from '../ui/useDialog';
 import { locationTarget, type NavigationLocation } from './navigationLocation';
@@ -16,14 +16,7 @@ import { useWorkspaceAccess } from './useWorkspaceAccess';
 export function useNavigation(
   app: Pick<
     ReturnType<typeof useApplication>,
-    | 'catalog'
-    | 'ready'
-    | 'startupWorkspace'
-    | 'report'
-    | 'finishOperation'
-    | 'setError'
-    | 'changePreferences'
-    | 'refresh'
+    'catalog' | 'ready' | 'startupTarget' | 'report' | 'finishOperation' | 'setError' | 'changePreferences' | 'refresh'
   >,
   chats: Pick<
     ReturnType<typeof useChats>,
@@ -44,12 +37,18 @@ export function useNavigation(
     location.kind === 'server' ? (app.catalog.servers.find((s) => s.id === location.serverId) ?? null) : null;
   const currentView = useRef({ target, server: serverHome?.name });
   currentView.current = { target, server: serverHome?.name };
-  const serverFiles = useServerFiles(serverHome, files, app.report, app.finishOperation);
+  const browsing = location.kind === 'directory';
+  const directoryFiles = useDirectoryFiles(
+    browsing ? target : serverHome ? { server: serverHome.name, path: '/' } : null,
+    files,
+    app.report,
+    app.finishOperation,
+  );
   const [busy, setBusy] = useState(false);
   // Keep the committed view intact underneath a pending navigation for Back/cancel.
   const [opening, setOpening] = useState<SessionOpening | null>(null);
   const selection = useRef(0);
-  const connection = target ? workspaces.get(target.server, target.path) : null;
+  const connection = target && !browsing ? workspaces.get(target.server, target.path) : null;
   const workspace =
     location.kind === 'workspace' || location.kind === 'session' ? location.workspace : (connection?.value ?? null);
   const sessions = useRef(new Map<string, Promise<Opened | null>>());
@@ -77,6 +76,7 @@ export function useNavigation(
       if (epoch === selection.current) setBusy(false);
     }
   };
+  const allowTakeover = (id: string | null) => app.startupTarget?.kind !== 'session' || app.startupTarget.id !== id;
   const prepare = (server: string, resume: string | null, path: string) =>
     prepareSession(
       { connect, chats, dialog, finishOperation: app.finishOperation, refresh: app.refresh, report: app.report },
@@ -92,6 +92,7 @@ export function useNavigation(
             ? { ...current, phase }
             : current,
         ),
+      allowTakeover(resume),
     );
   const newSession = (server: string, path: string, key = drafts.ensure({ server, path })) => {
     ++selection.current;
@@ -147,7 +148,8 @@ export function useNavigation(
     } catch (error) {
       if (epoch !== selection.current) return;
       const issue = failure(error);
-      if (issue.code === 'OPERATION_CANCELLED' || issue.code === 'SESSION_FOCUSED') setOpening(null);
+      if (issue.code === 'OPERATION_CANCELLED' || (issue.code === 'SESSION_FOCUSED' && allowTakeover(resume)))
+        setOpening(null);
       else setOpening((current) => (current ? { ...current, phase: 'failed', error: issue.message } : current));
     } finally {
       if (epoch === selection.current) setBusy(false);
@@ -157,9 +159,18 @@ export function useNavigation(
   useEffect(() => {
     if (!app.ready || restored.current) return;
     restored.current = true;
-    const saved = app.startupWorkspace;
-    if (saved && app.catalog.workspaces.some((w) => w.server === saved[0] && w.path === saved[1]))
-      void openWorkspace(...saved).catch(app.report);
+    const requested = app.startupTarget;
+    if (requested?.kind === 'workspace') void openWorkspace(requested.server, requested.path).catch(app.report);
+    if (requested?.kind === 'server') {
+      const server = app.catalog.servers.find((s) => s.name === requested.server);
+      if (server) goHome(server.id);
+      else app.report('This server is no longer available.');
+    }
+    if (requested?.kind === 'session') {
+      const entry = app.catalog.sessions.find((s) => s.session.id === requested.id);
+      if (entry) void openSession(entry.server, requested.id, entry.session.cwd);
+      else app.report('This session is no longer available.');
+    }
   });
   const goHome = (serverId?: string) => {
     ++selection.current;
@@ -175,7 +186,11 @@ export function useNavigation(
     }));
   };
   useEffect(() => {
-    if (app.ready && location.kind === 'server' && !app.catalog.servers.some((s) => s.id === location.serverId))
+    if (
+      app.ready &&
+      ((location.kind === 'server' && !app.catalog.servers.some((s) => s.id === location.serverId)) ||
+        (location.kind === 'directory' && !app.catalog.servers.some((s) => s.name === location.target.server)))
+    )
       goHome();
   }, [app.ready, app.catalog.servers, location]);
   return {
@@ -193,6 +208,7 @@ export function useNavigation(
     draftKey,
     newSession,
     connectFiles: () => {
+      if (browsing) return directoryFiles.connect();
       if (!target) return Promise.reject(new Error('Choose a workspace first.'));
       return connect(target.server, target.path);
     },
@@ -212,17 +228,29 @@ export function useNavigation(
       });
     },
     workspace,
-    fileContext: workspace ? { ...workspace, kind: 'workspace' as const } : serverFiles.context,
-    fileRoot: workspace?.path ?? target?.path ?? (location.kind === 'server' ? '/' : null),
-    fileLoading: target ? Boolean(connection && !connection.value && connection.error === null) : serverFiles.busy,
-    fileError: target ? (connection?.error ?? '') : serverFiles.error,
+    fileContext: workspace ? { ...workspace, kind: 'workspace' as const } : directoryFiles.context,
+    fileRoot:
+      workspace?.path ?? directoryFiles.context?.path ?? target?.path ?? (location.kind === 'server' ? '/' : null),
+    fileLoading:
+      target && !browsing ? Boolean(connection && !connection.value && connection.error === null) : directoryFiles.busy,
+    fileError: target && !browsing ? (connection?.error ?? '') : directoryFiles.error,
     retryFiles: () => {
-      if (target) void connect(target.server, target.path).catch(() => {});
-      else serverFiles.retry();
+      if (target && !browsing) void connect(target.server, target.path).catch(() => {});
+      else directoryFiles.retry();
     },
     selected,
     busy: opening ? opening.phase !== 'failed' : busy,
     openWorkspace,
+    openDirectory: (server: string, path: string) => {
+      goHome();
+      setLocation({ kind: 'directory', target: { server, path } });
+      const record = app.catalog.servers.find((s) => s.name === server);
+      const keys = record ? workspaceAncestorKeys(record.id, path) : [];
+      app.changePreferences((latest) => ({
+        files_collapsed: false,
+        collapsed_nodes: latest.collapsed_nodes.filter((k) => !keys.includes(k)),
+      }));
+    },
     openSession,
     focusSession: (id: string) => {
       const chat = chats.chats[id];
@@ -238,7 +266,7 @@ export function useNavigation(
         (path === undefined && current.server === server)
       )
         goHome();
-      serverFiles.forget(server, path);
+      directoryFiles.forget(server, path);
       workspaces.forget(server, path);
     },
     clear: () => goHome(),

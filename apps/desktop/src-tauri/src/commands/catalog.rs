@@ -13,6 +13,7 @@ pub(crate) struct Catalog {
     workspaces: Vec<Workspace>,
     sessions: Vec<CachedSession>,
     live: Vec<LiveSession>,
+    open_session_ids: Vec<String>,
 }
 #[derive(Serialize)]
 pub(crate) struct LiveSession {
@@ -26,7 +27,7 @@ pub(crate) async fn attach(
     window: WebviewWindow,
     state: State<'_, AppState>,
     channel: Channel<Event>,
-) -> Result<Option<(String, String)>> {
+) -> Result<Option<super::window::WindowTarget>> {
     let _gate = state.initialization.lock().await;
     if let Ok(context) = state.window(&window) {
         *context.events.lock().map_err(|_| unavailable())? = channel;
@@ -41,7 +42,7 @@ pub(crate) async fn attach(
         .map_err(|_| unavailable())?
         .insert(window.label().into(), context);
     Ok(state
-        .startup_workspaces
+        .startup_targets
         .lock()
         .map_err(|_| unavailable())?
         .remove(window.label()))
@@ -78,6 +79,7 @@ pub(crate) async fn catalog(
         workspaces,
         sessions,
         live,
+        open_session_ids: state.open_session_ids()?,
     })
 }
 

@@ -43,6 +43,7 @@ pub(crate) async fn session_open(
         Some(id) => Some(state.openings.acquire(&window, id).await?),
         None => None,
     };
+    state.changed();
     if let Some(id) = &input.resume {
         if owned_elsewhere(window.app_handle(), window.label(), id)?.is_some() {
             return Err(Error::new(
@@ -54,7 +55,7 @@ pub(crate) async fn session_open(
             return opened(&handle).await;
         }
     }
-    operation(&context, operation_id, async {
+    let result = operation(&context, operation_id, async {
         let prepared = context
             .client
             .sessions()
@@ -97,7 +98,9 @@ pub(crate) async fn session_open(
         )
         .await
     })
-    .await
+    .await;
+    state.changed();
+    result
 }
 #[tauri::command]
 pub(crate) async fn session_trust(
@@ -115,9 +118,11 @@ pub(crate) async fn session_trust(
         .remove(&preparation)
         .ok_or_else(unavailable)?;
     if !accept {
+        drop(prepared);
+        state.changed();
         return Ok(None);
     }
-    operation(&context, operation_id, async {
+    let result = operation(&context, operation_id, async {
         Ok(Some(
             register(
                 &context,
@@ -127,7 +132,10 @@ pub(crate) async fn session_trust(
             .await?,
         ))
     })
-    .await
+    .await;
+    drop(prepared._permit);
+    state.changed();
+    result
 }
 async fn opened(handle: &SessionHandle) -> Result<SessionOpened> {
     Ok(SessionOpened::Open {
@@ -158,6 +166,7 @@ async fn register(
         .insert(id.clone(), handle);
     let owner = Arc::downgrade(context);
     let stream_id = id.clone();
+    let events_app = app.clone();
     let task = tokio::spawn(async move {
         loop {
             let received = receiver.recv().await;
@@ -167,7 +176,7 @@ async fn register(
             match received {
                 Ok(event) => {
                     if matches!(event, SessionEvent::SessionUpdated { .. }) {
-                        app.state::<AppState>().changed();
+                        events_app.state::<AppState>().changed();
                     }
                     let closed = matches!(event, SessionEvent::Closed { .. });
                     if !context
@@ -183,6 +192,7 @@ async fn register(
                         if let Ok(mut sessions) = context.sessions.lock() {
                             sessions.remove(&id);
                         }
+                        events_app.state::<AppState>().changed();
                         break;
                     }
                 }
@@ -204,5 +214,6 @@ async fn register(
         .lock()
         .map_err(|_| unavailable())?
         .insert(stream_id, task.abort_handle());
+    app.state::<AppState>().changed();
     Ok(result)
 }

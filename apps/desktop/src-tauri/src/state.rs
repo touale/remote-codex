@@ -19,7 +19,7 @@ pub(crate) use crate::events::Event;
 pub(crate) struct AppState {
     pub windows: Mutex<HashMap<String, Arc<WindowState>>>,
     pub preferences: Mutex<Option<crate::commands::app_preferences::AppPreferences>>,
-    pub startup_workspaces: Mutex<HashMap<String, (String, String)>>,
+    pub startup_targets: Mutex<HashMap<String, crate::commands::window::WindowTarget>>,
     pub quitting: AtomicBool,
     pub openings: crate::opening::Openings,
     pub initialization: tokio::sync::Mutex<()>,

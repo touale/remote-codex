@@ -9,7 +9,7 @@ button {
   border-radius: 8px;
   background: var(--canvas);
 }
-button:not(.primary):hover:not(:disabled) {
+button:not(.primary):hover:not(:disabled, [role='switch']) {
   background: var(--hover);
 }
 button.primary {

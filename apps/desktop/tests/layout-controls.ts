@@ -43,7 +43,7 @@ export async function workspaceGroups(invoke: Invoke, workspace: string, remote:
   await expect($(group).$('svg.lucide-folder-open')).toExist();
   await expect($(child('test'))).toHaveText(expect.stringContaining('test'));
   await rowMenu(`[data-directory-path="${remote}/projects"]`, 'Copy path');
-  await $(group).click();
+  await $(`[data-directory-path="${remote}/projects"] .tree-disclosure`).click();
   await expect($(group).$('svg.lucide-folder')).toExist();
   await expect($(child('test1'))).not.toExist();
   await expect($('.workspace-path')).toHaveText(remote);

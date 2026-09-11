@@ -14,17 +14,22 @@ pub(crate) struct FileContext {
     kind: &'static str,
 }
 
-/// Server access is always rooted at /; the webview cannot select an arbitrary root.
+/// Directory browsing does not register a saved workspace.
 #[tauri::command]
 pub(crate) async fn file_context_open(
     window: WebviewWindow,
     state: State<'_, AppState>,
     operation_id: String,
     server: String,
+    path: Option<String>,
 ) -> Result<FileContext> {
     let context = state.window(&window)?;
     let files = operation(&context, operation_id, async {
-        Ok(context.client.servers().files(&server).await?)
+        Ok(context
+            .client
+            .servers()
+            .files(&server, path.as_deref().unwrap_or("/"))
+            .await?)
     })
     .await?;
     let id = uuid::Uuid::new_v4().to_string();

@@ -22,6 +22,7 @@ export async function prepareSession(
   resume: string | null,
   path: string,
   onPhase: (phase: 'history') => void,
+  allowTakeover = true,
 ): Promise<Opened | null> {
   const current = await connect(server, path);
   const existing = resume ? chats.store.get(resume) : undefined;
@@ -44,7 +45,7 @@ export async function prepareSession(
       result = await open();
     } catch (error) {
       const issue = failure(error);
-      if (issue.code === 'SESSION_IN_USE') {
+      if (issue.code === 'SESSION_IN_USE' && allowTakeover) {
         const answer = await dialog.ask({
           title: 'Take over this session?',
           message: 'Another Remote Codex process controls this session. Taking over closes that frontend connection.',

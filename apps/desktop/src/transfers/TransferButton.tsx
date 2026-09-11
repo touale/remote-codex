@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, FolderOpen, Pause, Play, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, FolderOpen, Pause, Play, Trash2, X } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import { call } from '../bridge/client';
@@ -11,6 +11,8 @@ import styles from './transfers.module.css';
 import type { TransferActions } from './useTransfers';
 export function TransferButton({ actions, report }: { actions: TransferActions; report: (error: unknown) => void }) {
   const tasks = useTransferList();
+  const [clearing, setClearing] = useState(false);
+  const removable = tasks.filter((t) => finished(t) && !t.active);
   const pending = tasks.filter((t) => !finished(t)).length;
   if (!tasks.length) return null;
   return (
@@ -32,6 +34,20 @@ export function TransferButton({ actions, report }: { actions: TransferActions; 
         >
           <header>
             <strong>Transfers</strong>
+            <span className="spacer" />
+            <button
+              className={styles.clear}
+              disabled={clearing || !removable.length}
+              onClick={() => {
+                setClearing(true);
+                void actions
+                  .remove(removable.map((t) => t.id))
+                  .catch(report)
+                  .finally(() => setClearing(false));
+              }}
+            >
+              Clear finished
+            </button>
             <Popover.Close asChild>
               <IconButton label="Close transfers">
                 <X size={14} />
@@ -126,6 +142,11 @@ function TransferRow({
               <X size={13} />
             </IconButton>
           </>
+        )}
+        {finished(task) && !task.active && (
+          <IconButton label="Remove from history" disabled={busy} onClick={() => run(actions.remove([task.id]))}>
+            <Trash2 size={13} />
+          </IconButton>
         )}
         {task.direction === 'download' && task.status === 'completed' && (
           <IconButton label="Show in Finder" onClick={() => run(call('transfer_reveal', { id: task.id }))}>

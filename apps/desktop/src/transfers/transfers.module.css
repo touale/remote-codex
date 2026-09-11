@@ -125,3 +125,11 @@
   padding-left: 16px;
   overflow-wrap: anywhere;
 }
+
+.clear {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 6px;
+}

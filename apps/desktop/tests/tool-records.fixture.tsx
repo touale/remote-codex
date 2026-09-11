@@ -56,7 +56,7 @@ const items: ToolItem[] = [
     output: '**Compare cancellation behavior**\n\nCheck the documented task lifecycle.',
     changes: [],
   },
-  { id: 'empty', kind: 'webSearch', title: 'webSearch', status: '', output: '', changes: [] },
+  { id: 'empty', kind: 'reasoning', title: 'reasoning', status: 'completed', output: '', changes: [] },
 ];
 
 export function ToolRecordsFixture() {

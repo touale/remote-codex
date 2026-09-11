@@ -1,3 +1,5 @@
+import { directoryNavigation } from './directory-navigation';
+import { windowNavigation } from './window-navigation';
 import { $, browser, expect } from '@wdio/globals';
 import { withExecuteOptions } from '@wdio/tauri-service';
 import path from 'node:path';
@@ -120,6 +122,7 @@ describe('A real SSH workspace in the native desktop', () => {
       await $('[role=dialog] button[aria-label=Close]').click();
       await expect($('.workspace-path')).toHaveText(remote);
       await workspaceGroups(invoke, workspace, remote);
+      await directoryNavigation(invoke, workspace, remote);
       await fileTransfers(invoke, workspace, remote);
     });
     await step('refreshes nested folders and relocates dirty editor buffers', () => fileRelocation(invoke, workspace));
@@ -295,5 +298,6 @@ describe('A real SSH workspace in the native desktop', () => {
     await step('starts without connecting the remembered workspace or requesting credentials', async () => {
       await startupWithoutConnection(remote, session, savedUsage);
     });
+    await step('opens new-window targets', () => windowNavigation(remote, session));
   }).timeout(600000);
 });

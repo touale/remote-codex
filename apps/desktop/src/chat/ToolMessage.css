@@ -5,7 +5,8 @@
   color: var(--muted);
 }
 .tool-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) max-content 13px;
   align-items: center;
   gap: 7px;
   min-height: 32px;
@@ -23,17 +24,14 @@ button.tool-heading:hover {
   color: var(--text);
 }
 .tool-title {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.tool-heading > svg,
 .tool-status {
-  flex: none;
-}
-.tool-status {
+  grid-column: 3;
+  justify-self: end;
   font-size: 10px;
 }
 .tool[data-status='failed'] .tool-status,
@@ -44,6 +42,7 @@ button.tool-heading:hover {
   animation: pulse 1.5s ease-in-out infinite;
 }
 .tool-chevron {
+  grid-column: 4;
   transition: transform 120ms ease;
 }
 .tool-heading[aria-expanded='true'] .tool-chevron {

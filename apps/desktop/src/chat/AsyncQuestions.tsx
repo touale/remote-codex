@@ -1,18 +1,19 @@
-import { Check, MessageCircleQuestion } from 'lucide-react';
+import { MessageCircleQuestion } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { failure } from '../bridge/client';
 import { ErrorText } from '../ui/controls';
 import { QuestionChoice } from './QuestionChoice';
+import { QuestionResult } from './QuestionResult';
 import type { Message } from './state';
 
 export const questionReplyId = (id: string) => `question:${id}`;
 export function AsyncQuestions({
   message,
-  answered,
+  reply,
   onAnswer,
 }: {
   message: Message;
-  answered: boolean;
+  reply?: string;
   onAnswer?: (message: Message, text: string) => Promise<void>;
 }) {
   const questions = message.questions ?? [];
@@ -20,12 +21,13 @@ export function AsyncQuestions({
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState('');
+  if (reply !== undefined && !busy) return <QuestionResult questions={questions} text={reply} />;
   return (
     <form
       className="question async-questions"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!onAnswer || answered || pending.current || answers.some((a) => !a.trim())) return;
+        if (!onAnswer || reply !== undefined || pending.current || answers.some((a) => !a.trim())) return;
         pending.current = true;
         setBusy(true);
         setError('');
@@ -39,33 +41,24 @@ export function AsyncQuestions({
       }}
     >
       <div className="question-heading">
-        {answered ? <Check size={15} /> : <MessageCircleQuestion size={15} />}
-        <strong>{answered ? 'Answered' : 'Your input is needed'}</strong>
+        <MessageCircleQuestion size={15} />
+        <strong>Your input is needed</strong>
       </div>
-      {answered ? (
-        <details>
-          <summary>View questions</summary>
-          {questions.map((q, i) => (
-            <p key={i}>{q.title}</p>
-          ))}
-        </details>
-      ) : (
-        questions.map((q, i) => (
-          <QuestionChoice
-            key={i}
-            label={q.title}
-            options={q.options}
-            value={answers[i] ?? ''}
-            disabled={busy}
-            onChange={(value) => setAnswers((previous) => previous.map((a, n) => (n === i ? value : a)))}
-          />
-        ))
-      )}
+      {questions.map((q, i) => (
+        <QuestionChoice
+          key={i}
+          label={q.title}
+          options={q.options}
+          value={answers[i] ?? ''}
+          disabled={busy}
+          onChange={(value) => setAnswers((previous) => previous.map((a, n) => (n === i ? value : a)))}
+        />
+      ))}
       <ErrorText message={error} />
-      {!answered && (
+      {reply === undefined && (
         <div className="actions">
           <button className="primary" disabled={busy || !onAnswer || answers.some((a) => !a.trim())}>
-            {busy ? 'Sending…' : 'Send answers'}
+            {busy ? 'Submitting…' : 'Submit'}
           </button>
         </div>
       )}

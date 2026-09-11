@@ -4,6 +4,7 @@ import { MarkdownBody } from './MarkdownBody';
 import { ToolMessage } from './ToolMessage';
 import type { FileChange } from '../files/useFiles';
 import type { Message } from './state';
+import { QuestionResult } from './QuestionResult';
 import { AsyncQuestions } from './AsyncQuestions';
 import { clockTime, fullTime } from './time';
 export type PlanChoice = 'implement' | 'fresh' | 'revise';
@@ -12,7 +13,7 @@ export const MessageView = memo(function MessageView({
   onEdit,
   editor,
   onAnswer,
-  answered = false,
+  questionReply,
   onDiff,
   report,
   onPlan,
@@ -23,17 +24,19 @@ export const MessageView = memo(function MessageView({
   onEdit?: (message: Message) => void;
   editor?: ReactNode;
   onAnswer?: (message: Message, text: string) => Promise<void>;
-  answered?: boolean;
+  questionReply?: string;
   onPlan?: (message: Message, choice: PlanChoice) => void;
   activePlan?: boolean;
   revisingPlan?: boolean;
   onDiff: (change: FileChange) => void;
   report: (error: unknown) => void;
 }) {
+  if (message.role === 'user' && message.clientId?.startsWith('question:'))
+    return <QuestionResult text={message.text} />;
   if (message.tool) return <ToolMessage tool={message.tool} onDiff={onDiff} report={report} />;
   if (editor) return <article className="message user editing-message">{editor}</article>;
   if (message.delivery === 'async' && message.questions?.length)
-    return <AsyncQuestions message={message} answered={answered} onAnswer={onAnswer} />;
+    return <AsyncQuestions message={message} reply={questionReply} onAnswer={onAnswer} />;
   return (
     <article className={`message ${message.role} ${message.plan ? 'plan-card' : ''}`}>
       <div className="message-body">

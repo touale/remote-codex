@@ -23,6 +23,7 @@ import type {
   SessionOpened,
   SessionSnapshot,
   TextFile,
+  WindowTarget,
 } from './types';
 
 import type { AppPreferences, AppPreferencesPatch } from './preferences';
@@ -45,7 +46,7 @@ type NativeAction =
 
 // The private desktop IPC contract. Callers infer results from the command name.
 export interface Commands {
-  attach: Command<{ channel: Channel<AppEvent> }, [string, string] | null>;
+  attach: Command<{ channel: Channel<AppEvent> }, WindowTarget | null>;
   acknowledge: Command<Id>;
   catalog: Command<{ archived: boolean }, Catalog>;
   server_save: Command<
@@ -74,7 +75,7 @@ export interface Commands {
   directory_browse: Command<Operation & { browser: string; path: string }, DirectoryPage>;
   directory_create: Command<Operation & { browser: string; parent: string; name: string }, string>;
   directory_close: Command<{ browser: string }>;
-  file_context_open: Command<Operation & { server: string }, FileContext>;
+  file_context_open: Command<Operation & { server: string; path?: string }, FileContext>;
   file_context_close: Command<Id>;
   file_list: Command<FilePath, DirectoryPage>;
   file_read: Command<FilePath, TextFile>;
@@ -83,7 +84,7 @@ export interface Commands {
   project_mcp: Command<{ workspace: string; servers: McpConfig['servers'] | null; revision: string | null }, McpConfig>;
   terminal_open: Command<
     Operation & {
-      target: { kind: 'server'; server: string } | { kind: 'workspace'; workspace: string };
+      target: { kind: 'server'; server: string } | { kind: 'files'; context: string };
       columns: number;
       rows: number;
     },
@@ -114,6 +115,7 @@ export interface Commands {
   transfer_upload: Command<{ context: string; destination: string; token: string }, Transfer>;
   transfer_download: Command<{ context: string; source: string }, Transfer | null>;
   transfer_discard_grant: Command<{ token: string }>;
+  transfer_remove: Command<{ ids: string[] }, string[]>;
   transfer_list: Command<undefined, Transfer[]>;
   transfer_run: Command<Id>;
   transfer_action: Command<
@@ -125,7 +127,7 @@ export interface Commands {
   app_preferences: Command<{ patch: AppPreferencesPatch | null }, AppPreferences>;
   authentication_answer: Command<Id & { answer: string | null }>;
   cancel_operation: Command<Id>;
-  new_window: Command<{ workspace: WorkspaceTarget | null }, string>;
+  new_window: Command<{ target: WindowTarget | null }, string>;
   close_window: Command<{ cancel: boolean }>;
   external_link: Command<{ url: string }>;
 }

@@ -90,3 +90,23 @@ pub(crate) async fn transfer_reveal(
         .await?;
     Ok(())
 }
+
+#[tauri::command]
+pub(crate) async fn transfer_remove(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<Vec<String>> {
+    let removed = state
+        .window(&window)?
+        .client
+        .transfers()
+        .remove_finished(&ids)
+        .await?;
+    if !removed.is_empty() {
+        state.broadcast(Event::TransfersRemoved {
+            ids: removed.clone(),
+        });
+    }
+    Ok(removed)
+}

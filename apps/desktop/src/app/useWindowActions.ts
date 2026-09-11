@@ -36,7 +36,7 @@ export function useWindowActions(
       if (event.kind === 'focus_session') nav.focusSession(event.id);
       if (event.kind === 'ui_action') {
         if (event.action !== 'new_window' && document.querySelector('[role=dialog]')) return;
-        if (event.action === 'new_window') run(call('new_window', { workspace: null }));
+        if (event.action === 'new_window') run(call('new_window', { target: null }));
         if (event.action === 'new_session') newSession();
         if (event.action === 'settings') setSettings(true);
         if (event.action === 'terminal') toggleTerminal();

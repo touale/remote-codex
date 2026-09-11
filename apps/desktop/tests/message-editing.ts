@@ -12,14 +12,23 @@ export async function messageEditing(invoke: Invoke, id: string) {
   await browser.saveScreenshot(new URL('../../../.artifacts/desktop-e2e/plan-questions.png', import.meta.url).pathname);
   await browser.waitUntil(async () => !(await invoke<SessionSnapshot>('session_snapshot', { id })).turn);
   await $('.async-questions .question-option:nth-of-type(2)').click();
-  await $('.async-questions').$('button=Send answers').click();
+  await $('.async-questions').$('button=Submit').click();
   await expect($('.messages')).toHaveText(expect.stringContaining('The choices are recorded.'));
-  await expect($('.async-questions')).toHaveText(expect.stringContaining('Answered'));
+  await expect($('.question-result')).toHaveText(expect.stringContaining('2/2 answered'));
+  await expect($('.question-result')).toHaveText(expect.stringContaining('Implementation'));
+  for (const message of await $$('.message.user'))
+    await expect(message).not.toHaveText(expect.stringContaining('Which scope?'));
+  await browser.refresh();
+  await $(`[data-session-id="${id}"] .tree-label`).click();
+  await expect($('.question-result')).toHaveText(expect.stringContaining('Implementation'));
+  for (const message of await $$('.message.user'))
+    await expect(message).not.toHaveText(expect.stringContaining('Which scope?'));
   await browser.waitUntil(async () => !(await invoke<SessionSnapshot>('session_snapshot', { id })).turn);
   const before = await invoke<HistoryPage>('session_history', { id });
   const target = before.turns.find((t) => t.items.some((i) => i.text === 'Clarify this plan.'))!;
   expect(target.items.find((i) => i.delivery === 'async')?.questions).toHaveLength(2);
-  expect(before.turns.some((t) => t.items.some((i) => i.client_id?.startsWith('question:')))).toBe(true);
+  const reply = before.turns.flatMap((t) => t.items).find((i) => i.client_id?.startsWith('question:'));
+  expect(reply?.text).toBe('Which scope?\nImplementation\n\nWhich budget?\nSmall');
   const draft = 'Keep this unrelated composer draft.';
   await $('textarea[aria-label="Message Codex"]').setValue(draft);
   const message = $(`[data-turn-id="${target.id}"] .message.user`);

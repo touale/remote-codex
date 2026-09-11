@@ -18,8 +18,8 @@ struct FileOwner {
     operations: tokio::sync::RwLock<()>,
 }
 impl ServerService {
-    pub async fn files(&self, server: &str) -> Result<FileHandle> {
-        FileHandle::open(&self.client, server, "/").await
+    pub async fn files(&self, server: &str, path: &str) -> Result<FileHandle> {
+        FileHandle::open(&self.client, server, path).await
     }
 }
 impl FileHandle {
@@ -186,7 +186,7 @@ impl FileHandle {
         self.call(FileRequest::Remove { path: path.into() }).await?;
         Ok(())
     }
-    pub(super) async fn terminal(&self, columns: u16, rows: u16) -> Result<super::ShellHandle> {
+    pub async fn terminal(&self, columns: u16, rows: u16) -> Result<super::ShellHandle> {
         self.ensure_open()?;
         let (_activity, guard) = self.operation_lock().await?;
         self.0.remote.recover(false).await?;

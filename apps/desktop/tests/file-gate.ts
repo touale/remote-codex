@@ -44,7 +44,13 @@ export async function holdFiles(
         const response = server ? undefined : await original.call(window, input, init);
         let request!: Held;
         const fail = await new Promise<boolean>((release) => {
-          request = { command, path: args.path ?? args.server, release, released: false, settled: false };
+          request = {
+            command,
+            path: command === 'file_context_open' && args.path === '/' ? args.server : (args.path ?? args.server),
+            release,
+            released: false,
+            settled: false,
+          };
           gate.held.push(request);
         });
         const result = fail

@@ -73,7 +73,7 @@ export function TerminalArea({ app, nav, terminals }: Pick<Props, 'app' | 'nav' 
   const prefs = app.preferences;
   const run = (promise: Promise<unknown>) => void promise.catch(app.report);
   const server = nav.workspace?.server ?? nav.target?.server ?? nav.serverHome?.name ?? null;
-  const target = nav.workspace ?? (server ? { server } : null);
+  const target = nav.fileContext ?? (server ? { server } : null);
   const visible = prefs.terminal_visible && Boolean(server && terminals.tabs.some((t) => t.server === server));
   return (
     <div style={{ display: visible ? 'contents' : 'none' }}>

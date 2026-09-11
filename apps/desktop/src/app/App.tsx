@@ -70,7 +70,7 @@ export default function App() {
   };
   const toggleTerminal = () => {
     if (nav.opening) return;
-    if (nav.workspace) run(terminals.toggle(nav.workspace));
+    if (nav.fileContext) run(terminals.toggle(nav.fileContext));
     else if (nav.target) run(nav.connectFiles().then(terminals.open));
     else if (nav.serverHome) run(terminals.toggle({ server: nav.serverHome.name }));
     else setPicker('terminal');

@@ -38,9 +38,7 @@ export function useTerminals({
         const result = await call('terminal_open', {
           operationId: operation,
           target:
-            'id' in workspace
-              ? { kind: 'workspace', workspace: workspace.id }
-              : { kind: 'server', server: workspace.server },
+            'id' in workspace ? { kind: 'files', context: workspace.id } : { kind: 'server', server: workspace.server },
           columns: 100,
           rows: 20,
         });

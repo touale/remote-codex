@@ -52,7 +52,12 @@ interface LiveSession {
   server: string;
   settings: Settings;
 }
+export type WindowTarget =
+  | { kind: 'server'; server: string }
+  | { kind: 'workspace'; server: string; path: string }
+  | { kind: 'session'; id: string };
 export interface Catalog {
+  open_session_ids: string[];
   servers: Server[];
   workspaces: Workspace[];
   sessions: CachedSession[];
@@ -162,6 +167,7 @@ export type Progress =
   | { type: 'stage'; data: string }
   | { type: 'transfer'; data: { kind: string; transferred_bytes: number; total_bytes: number | null } };
 export type AppEvent =
+  | { kind: 'transfers_removed'; ids: string[] }
   | { kind: 'file_relocated'; server: string; source: string; destination: string; context: string }
   | { kind: 'transfer'; transfer: import('./files').Transfer }
   | { kind: 'files_dropped'; token: string; names: string[]; x: number; y: number }

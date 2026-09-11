@@ -4,6 +4,9 @@ use serde::Serialize;
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum Event {
+    TransfersRemoved {
+        ids: Vec<String>,
+    },
     FileRelocated {
         server: String,
         source: String,

@@ -14,6 +14,14 @@ type Entry = (String, Weak<Gate<()>>);
 #[derive(Default)]
 pub(crate) struct Openings(Mutex<HashMap<String, Entry>>);
 impl Openings {
+    fn ids(&self) -> Result<Vec<String>> {
+        let entries = self.0.lock().map_err(|_| crate::state::unavailable())?;
+        Ok(entries
+            .iter()
+            .filter(|(_, (_, gate))| gate.strong_count() > 0)
+            .map(|(id, _)| id.clone())
+            .collect())
+    }
     pub(crate) async fn acquire(
         &self,
         window: &WebviewWindow,
@@ -63,4 +71,38 @@ pub(crate) fn focus(app: &AppHandle, owner: &str, id: &str) -> Result<()> {
 pub(crate) struct PreparedOpen {
     pub session: remote_codex_client::application::PreparedSession,
     pub _permit: Option<OwnedMutexGuard<()>>,
+}
+
+impl AppState {
+    pub(crate) fn open_session_ids(&self) -> Result<Vec<String>> {
+        let mut ids = self.openings.ids()?;
+        for context in self
+            .windows
+            .lock()
+            .map_err(|_| crate::state::unavailable())?
+            .values()
+        {
+            ids.extend(
+                context
+                    .sessions
+                    .lock()
+                    .map_err(|_| crate::state::unavailable())?
+                    .keys()
+                    .cloned(),
+            );
+        }
+        for target in self
+            .startup_targets
+            .lock()
+            .map_err(|_| crate::state::unavailable())?
+            .values()
+        {
+            if let crate::commands::window::WindowTarget::Session { id } = target {
+                ids.push(id.clone());
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
+    }
 }

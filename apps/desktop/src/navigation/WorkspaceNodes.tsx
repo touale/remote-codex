@@ -10,19 +10,22 @@ export function WorkspaceNodes({ node, level, ...tree }: TreeContext & { node: P
   const { selection, actions, collapsed, toggle, searching } = tree;
   const workspace = node.workspace;
   const expanded = !collapsed.has(node.key);
-  const current =
-    workspace && selection.current?.server === workspace.server && selection.current.path === workspace.path;
+  const current = selection.current?.server === node.server && selection.current.path === node.path;
   const items: MenuItem[] = workspace
     ? [
         { label: 'Open workspace', action: () => actions.onSelectWorkspace(workspace) },
         { label: 'New session', action: () => actions.onNew(workspace) },
         { label: 'Refresh', action: actions.onRefresh, disabled: actions.refreshing },
         { label: 'Open terminal', action: () => actions.onTerminal(workspace) },
-        { label: 'Open in New Window', action: () => actions.onWindow(workspace) },
+        {
+          label: 'Open in New Window',
+          action: () => actions.onWindow({ kind: 'workspace', server: workspace.server, path: workspace.path }),
+        },
         { label: 'Copy path', action: () => copyTreeText(node.path, actions) },
         { label: 'Remove workspace…', action: () => actions.onRemoveWorkspace(workspace), danger: true },
       ]
     : [
+        { label: 'Open directory', action: () => actions.onSelectDirectory({ server: node.server, path: node.path }) },
         { label: expanded ? 'Collapse' : 'Expand', action: () => toggle(node.key) },
         { label: 'Copy path', action: () => copyTreeText(node.path, actions) },
       ];
@@ -49,23 +52,20 @@ export function WorkspaceNodes({ node, level, ...tree }: TreeContext & { node: P
             role="treeitem"
             aria-level={level}
             aria-expanded={expanded}
-            aria-selected={workspace ? Boolean(current && !selection.selected) : undefined}
+            aria-selected={Boolean(current && !selection.selected)}
             title={node.path}
-            onClick={() => {
-              if (!workspace) toggle(node.key);
-            }}
             onKeyDown={(event) => {
-              if (workspace && (event.key === 'Enter' || event.key === ' ')) {
+              if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 toggle(node.key, true);
-                actions.onSelectWorkspace(workspace);
+                if (workspace) actions.onSelectWorkspace(workspace);
+                else actions.onSelectDirectory({ server: node.server, path: node.path });
               }
             }}
             onDoubleClick={() => {
-              if (workspace) {
-                toggle(node.key, true);
-                actions.onSelectWorkspace(workspace);
-              }
+              toggle(node.key, true);
+              if (workspace) actions.onSelectWorkspace(workspace);
+              else actions.onSelectDirectory({ server: node.server, path: node.path });
             }}
           >
             <FolderIcon expanded={expanded} />
@@ -108,6 +108,11 @@ function SessionRow({
   const chat = selection.chats[session.id];
   const items: MenuItem[] = [
     { label: 'Open session', action: () => actions.onSelectSession(workspace.server, session.id, workspace.path) },
+    {
+      label: 'Open in New Window',
+      action: () => actions.onWindow({ kind: 'session', id: session.id }),
+      disabled: selection.openSessions.includes(session.id) || Boolean(chat && !chat.closed),
+    },
     { label: 'Rename…', action: () => actions.onSessionMenu(session.id, 'rename') },
     { label: 'Archive', action: () => actions.onSessionMenu(session.id, 'archive') },
     {

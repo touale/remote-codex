@@ -60,6 +60,7 @@
     "allow-transfer-download",
     "allow-transfer-discard-grant",
     "allow-transfer-list",
+    "allow-transfer-remove",
     "allow-transfer-run",
     "allow-transfer-action",
     "allow-transfer-skipped",

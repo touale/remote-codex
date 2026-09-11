@@ -2,13 +2,14 @@ use crate::{
     error::{Error, Result},
     state::{AppState, Event, unavailable},
 };
-use serde::Deserialize;
 use std::sync::atomic::Ordering;
 use tauri::{Manager, State, WebviewWindow};
 
 mod layout;
+mod target;
 pub(crate) use layout::{Preferences, load_preferences, preferences_root};
 use layout::{preferences_path, validate};
+pub(crate) use target::WindowTarget;
 
 #[tauri::command]
 pub(crate) async fn preferences(
@@ -86,47 +87,28 @@ pub(crate) async fn cancel_operation(
     }
     Ok(())
 }
-#[derive(Deserialize)]
-pub(crate) struct WindowWorkspace {
-    server: String,
-    path: String,
-}
 #[tauri::command]
 pub(crate) async fn new_window(
     window: WebviewWindow,
     state: State<'_, AppState>,
-    workspace: Option<WindowWorkspace>,
+    target: Option<WindowTarget>,
 ) -> Result<String> {
+    let _gate = state.initialization.lock().await;
     let context = state.window(&window)?;
     let mut preferences = load_preferences(&window)?;
-    preferences.selected_workspace = match workspace {
-        Some(w) => {
-            if !context
-                .client
-                .workspaces()
-                .list()
-                .await?
-                .iter()
-                .any(|saved| saved.server == w.server && saved.path == w.path)
-            {
-                return Err(Error::new(
-                    "NOT_FOUND",
-                    "This workspace is no longer available.",
-                ));
-            }
-            Some((w.server, w.path))
-        }
+    preferences.selected_workspace = match &target {
+        Some(target) => target.validate(&context, &state).await?,
         None => None,
     };
     let label = format!("workspace-{}", uuid::Uuid::new_v4());
     let path = preferences_path(&window)?.with_file_name(format!("window-{label}.json"));
     std::fs::write(&path, serde_json::to_vec(&preferences)?)?;
-    if let Some(workspace) = &preferences.selected_workspace {
+    if let Some(target) = &target {
         state
-            .startup_workspaces
+            .startup_targets
             .lock()
             .map_err(|_| unavailable())?
-            .insert(label.clone(), workspace.clone());
+            .insert(label.clone(), target.clone());
     }
     let builder = tauri::WebviewWindowBuilder::new(
         window.app_handle(),
@@ -138,7 +120,10 @@ pub(crate) async fn new_window(
             .selected_workspace
             .as_ref()
             .map(|(server, path)| format!("{server} · {path} — Remote Codex"))
-            .unwrap_or_else(|| "Remote Codex".into()),
+            .unwrap_or_else(|| match &target {
+                Some(WindowTarget::Server { server }) => format!("{server} — Remote Codex"),
+                _ => "Remote Codex".into(),
+            }),
     )
     .inner_size(1440.0, 900.0)
     .min_inner_size(900.0, 600.0)
@@ -150,12 +135,14 @@ pub(crate) async fn new_window(
     let built = builder.build();
     if let Err(error) = built {
         state
-            .startup_workspaces
+            .startup_targets
             .lock()
             .map_err(|_| unavailable())?
             .remove(&label);
+        let _ = std::fs::remove_file(path);
         return Err(error.into());
     }
+    state.changed();
     Ok(label)
 }
 #[tauri::command]
@@ -176,6 +163,7 @@ pub(crate) async fn close_window(
         .map_err(|_| unavailable())?
         .remove(window.label());
     window.destroy()?;
+    state.changed();
     if state.windows.lock().map_err(|_| unavailable())?.is_empty() {
         window.app_handle().exit(0);
     }

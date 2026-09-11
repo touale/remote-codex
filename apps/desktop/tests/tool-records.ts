@@ -5,9 +5,13 @@ export async function toolRecords(setTheme: (theme: 'light' | 'dark') => Promise
   await browser.setWindowSize(1000, 800);
   await $('button=Fixture tools').click();
   const row = (id: string) => $(`[data-tool-id="${id}"]`);
-  await expect(row('empty')).toHaveText('Search the web');
+  await expect(row('empty').$('.tool-title')).toHaveText('Reasoning summary');
   await expect(row('empty').$('button')).not.toExist();
   await expect(row('empty').$('.tool-chevron')).not.toExist();
+  const rightEdges = await browser.execute(() =>
+    [...document.querySelectorAll('.tool-status')].map((e) => e.getBoundingClientRect().right),
+  );
+  expect(Math.max(...rightEdges) - Math.min(...rightEdges)).toBeLessThanOrEqual(1);
   for (const id of ['search', 'mcp', 'reasoning']) {
     const heading = row(id).$('.tool-heading');
     await expect(heading).toHaveAttribute('aria-expanded', 'false');
