@@ -125,6 +125,10 @@ async fn process(
     generation: &Generation,
     mut event: Value,
 ) -> Result<bool> {
+    if let Some(reply) = generation.native.goal_attachment_response(&event).await {
+        generation.native.send(reply)?;
+        return Ok(true);
+    }
     if let Some(reply) = super::recovery::handle(runtime, &event).await {
         generation.native.send(reply)?;
         return Ok(true);

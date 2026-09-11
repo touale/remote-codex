@@ -1,4 +1,4 @@
-use super::{Thread, binding, execution_policy, settings};
+use super::{Thread, attachments, binding, execution_policy, settings};
 use remote_codex_protocol::Fault;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
@@ -69,6 +69,10 @@ impl Thread {
             ));
         }
         let kind = match method {
+            "fs/createDirectory" | "fs/writeFile" | "fs/readFile" => {
+                attachments::prepare(method, &mut params, Path::new(&self.binding.codex_home))?;
+                OperationKind::Read
+            }
             "thread/goal/set" => {
                 settings::known_fields(
                     &params,

@@ -7,8 +7,8 @@ pub struct RecoveryRequest {
     pub after: i64,
 }
 
-pub fn tools() -> Value {
-    json!([{"type":"function","name":"remote_jobs","description":"Inspect commands previously submitted by this local thread to its bound remote environment. Use after reconnection; never rerun a command solely because its terminal ID is unavailable.","inputSchema":{"type":"object","properties":{"id":{"type":"string"},"after":{"type":"integer","minimum":0}},"additionalProperties":false}}])
+pub fn tool() -> Value {
+    json!({"type":"function","name":"remote_jobs","description":"Inspect commands previously submitted by this local thread to its bound remote environment. Use after reconnection; never rerun a command solely because its terminal ID is unavailable.","inputSchema":{"type":"object","properties":{"id":{"type":"string"},"after":{"type":"integer","minimum":0}},"additionalProperties":false}})
 }
 
 pub fn request(event: &Value) -> Option<RecoveryRequest> {

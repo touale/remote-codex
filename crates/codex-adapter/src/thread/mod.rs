@@ -1,6 +1,8 @@
 pub mod action;
+mod attachments;
 pub(crate) mod binding;
 mod execution_policy;
+mod goal_attachments;
 pub mod history;
 mod request;
 mod settings;
@@ -91,7 +93,7 @@ impl Codex {
         for (key, value) in options.mcp {
             params["config"][key] = value;
         }
-        if !options.instructions.is_empty() {
+        {
             let native = self
                 .engine
                 .call("config/read", json!({"includeLayers":false}))
@@ -99,10 +101,13 @@ impl Codex {
             let inherited = native["config"]["developer_instructions"]
                 .as_str()
                 .unwrap_or_default();
-            params["developerInstructions"] =
-                json!(format!("{inherited}\n\n{}", options.instructions));
+            params["developerInstructions"] = json!(format!(
+                "{inherited}\n\n{}\n\n{}",
+                options.instructions,
+                goal_attachments::INSTRUCTIONS
+            ));
         }
-        params["dynamicTools"] = crate::recovery::tools();
+        params["dynamicTools"] = json!([crate::recovery::tool(), goal_attachments::tool()]);
         let events = self.engine.subscribe();
         let response = if let Some(id) = options.existing {
             if let Some(object) = params.as_object_mut() {
