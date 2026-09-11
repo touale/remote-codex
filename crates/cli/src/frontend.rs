@@ -47,15 +47,12 @@ async fn attach(
     let status = loop {
         tokio::select! {
           result=child.wait()=>break result?,
-          _=closed.changed()=>{let _=child.kill().await;break child.wait().await?},
+          _=closed.changed()=>break wait_for_exit(&mut child).await?,
           _=interrupt.recv()=>{
               if let Some(pid) = child.id().and_then(|pid| i32::try_from(pid).ok()) {
                   let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), nix::sys::signal::Signal::SIGINT);
               }
-              break match tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
-                  Ok(status) => status?,
-                  Err(_) => { child.kill().await?; child.wait().await? },
-              }
+              break wait_for_exit(&mut child).await?;
           },
           changed=environment.changed()=>{
               if changed.is_err() { continue; }
@@ -82,6 +79,20 @@ async fn attach(
         ));
     }
     Ok(())
+}
+
+async fn wait_for_exit(
+    child: &mut tokio::process::Child,
+) -> std::io::Result<std::process::ExitStatus> {
+    // Closing the frontend socket can precede its normal process exit. Allow
+    // terminal cleanup to finish before killing an unresponsive frontend.
+    match tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
+        Ok(status) => status,
+        Err(_) => {
+            child.kill().await?;
+            child.wait().await
+        }
+    }
 }
 
 fn resume_command(cli: &Cli, id: &str) -> Result<String> {

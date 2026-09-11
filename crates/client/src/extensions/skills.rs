@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, path::Path};
 
 /// Maps enabled local Skill paths to verified assets in the selected environment.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default)]
 pub(crate) struct SkillMap(BTreeMap<String, String>);
 
 impl SkillMap {
@@ -90,6 +90,25 @@ impl SkillMap {
 
     pub(crate) fn mappings(&self) -> &BTreeMap<String, String> {
         &self.0
+    }
+
+    pub(crate) fn verify_unchanged(&self, current: &Self) -> Result<()> {
+        if let Some(path) = self
+            .0
+            .keys()
+            .chain(current.0.keys())
+            .find(|path| self.0.get(*path) != current.0.get(*path))
+        {
+            return Err(remote_codex_protocol::Fault::new(
+                "SKILLS_CHANGED",
+                &format!(
+                    "enabled Skill resources changed at {}; exit and resume this session to apply the current Skills",
+                    json!(path)
+                ),
+            )
+            .into());
+        }
+        Ok(())
     }
 
     pub(crate) fn instructions(&self) -> String {
@@ -184,6 +203,32 @@ fn excluded(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_rejects_added_removed_or_changed_skills() {
+        let original = SkillMap(BTreeMap::from([(
+            "/probe/SKILL.md".into(),
+            "digest-a".into(),
+        )]));
+        assert!(original.verify_unchanged(&original).is_ok());
+        for (previous, current) in [
+            (SkillMap::default(), original.clone()),
+            (original.clone(), SkillMap::default()),
+            (
+                original,
+                SkillMap(BTreeMap::from([(
+                    "/probe/SKILL.md".into(),
+                    "digest-b".into(),
+                )])),
+            ),
+        ] {
+            let error = previous.verify_unchanged(&current).err();
+            assert!(error.is_some_and(
+                |e| e.code() == "SKILLS_CHANGED" && e.to_string().contains("/probe/SKILL.md")
+            ));
+        }
+    }
+
     #[test]
     fn bundle_rejects_links_and_omits_credential_files() -> Result<()> {
         let root = tempfile::tempdir()?;

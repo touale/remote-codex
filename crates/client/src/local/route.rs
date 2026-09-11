@@ -32,7 +32,6 @@ pub(super) async fn request(
     let prepared = generation.native.prepare(
         method,
         params,
-        generation.permissions.full_access(),
         runtime.has_history.load(Ordering::Acquire),
         generation.skills.mappings(),
     )?;
@@ -145,6 +144,9 @@ async fn dispatch(
             if operation.kind != OperationKind::GoalDefine {
                 generation.bridge.check().map_err(fault)?;
             }
+            generation
+                .native
+                .validate_execution(&operation, generation.permissions.full_access())?;
             if !runtime.has_history.load(Ordering::Acquire) {
                 runtime
                     .store
@@ -194,6 +196,13 @@ async fn dispatch(
 }
 
 fn fault(error: crate::ClientError) -> Fault {
+    if let crate::ClientError::RemoteFault(code, message, outcome_unknown) = error {
+        return Fault {
+            code,
+            message,
+            outcome_unknown,
+        };
+    }
     Fault {
         code: error.code().into(),
         message: error.to_string(),

@@ -49,7 +49,6 @@ impl LocalRuntime {
         let prepared = generation.native.prepare(
             method,
             params,
-            generation.permissions.full_access(),
             self.has_history.load(Ordering::Acquire),
             generation.skills.mappings(),
         )?;
@@ -197,7 +196,6 @@ impl LocalRuntime {
         let prepared = generation.native.prepare(
             "thread/settings/update",
             params,
-            generation.permissions.full_access(),
             self.has_history.load(Ordering::Acquire),
             generation.skills.mappings(),
         )?;

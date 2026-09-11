@@ -72,7 +72,6 @@ impl LocalRuntime {
         }
         let prepared = generation.native.prepare_action(
             action,
-            generation.permissions.full_access(),
             self.has_history.load(Ordering::Acquire),
             generation.skills.mappings(),
         )?;
@@ -91,7 +90,6 @@ impl LocalRuntime {
         let generation = self.current()?;
         let prepared = generation.native.prepare_action(
             Action::Submit(text),
-            generation.permissions.full_access(),
             self.has_history.load(Ordering::Acquire),
             generation.skills.mappings(),
         )?;

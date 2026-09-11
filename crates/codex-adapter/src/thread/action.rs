@@ -20,7 +20,6 @@ impl Thread {
     pub fn prepare_action(
         &self,
         action: Action,
-        full_access: bool,
         persisted: bool,
         skills: &BTreeMap<String, String>,
     ) -> Result<Prepared, Fault> {
@@ -65,11 +64,11 @@ impl Thread {
             }
             Action::Goal(action) => {
                 let (method, params) = crate::goals::params(thread, action)?;
-                return self.prepare(method, params, full_access, persisted, skills);
+                return self.prepare(method, params, persisted, skills);
             }
             Action::Interrupt(turn) => ("turn/interrupt", crate::events::interrupt(thread, &turn)),
         };
-        self.prepare(method, params, full_access, persisted, skills)
+        self.prepare(method, params, persisted, skills)
     }
 
     pub fn frontend(

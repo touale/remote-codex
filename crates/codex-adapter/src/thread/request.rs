@@ -38,7 +38,6 @@ impl Thread {
         &self,
         method: &str,
         mut params: Value,
-        full_access: bool,
         persisted: bool,
         skills: &BTreeMap<String, String>,
     ) -> Result<Prepared, Fault> {
@@ -102,7 +101,6 @@ impl Thread {
             }
             "turn/start" => {
                 binding::turn_params(&mut params, &self.binding);
-                execution_policy::validate(&params, &self.binding, full_access)?;
                 OperationKind::Turn
             }
             "turn/steer" => {
@@ -156,6 +154,18 @@ impl Thread {
             method: method.into(),
             params,
         }))
+    }
+
+    /// Check authority at dispatch, after the execution environment is ready.
+    pub fn validate_execution(
+        &self,
+        operation: &Operation,
+        full_access: bool,
+    ) -> Result<(), Fault> {
+        if operation.kind == OperationKind::Turn {
+            execution_policy::validate(&operation.params, &self.binding, full_access)?;
+        }
+        Ok(())
     }
 
     pub async fn execute(&self, operation: Operation) -> Result<Value, Fault> {

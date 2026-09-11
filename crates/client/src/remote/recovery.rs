@@ -29,10 +29,12 @@ impl Recovery {
     }
 
     pub(crate) fn ready(&self) -> Result<()> {
-        if *self.state.borrow() == EnvironmentState::Ready {
-            Ok(())
-        } else {
-            Err(remote_codex_protocol::Fault::new("ENVIRONMENT_NOT_READY", "execution environment is reconnecting or requires attention; no new turn was submitted").into())
+        match &*self.state.borrow() {
+            EnvironmentState::Ready => Ok(()),
+            EnvironmentState::ActionRequired { code, message } => {
+                Err(remote_codex_protocol::Fault::new(code, message).into())
+            }
+            _ => Err(remote_codex_protocol::Fault::new("ENVIRONMENT_NOT_READY", "execution environment is reconnecting or requires attention; no new turn was submitted").into()),
         }
     }
 

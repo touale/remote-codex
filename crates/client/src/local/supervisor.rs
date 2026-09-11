@@ -41,9 +41,12 @@ impl LocalRuntime {
             .lock()
             .map_err(|_| ClientError::RemoteResponse)?
             .disconnect();
-        self.recovery
-            .publish(EnvironmentState::Recovering { reason });
-        self.announce("Execution environment interrupted. Restoring this session…");
+        self.recovery.publish(EnvironmentState::Recovering {
+            reason: reason.clone(),
+        });
+        self.announce(&format!(
+            "Execution environment interrupted ({reason}). Restoring this session…"
+        ));
         // Resolve stale UI prompts before shutting down their owning native process.
         if let Ok(mut pending) = old.pending_requests.lock() {
             for id in pending.keys() {

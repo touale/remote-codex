@@ -71,12 +71,8 @@ impl Recipe {
                 .register_environment(&environment, &bridge.url)
                 .await?;
             let skills = SkillMap::prepare(&codex, &remote, &self.home, progress).await?;
-            if expected_skills.is_some_and(|expected| expected != &skills) {
-                return Err(remote_codex_protocol::Fault::new(
-                    "SKILLS_CHANGED",
-                    "enabled Skill resources changed; reopen the session to apply them",
-                )
-                .into());
+            if let Some(expected) = expected_skills {
+                expected.verify_unchanged(&skills)?;
             }
             progress(PrepareEvent::Stage(PrepareStage::OpenLocalSession));
             let opened = codex
