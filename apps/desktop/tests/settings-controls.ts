@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { AppPreferences } from '../src/bridge/preferences';
 import type { SessionSnapshot } from '../src/bridge/types';
 import { invokeWindow } from './invoke';
+import { draftConnection } from './draft-connection';
 export async function sharedAppearanceAndUsage() {
   let windowLabel = 'main';
   const invoke = <T>(command: string, args: Record<string, unknown> = {}) =>
@@ -99,6 +100,7 @@ export async function startupWithoutConnection(
   await expect($('.terminal-panel')).not.toBeDisplayed();
   await expect($('[role="dialog"]')).not.toExist();
   await expect($('footer')).toHaveText(expect.stringContaining('No workspace selected'));
+  await draftConnection(invoke, remote);
   // A fresh window owns a fresh Client and native process: no previous frontend usage cache.
   await $(`.session-row[data-session-id="${session}"] .tree-label`).click();
   await $('textarea[aria-label="Message Codex"]').waitForDisplayed({ timeout: 60000 });

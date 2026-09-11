@@ -111,9 +111,7 @@ export function DraftChat({
           </p>
           {draft.opened && <code>{draft.opened.id}</code>}
           <AccountUsagePanel />
-          <p className="muted">
-            Send a message to connect your environment and start Codex. Your draft stays here until then.
-          </p>
+          <p className="muted">Send a message to start Codex.</p>
         </Modal>
       )}
     </section>

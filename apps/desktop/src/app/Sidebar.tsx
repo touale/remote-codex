@@ -48,7 +48,6 @@ export function Sidebar({
     | 'fileLoading'
     | 'fileError'
     | 'retryFiles'
-    | 'connectFiles'
   >;
   fileActions: Pick<ReturnType<typeof useFileActions>, 'create' | 'change' | 'move'>;
   resources: Pick<ReturnType<typeof useResourceActions>, 'removeWorkspace' | 'removeServer'>;
@@ -148,7 +147,6 @@ export function Sidebar({
               error={nav.fileError}
               onRetry={nav.retryFiles}
               root={nav.fileRoot}
-              onConnect={nav.target && !nav.fileContext ? () => run(nav.connectFiles()) : undefined}
               cacheKey={JSON.stringify([fileServer?.id, nav.fileRoot])}
               refresh={fileRevision}
               collapsed={p.files_collapsed}

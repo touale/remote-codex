@@ -1,6 +1,6 @@
 import type { SessionOpening } from '../chat/ConversationLoading';
 import { useEffect, useRef, useState } from 'react';
-import { call, failure, operationId } from '../bridge/client';
+import { failure } from '../bridge/client';
 import type { CurrentWorkspace } from '../bridge/files';
 import { DraftStore } from '../chat/drafts/store';
 import { submitDraft, type DraftSubmission } from '../chat/drafts/submit';
@@ -12,12 +12,7 @@ import type { useDialog } from '../ui/useDialog';
 import { locationTarget, type NavigationLocation } from './navigationLocation';
 import { prepareSession, type Opened } from './sessionOpening';
 import type { useApplication } from './useApplication';
-interface WorkspaceAccess {
-  server: string;
-  path: string;
-  task: Promise<CurrentWorkspace>;
-  value?: CurrentWorkspace;
-}
+import { useWorkspaceAccess } from './useWorkspaceAccess';
 export function useNavigation(
   app: Pick<
     ReturnType<typeof useApplication>,
@@ -40,7 +35,8 @@ export function useNavigation(
   const [drafts] = useState(() => new DraftStore());
   const [location, setLocation] = useState<NavigationLocation>({ kind: 'home' });
   const activeDraft = useRef<string | null>(null);
-  const [, updateConnections] = useState(0);
+  const workspaces = useWorkspaceAccess(app);
+  const connect = workspaces.connect;
   const target = locationTarget(location);
   const draftKey = location.kind === 'draft' ? location.key : null;
   const selected = location.kind === 'session' ? location.id : null;
@@ -53,45 +49,10 @@ export function useNavigation(
   // Keep the committed view intact underneath a pending navigation for Back/cancel.
   const [opening, setOpening] = useState<SessionOpening | null>(null);
   const selection = useRef(0);
-  const workspaces = useRef(new Map<string, WorkspaceAccess>());
-  const workspaceKey = (server: string, path: string) => JSON.stringify([server, path]);
+  const connection = target ? workspaces.get(target.server, target.path) : null;
   const workspace =
-    location.kind === 'workspace' || location.kind === 'session'
-      ? location.workspace
-      : target
-        ? (workspaces.current.get(workspaceKey(target.server, target.path))?.value ?? null)
-        : null;
+    location.kind === 'workspace' || location.kind === 'session' ? location.workspace : (connection?.value ?? null);
   const sessions = useRef(new Map<string, Promise<Opened | null>>());
-  const connect = (server: string, path: string) => {
-    const key = workspaceKey(server, path);
-    const cached = workspaces.current.get(key);
-    if (cached) return cached.task;
-    const operation = operationId();
-    const entry: WorkspaceAccess = {
-      server,
-      path,
-      task: call('workspace_open', { operationId: operation, server, path })
-        .then((value) => {
-          if (workspaces.current.get(key) !== entry) {
-            void call('workspace_close', { id: value.id }).catch(app.report);
-            throw { code: 'OPERATION_CANCELLED', message: 'The workspace was removed while opening.' };
-          }
-          entry.value = value;
-          const canonical = workspaceKey(value.server, value.path);
-          // A second spelling may already be opening. Keep its request owner intact.
-          if (!workspaces.current.has(canonical)) workspaces.current.set(canonical, entry);
-          updateConnections((v) => v + 1);
-          return value;
-        })
-        .catch((error) => {
-          if (workspaces.current.get(key) === entry) workspaces.current.delete(key);
-          throw error;
-        })
-        .finally(() => app.finishOperation(operation)),
-    };
-    workspaces.current.set(key, entry);
-    return entry.task;
-  };
   const activate = (value: CurrentWorkspace, id: string | null) => {
     activeDraft.current = null;
     setBusy(false);
@@ -140,6 +101,8 @@ export function useNavigation(
     setLocation({ kind: 'draft', key, target });
     setBusy(false);
     app.setError('');
+    // The draft is usable immediately; file connection failures are shown in its file pane.
+    void connect(server, path).catch(() => {});
     const record = app.catalog.servers.find((s) => s.name === server);
     const keys = record ? workspaceAncestorKeys(record.id, path) : [];
     app.changePreferences((latest) => ({
@@ -149,7 +112,7 @@ export function useNavigation(
   };
   const openSession = async (server: string, resume: string, path: string) => {
     const epoch = ++selection.current;
-    const current = workspaces.current.get(workspaceKey(server, path))?.value;
+    const current = workspaces.get(server, path)?.value;
     const existing = chats.store.get(resume);
     if (current && existing && !existing.closed && existing.historyReady) {
       setOpening(null);
@@ -229,12 +192,9 @@ export function useNavigation(
     drafts,
     draftKey,
     newSession,
-    connectFiles: async () => {
-      if (!target) throw new Error('Choose a workspace first.');
-      const epoch = selection.current;
-      const value = await connect(target.server, target.path);
-      if (epoch === selection.current) updateConnections((v) => v + 1);
-      return value;
+    connectFiles: () => {
+      if (!target) return Promise.reject(new Error('Choose a workspace first.'));
+      return connect(target.server, target.path);
     },
     submitDraft: (key: string, action: DraftSubmission) => {
       if (activeDraft.current === key) setBusy(true);
@@ -254,9 +214,12 @@ export function useNavigation(
     workspace,
     fileContext: workspace ? { ...workspace, kind: 'workspace' as const } : serverFiles.context,
     fileRoot: workspace?.path ?? target?.path ?? (location.kind === 'server' ? '/' : null),
-    fileLoading: serverFiles.busy,
-    fileError: serverFiles.error,
-    retryFiles: serverFiles.retry,
+    fileLoading: target ? Boolean(connection && !connection.value && connection.error === null) : serverFiles.busy,
+    fileError: target ? (connection?.error ?? '') : serverFiles.error,
+    retryFiles: () => {
+      if (target) void connect(target.server, target.path).catch(() => {});
+      else serverFiles.retry();
+    },
     selected,
     busy: opening ? opening.phase !== 'failed' : busy,
     openWorkspace,
@@ -276,9 +239,7 @@ export function useNavigation(
       )
         goHome();
       serverFiles.forget(server, path);
-      for (const [key, value] of workspaces.current)
-        if (value.server === server && (path === undefined || value.path === path || value.value?.path === path))
-          workspaces.current.delete(key);
+      workspaces.forget(server, path);
     },
     clear: () => goHome(),
     selectServer: (serverId: string) => {

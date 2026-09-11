@@ -25,7 +25,6 @@ export function FileTree({
   refresh,
   cacheKey,
   onOpen,
-  onConnect,
   onCreate,
   onRename,
   onMove,
@@ -46,7 +45,6 @@ export function FileTree({
   refresh: number;
   cacheKey: string;
   onOpen: (path: string) => void;
-  onConnect?: () => void;
   onCreate: (directory: boolean, parent: string) => Promise<boolean>;
   onRename: (entry: Entry) => void;
   onMove: (entry: Entry, parent: string) => Promise<void>;
@@ -86,7 +84,6 @@ export function FileTree({
     { label: 'Upload folder…', action: () => onUpload(parent, true), disabled: !context },
   ];
   const backgroundItems: MenuItem[] = [
-    ...(onConnect ? [{ label: 'Connect files', action: onConnect }] : []),
     ...creationItems(''),
     ...uploadItems(''),
     { label: 'Refresh', action: reload, disabled: !context },
@@ -192,7 +189,7 @@ export function FileTree({
           )}
           {drop.target !== null && (
             <div className="file-drop-hint" role="status">
-              {context ? `Upload to ${drop.target || root || 'workspace'}` : 'Connect files to upload'}
+              {context ? `Upload to ${drop.target || root || 'workspace'}` : 'Files are not ready for uploads yet'}
             </div>
           )}
           <div className="section-heading">
@@ -235,12 +232,7 @@ export function FileTree({
                 {context ? (
                   branch('', 0)
                 ) : loading || connectionError ? null : (
-                  <Empty
-                    title={onConnect ? 'Files are not connected' : 'Choose a server or workspace'}
-                    detail={onConnect ? 'Connect to browse this workspace.' : 'Its remote files appear here.'}
-                  >
-                    {onConnect && <button onClick={onConnect}>Connect files</button>}
-                  </Empty>
+                  <Empty title="Choose a server or workspace" detail="Its remote files appear here." />
                 )}
               </div>
             </>

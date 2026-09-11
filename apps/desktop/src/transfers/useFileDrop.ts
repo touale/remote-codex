@@ -34,7 +34,7 @@ export function useFileDrop(
       setTarget(null);
       if (destination === null || !current.current.enabled) {
         void call('transfer_discard_grant', { token: event.token }).catch(current.current.report);
-        if (destination !== null) current.current.report({ message: 'Connect files before uploading.' });
+        if (destination !== null) current.current.report({ message: 'Files are not ready for uploads yet.' });
       } else
         void current.current
           .upload(destination, { token: event.token, names: event.names })
