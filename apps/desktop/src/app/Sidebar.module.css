@@ -1,0 +1,40 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-height: 0;
+  min-width: 0;
+  background: var(--sidebar);
+}
+.trees {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.area {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  flex: 0 0 40px;
+  padding: 4px 10px;
+  gap: 8px;
+}
+.footer button {
+  border: none;
+  background: transparent;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 6px;
+}
+.footer small {
+  margin-left: auto;
+  font-size: 10px;
+}

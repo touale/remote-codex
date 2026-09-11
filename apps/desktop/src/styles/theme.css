@@ -1,0 +1,145 @@
+:root {
+  color-scheme: light;
+  --canvas: #fff;
+  --sidebar: #f9f9f9;
+  --surface: #f4f4f4;
+  --selected: #ececec;
+  --text: #0d0d0d;
+  --muted: #666;
+  --border: #e5e5e5;
+  --hover: #eeeeee;
+  --primary: #171717;
+  --on-primary: #fff;
+  --primary-hover: #303030;
+  --primary-active: #454545;
+  --danger: #b42318;
+  --success: #258550;
+  --shadow: 0 8px 32px #00000014, 0 1px 4px #0000000d;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #212121;
+  --sidebar: #171717;
+  --surface: #2f2f2f;
+  --selected: #393939;
+  --text: #ececec;
+  --muted: #a3a3a3;
+  --border: #3b3b3b;
+  --hover: #303030;
+  --primary: #ececec;
+  --on-primary: #171717;
+  --primary-hover: #d8d8d8;
+  --primary-active: #c4c4c4;
+  --danger: #f28b82;
+  --success: #78bd95;
+  --shadow: 0 8px 32px #00000040, 0 1px 4px #00000020;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+button {
+  color: var(--text);
+  cursor: pointer;
+}
+button:disabled,
+select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+button svg {
+  flex: none;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+::selection {
+  background: var(--selected);
+}
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+.muted,
+small {
+  color: var(--muted);
+}
+small {
+  font-size: 11px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+  flex: none;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+  flex: none;
+}
+.status-dot.online {
+  background: var(--success);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

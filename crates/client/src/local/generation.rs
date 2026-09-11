@@ -19,13 +19,18 @@ pub(super) struct Recipe {
     pub config: crate::config::EffectiveConfig,
 }
 
+pub(super) struct PendingRequest {
+    pub event: Value,
+    pub command_approval: bool,
+}
+
 pub(super) struct Generation {
     pub native: Thread,
     pub bridge: Bridge,
     pub skills: SkillMap,
     pub approvals: Arc<approvals::Approvals>,
     pub permissions: Arc<permissions::Permissions>,
-    pub pending_approvals: Mutex<HashMap<String, bool>>,
+    pub pending_requests: Mutex<HashMap<String, PendingRequest>>,
     detached: tokio::sync::OnceCell<()>,
     closed: tokio::sync::OnceCell<()>,
 }
@@ -99,6 +104,9 @@ impl Recipe {
                 return Err(ClientError::RemoteResponse);
             }
             let native = codex.bind(opened, binding.clone(), existing.is_some())?;
+            if expected_skills.is_some() {
+                native.pause_goal_for_recovery().await?;
+            }
             permissions.restore(&bridge.channel, &binding.session.id, full)?;
             Ok::<_, ClientError>((native, binding, skills))
         }
@@ -111,7 +119,7 @@ impl Recipe {
                     skills,
                     approvals,
                     permissions,
-                    pending_approvals: Mutex::new(HashMap::new()),
+                    pending_requests: Mutex::new(HashMap::new()),
                     detached: tokio::sync::OnceCell::new(),
                     closed: tokio::sync::OnceCell::new(),
                 },

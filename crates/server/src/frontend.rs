@@ -28,6 +28,9 @@ pub(crate) async fn connection(service: Arc<Service>, stream: UnixStream) -> Res
         .checked("TIMEOUT", "execution handshake timed out")?
         .checked("INVALID_REQUEST", "invalid execution handshake")?
         .ok_or_else(|| Fault::new("CONNECTION_CLOSED", "execution handshake missing"))?;
+    if matches!(&call.request, Request::Transfer { .. }) {
+        return crate::transfers::serve(&service, &call, reader.into_inner(), write).await;
+    }
     let validation = service.validate(&call);
     let streaming = matches!(&call.request, Request::AttachExecution { .. });
     if validation.is_err() || !streaming {

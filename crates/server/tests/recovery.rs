@@ -34,6 +34,15 @@ async fn restart_preserves_identity_evidence_and_unknown_outcomes() -> TestResul
     assert_ne!(reopened.instance, instance);
     let status = reopened.inspect_execution("owner", "channel").await?;
     assert_eq!(status.state, "lost");
+    assert_eq!(
+        reopened
+            .inspect_execution("other", "channel")
+            .await
+            .err()
+            .ok_or("expected denial")?
+            .code,
+        "EXECUTION_NOT_FOUND"
+    );
     assert_eq!(status.reason.as_deref(), Some("service_restarted"));
     assert_eq!(status.unknown_operations, 1);
     assert_eq!(reopened.job("owner", &job).await?.state, "unknown");
@@ -51,41 +60,6 @@ async fn restart_preserves_identity_evidence_and_unknown_outcomes() -> TestResul
             .err()
             .ok_or("expected unknown outcome")?
             .outcome_unknown
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn version_one_migrates_atomically_and_recovery_is_profile_scoped() -> TestResult {
-    let root = tempfile::tempdir()?;
-    let state = root.path().join("service");
-    std::fs::create_dir(&state)?;
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))?;
-    let path = state.join("execution.sqlite3");
-    let pool = sqlx::SqlitePool::connect_with(
-        sqlx::sqlite::SqliteConnectOptions::new()
-            .filename(&path)
-            .create_if_missing(true),
-    )
-    .await?;
-    sqlx::raw_sql(include_str!("../src/storage/schema.sql"))
-        .execute(&pool)
-        .await?;
-    sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=1; INSERT INTO identity VALUES(1,'existing'); INSERT INTO execution_channels(id,profile,revision,state) VALUES('old','owner',1,'running');").execute(&pool).await?;
-    pool.close().await;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    let store = Store::open(&state).await?;
-    assert_eq!(store.identity, "existing");
-    assert_eq!(store.inspect_execution("owner", "old").await?.state, "lost");
-    assert_eq!(
-        store
-            .inspect_execution("other", "old")
-            .await
-            .err()
-            .ok_or("expected denial")?
-            .code,
-        "EXECUTION_NOT_FOUND"
     );
     Ok(())
 }

@@ -8,7 +8,64 @@ use remote_codex_core::session::{ApprovalDecision, SessionEvent, SessionSettings
 use std::{ffi::OsString, path::Path, sync::atomic::Ordering};
 
 impl LocalRuntime {
-    async fn action(&self, action: Action) -> Result<serde_json::Value> {
+    pub(crate) fn snapshot(&self) -> Result<remote_codex_core::desktop::SessionSnapshot> {
+        let generation = self.current()?;
+        let intent = self
+            .intent
+            .lock()
+            .map_err(|_| crate::ClientError::RemoteResponse)?;
+        let pending = generation
+            .pending_requests
+            .lock()
+            .map_err(|_| crate::ClientError::RemoteResponse)?
+            .values()
+            .filter_map(|request| events::public_event(&request.event))
+            .collect();
+        Ok(remote_codex_core::desktop::SessionSnapshot {
+            status: intent.status.clone(),
+            current_turn: intent.current_turn.clone(),
+            goal: intent.goal.clone(),
+            plan: intent.plan.clone(),
+            settings: remote_codex_adapter::desktop::settings(&intent.settings),
+            environment: self.recovery.state.borrow().clone(),
+            turn: intent.active.clone(),
+            pending,
+            closed: self.closed.borrow().is_some(),
+        })
+    }
+    pub(crate) fn interact(
+        &self,
+        id: &str,
+        answer: remote_codex_core::desktop::InteractionAnswer,
+    ) -> Result<()> {
+        let generation = self.current()?;
+        let request = generation
+            .pending_requests
+            .lock()
+            .map_err(|_| crate::ClientError::RemoteResponse)?
+            .get(id)
+            .map(|request| request.event.clone())
+            .ok_or(crate::ClientError::Argument(
+                "This interaction is no longer pending.",
+            ))?;
+        self.respond(remote_codex_adapter::interactions::answer(
+            &request, answer,
+        )?)
+    }
+    pub(crate) fn current_settings(&self) -> Result<remote_codex_core::desktop::ConfirmedSettings> {
+        let intent = self
+            .intent
+            .lock()
+            .map_err(|_| crate::ClientError::RemoteResponse)?;
+        Ok(remote_codex_adapter::desktop::settings(&intent.settings))
+    }
+    pub(crate) async fn models(&self) -> Result<Vec<remote_codex_core::desktop::ModelOption>> {
+        Ok(self.current()?.native.models().await?)
+    }
+    pub(crate) async fn mcp_status(&self) -> Result<Vec<remote_codex_core::desktop::McpStatus>> {
+        Ok(self.current()?.native.mcp_status().await?)
+    }
+    pub(super) async fn action(&self, action: Action) -> Result<serde_json::Value> {
         let generation = self.current()?;
         if let Action::Interrupt(turn) = &action {
             self.cancel_continuation(turn)?;
@@ -43,12 +100,47 @@ impl LocalRuntime {
         )?)
     }
 
-    pub(crate) async fn submit(&self, text: String) -> Result<String> {
-        Ok(turn_id(&self.action(Action::Submit(text)).await?)?)
+    pub(crate) async fn message(
+        &self,
+        text: String,
+        client_id: String,
+        expected_turn: Option<String>,
+    ) -> Result<remote_codex_core::status::Submission> {
+        let response = self
+            .action(Action::Message {
+                text,
+                client_id: client_id.clone(),
+                expected_turn,
+            })
+            .await?;
+        let turn_id = match response["turnId"].as_str() {
+            Some(turn) => turn.to_owned(),
+            None => turn_id(&response)?,
+        };
+        let sent_at = match self
+            .store
+            .message_time(&self.binding.session.id, &client_id)
+            .await
+        {
+            Ok(value) => value,
+            Err(_) => {
+                // Submission already succeeded. A display metadata read must never invite replay.
+                let _ = self.events.send(SessionEvent::Warning {
+                    message: "Message submitted; its timestamp is temporarily unavailable.".into(),
+                });
+                None
+            }
+        };
+        Ok(remote_codex_core::status::Submission { turn_id, sent_at })
     }
 
     pub(crate) async fn settings(&self, settings: SessionSettings) -> Result<()> {
-        self.action(Action::Settings(settings)).await?;
+        if settings.mode.is_some() {
+            self.change_mode(settings).await?;
+        } else {
+            let _gate = self.goal_gate.lock().await;
+            self.action(Action::Settings(settings)).await?;
+        }
         Ok(())
     }
 
@@ -60,6 +152,8 @@ impl LocalRuntime {
             )
             .into());
         }
+        self.cancel_continuation(turn)?;
+        self.pause_goal().await?;
         if self.recovery.ready().is_err() {
             self.cancel_continuation(turn)?;
             let _ = self.current()?.native.queue_interrupt(turn);

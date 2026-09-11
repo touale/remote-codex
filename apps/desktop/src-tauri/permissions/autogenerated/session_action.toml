@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-session-action"
+description = "Enables the session_action command without any pre-configured scope."
+commands.allow = ["session_action"]
+
+[[permission]]
+identifier = "deny-session-action"
+description = "Denies the session_action command without any pre-configured scope."
+commands.deny = ["session_action"]

@@ -3,7 +3,7 @@ use remote_codex_protocol::Fault;
 use serde_json::{Value, json};
 pub(crate) fn start_params(environment: &str, cwd: &str, mode: &str) -> Value {
     json!({"cwd":cwd,"environments":[{"environmentId":environment,"cwd":cwd}],
-        "approvalPolicy":"on-request","sandbox":if mode=="unrestricted" {"danger-full-access"} else {"workspace-write"},
+        "approvalPolicy":"on-request","sandbox":if full_access(mode) {"danger-full-access"} else {"workspace-write"},
         "config":{"features.multi_agent":false},"experimentalRawEvents":false})
 }
 
@@ -39,4 +39,8 @@ pub(crate) fn session(thread: &Value, cwd: &str) -> Result<Session, Fault> {
             .unwrap_or("idle")
             .into(),
     })
+}
+
+pub(crate) fn full_access(mode: &str) -> bool {
+    mode == "unrestricted"
 }

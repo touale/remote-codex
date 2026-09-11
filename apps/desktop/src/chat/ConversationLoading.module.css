@@ -1,0 +1,95 @@
+.root {
+  overflow: hidden;
+}
+.messages {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  overflow: hidden;
+}
+.block {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--muted) 10%, transparent), transparent);
+  transform: translateX(-100%);
+  animation: sweep 1.6s linear infinite;
+}
+.user {
+  width: 42%;
+  height: 42px;
+  min-width: 120px;
+  margin: 0 0 36px auto;
+  border-radius: 18px;
+}
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 38px;
+}
+.composer {
+  flex: none;
+  width: calc(100% - 40px);
+  max-width: 880px;
+  margin: 0 auto 16px;
+  padding: 20px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+}
+.input {
+  width: 52%;
+  margin-bottom: 24px;
+}
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.send {
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border-radius: 50%;
+}
+.failure {
+  margin: auto;
+  padding: 32px;
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+  color: var(--muted);
+}
+.failure h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.failure p {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.failure > div {
+  justify-content: center;
+}
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .block::after {
+    display: none;
+  }
+}

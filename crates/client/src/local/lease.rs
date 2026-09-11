@@ -44,9 +44,7 @@ impl Lease {
                 Err((returned, nix::errno::Errno::EWOULDBLOCK)) => {
                     file = returned;
                     if !takeover {
-                        return Err(ClientError::Argument(
-                            "session is already open in another frontend; use --takeover to transfer control",
-                        ));
+                        return Err(ClientError::SessionInUse);
                     }
                     if !requested {
                         let stage = tempfile::NamedTempFile::new_in(&root)?;

@@ -1,0 +1,133 @@
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
+.titlebar {
+  height: 42px;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 0;
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.trafficSpace {
+  width: 76px;
+  align-self: stretch;
+  flex: none;
+}
+.product {
+  font-size: 12px;
+  font-weight: 550;
+  padding: 8px;
+}
+.dragSpace {
+  flex: 1;
+  align-self: stretch;
+}
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.workspaceToolbar {
+  display: flex;
+  height: var(--content-header-height);
+  flex: 0 0 var(--content-header-height);
+  gap: 10px;
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+.context {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.context > span {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(400px, 60%);
+  flex-shrink: 0;
+}
+.context > small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.content {
+  --content-header-height: 42px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.chatColumn {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 320px;
+  min-height: 0;
+}
+.editor {
+  flex: none;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  max-width: 58%;
+}
+.terminals {
+  flex: none;
+  min-height: 100px;
+  max-height: 65vh;
+  display: flex;
+}
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.errorBanner > svg {
+  flex: none;
+}
+.errorBanner > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.errorBanner > button:not(:last-child) {
+  border: none;
+  background: transparent;
+  text-decoration: underline;
+}
+@media (max-width: 1100px) {
+  .editor,
+  .content > :global(.resize-handle) {
+    display: none;
+  }
+  .context > small {
+    display: none;
+  }
+}

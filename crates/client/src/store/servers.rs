@@ -55,17 +55,15 @@ impl LocalStore {
             ));
         }
         let mut tx = self.begin_write().await?;
-        sqlx::query("INSERT INTO workspace_history(server,path) VALUES(?,?) ON CONFLICT(server,path) DO UPDATE SET used_at=unixepoch()")
+        sqlx::query("INSERT INTO workspaces(server,path) VALUES(?,?) ON CONFLICT(server,path) DO UPDATE SET used_at=unixepoch()")
             .bind(server).bind(path).execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM workspace_history WHERE server=? AND path NOT IN (SELECT path FROM workspace_history WHERE server=? ORDER BY used_at DESC,path LIMIT 30)")
-            .bind(server).bind(server).execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(())
     }
 
     pub(crate) async fn workspaces(&self, server: &str) -> Result<Vec<String>> {
         Ok(sqlx::query_scalar(
-            "SELECT path FROM workspace_history WHERE server=? ORDER BY used_at DESC,path LIMIT 30",
+            "SELECT path FROM workspaces WHERE server=? ORDER BY used_at DESC,path LIMIT 30",
         )
         .bind(server)
         .fetch_all(&self.pool)
@@ -73,6 +71,13 @@ impl LocalStore {
     }
 
     pub(crate) async fn remove_server(&self, id: &str) -> Result<()> {
+        let pending: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM transfer_tasks WHERE server=? AND json_extract(record,'$.view.status') NOT IN ('completed','cancelled'))")
+            .bind(id).fetch_one(&self.pool).await?;
+        if pending {
+            return Err(ClientError::Argument(
+                "Finish or cancel this server's file transfers before removing it.",
+            ));
+        }
         let mut tx = self.begin_write().await?;
         sqlx::query("UPDATE ssh_credentials SET state='retired' WHERE server=?")
             .bind(id)

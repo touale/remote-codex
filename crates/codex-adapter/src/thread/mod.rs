@@ -1,5 +1,5 @@
 pub mod action;
-mod binding;
+pub(crate) mod binding;
 mod execution_policy;
 pub mod history;
 mod request;
@@ -19,6 +19,7 @@ use std::{
 pub struct Codex {
     pub(crate) engine: Engine,
     initialized: Value,
+    home: PathBuf,
 }
 
 pub struct OpenThread<'a> {
@@ -34,12 +35,16 @@ pub struct Opened {
     pub session: Session,
     pub full_access: bool,
     response: Value,
+    usage: Option<remote_codex_core::status::TokenUsage>,
+    events: tokio::sync::broadcast::Receiver<Value>,
 }
 
 pub struct Thread {
-    codex: Codex,
-    binding: SessionBinding,
+    pub(crate) codex: Codex,
+    pub(crate) binding: SessionBinding,
     bootstrap: Value,
+    initial_usage: Option<remote_codex_core::status::TokenUsage>,
+    initial_events: std::sync::Mutex<Option<tokio::sync::broadcast::Receiver<Value>>>,
 }
 
 impl Codex {
@@ -48,6 +53,7 @@ impl Codex {
         Ok(Self {
             engine,
             initialized,
+            home: home.into(),
         })
     }
 
@@ -97,6 +103,7 @@ impl Codex {
                 json!(format!("{inherited}\n\n{}", options.instructions));
         }
         params["dynamicTools"] = crate::recovery::tools();
+        let events = self.engine.subscribe();
         let response = if let Some(id) = options.existing {
             if let Some(object) = params.as_object_mut() {
                 for key in ["environments", "sandbox", "approvalPolicy"] {
@@ -108,11 +115,20 @@ impl Codex {
         } else {
             self.engine.call("thread/start", params).await?
         };
+        let session = binding::session(&response["thread"], options.directory)?;
+        let usage = if options.existing == Some(session.id.as_str()) {
+            crate::usage_history::read(&self.home, &session.id, response["thread"]["path"].as_str())
+                .await
+        } else {
+            None
+        };
         Ok(Opened {
-            session: binding::session(&response["thread"], options.directory)?,
+            session,
+            usage,
             full_access: response.pointer("/sandbox/type").and_then(Value::as_str)
                 == Some("dangerFullAccess"),
             response,
+            events,
         })
     }
 
@@ -131,6 +147,8 @@ impl Codex {
             codex: self.clone(),
             binding,
             bootstrap: opened.response,
+            initial_usage: opened.usage,
+            initial_events: std::sync::Mutex::new(Some(opened.events)),
         })
     }
 
@@ -143,6 +161,21 @@ impl Codex {
 }
 
 impl Thread {
+    /// Subscribe before opening the thread so startup/resume notifications are not lost.
+    /// One owner drains this bounded native broadcast stream; other subscribers see live events.
+    pub fn take_events(&self) -> Result<tokio::sync::broadcast::Receiver<Value>, Fault> {
+        self.initial_events
+            .lock()
+            .map_err(|_| Fault::new("SESSION_STATE", "Native event stream unavailable"))?
+            .take()
+            .ok_or_else(|| Fault::new("EVENT_OWNER", "Native event stream already claimed"))
+    }
+    pub fn initial_status(&self) -> remote_codex_core::status::SessionStatus {
+        remote_codex_core::status::SessionStatus {
+            usage: self.initial_usage.clone(),
+            ..crate::status::initial(&self.bootstrap)
+        }
+    }
     pub fn settings_snapshot(&self) -> Value {
         let mut settings = self.bootstrap.clone();
         settings["sandboxPolicy"] = settings["sandbox"].clone();

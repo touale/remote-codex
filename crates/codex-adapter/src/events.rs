@@ -111,15 +111,48 @@ pub fn public_event(event: &Value) -> Option<SessionEvent> {
                         .into(),
                 }
             } else {
-                SessionEvent::InteractionRequired {
+                SessionEvent::InteractionRequested {
                     request_id: id.to_string(),
-                    kind: method.into(),
+                    interaction: crate::interactions::project(event),
                 }
             },
         );
     }
+    if let Some(event) = crate::status::event(event).or_else(|| crate::goals::event(event)) {
+        return Some(event);
+    }
     match event["method"].as_str()? {
+        "item/started" | "item/completed"
+            if crate::desktop::tool(&event["params"]["item"]).is_some() =>
+        {
+            crate::desktop::tool(&event["params"]["item"]).map(|item| SessionEvent::ToolChanged {
+                item,
+                turn_id: text("/params/turnId"),
+            })
+        }
+        "warning" | "error" => Some(SessionEvent::Warning {
+            message: event["params"]["message"]
+                .as_str()
+                .or_else(|| event["params"]["error"]["message"].as_str())
+                .unwrap_or("Codex reported an error.")
+                .into(),
+        }),
+        "serverRequest/resolved" => Some(SessionEvent::InteractionResolved {
+            request_id: event["params"]["requestId"].to_string(),
+        }),
+        "item/started" | "item/completed" if event["params"]["item"]["type"] == "userMessage" => {
+            Some(SessionEvent::UserMessage {
+                item_id: text("/params/item/id"),
+                client_id: event["params"]["item"]["clientId"]
+                    .as_str()
+                    .map(str::to_owned),
+                turn_id: text("/params/turnId"),
+                text: crate::thread::history::item_text(&event["params"]["item"]),
+            })
+        }
         "item/agentMessage/delta" => Some(SessionEvent::Message {
+            turn_id: text("/params/turnId"),
+            phase: event["params"]["item"]["phase"].as_str().map(str::to_owned),
             item_id: text("/params/itemId"),
             text: text("/params/delta"),
             complete: false,
@@ -129,19 +162,24 @@ pub fn public_event(event: &Value) -> Option<SessionEvent> {
                 == Some("agentMessage") =>
         {
             Some(SessionEvent::Message {
+                turn_id: text("/params/turnId"),
+                phase: event["params"]["item"]["phase"].as_str().map(str::to_owned),
                 item_id: text("/params/item/id"),
                 text: text("/params/item/text"),
                 complete: true,
             })
         }
         "item/commandExecution/outputDelta" => Some(SessionEvent::ToolOutput {
+            turn_id: text("/params/turnId"),
             item_id: text("/params/itemId"),
             text: text("/params/delta"),
         }),
         "turn/started" => Some(SessionEvent::TurnStarted {
+            timing: crate::status::timing(&event["params"]["turn"]),
             id: text("/params/turn/id"),
         }),
         "turn/completed" => Some(SessionEvent::TurnCompleted {
+            timing: crate::status::timing(&event["params"]["turn"]),
             id: text("/params/turn/id"),
             outcome: match event.pointer("/params/turn/status").and_then(Value::as_str) {
                 Some("completed") => TurnOutcome::Completed,
@@ -155,11 +193,8 @@ pub fn public_event(event: &Value) -> Option<SessionEvent> {
                 },
             },
         }),
-        "thread/settings/updated" => Some(SessionEvent::PermissionsUpdated {
-            full_access: event
-                .pointer("/params/threadSettings/sandboxPolicy/type")
-                .and_then(Value::as_str)
-                == Some("dangerFullAccess"),
+        "thread/settings/updated" => Some(SessionEvent::SettingsChanged {
+            settings: crate::desktop::settings(&event["params"]["threadSettings"]),
         }),
         _ => None,
     }

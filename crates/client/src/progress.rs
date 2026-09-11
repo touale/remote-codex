@@ -1,4 +1,13 @@
 use serde::Serialize;
+use std::{future::Future, sync::Arc};
+pub type ProgressHandler = Arc<dyn Fn(PrepareEvent) + Send + Sync>;
+tokio::task_local! { static OPERATION: ProgressHandler; }
+pub async fn with_progress<F: Future>(handler: ProgressHandler, future: F) -> F::Output {
+    OPERATION.scope(handler, future).await
+}
+pub(crate) fn current() -> Option<ProgressHandler> {
+    OPERATION.try_with(Clone::clone).ok()
+}
 
 /// Preparation events contain data only; terminal and desktop clients own rendering.
 #[derive(Clone, Copy, Debug, Serialize)]

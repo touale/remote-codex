@@ -3,7 +3,7 @@ use sqlx::{Connection, SqliteConnection, SqlitePool, sqlite::SqliteConnectOption
 use crate::{ClientError, Result};
 
 const APPLICATION_ID: i64 = 0x52434458;
-const SCHEMA_VERSION: i64 = 10;
+const SCHEMA_VERSION: i64 = 13;
 
 pub(super) async fn preflight(path: &std::path::Path) -> Result<()> {
     let mut connection =
@@ -16,7 +16,7 @@ pub(super) async fn preflight(path: &std::path::Path) -> Result<()> {
         let version: i64 = sqlx::query_scalar("PRAGMA user_version")
             .fetch_one(&mut connection)
             .await?;
-        if app == APPLICATION_ID && (6..=SCHEMA_VERSION).contains(&version) {
+        if app == APPLICATION_ID && version == SCHEMA_VERSION {
             return Ok(());
         }
         let count: i64 = sqlx::query_scalar(
@@ -49,7 +49,7 @@ pub(super) async fn ensure_current(connection: &mut SqliteConnection) -> Result<
     }
 }
 
-pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -> Result<()> {
+pub(super) async fn initialize(pool: &SqlitePool) -> Result<()> {
     let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
     let app: i64 = sqlx::query_scalar("PRAGMA application_id")
         .fetch_one(&mut *tx)
@@ -61,42 +61,6 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
         tx.commit().await?;
         return Ok(());
     }
-    if (6..SCHEMA_VERSION).contains(&version) && app == APPLICATION_ID {
-        super::backup::create(pool, directory, version).await?;
-        sqlx::query("DELETE FROM settings WHERE key='codex.update_policy'")
-            .execute(&mut *tx)
-            .await?;
-        if version == 6 {
-            sqlx::query("UPDATE server_revisions SET revision=CASE WHEN revision<9223372036854775807 THEN revision+1 ELSE -1 END")
-                .execute(&mut *tx).await?;
-        }
-        // Original vault entries stay untouched; only obsolete Agent bookkeeping goes away.
-        sqlx::query("DROP TABLE IF EXISTS retained_legacy_credentials")
-            .execute(&mut *tx)
-            .await?;
-        if version < 8 {
-            sqlx::query("ALTER TABLE connections DROP COLUMN phase")
-                .execute(&mut *tx)
-                .await?;
-        }
-        if version < 9 {
-            sqlx::raw_sql(include_str!("ssh_credentials.sql"))
-                .execute(&mut *tx)
-                .await?;
-        }
-        // Only current execution settings prove ownership of old vault entries.
-        // Unreferenced historical Agent entries remain outside automatic cleanup.
-        sqlx::query("ALTER TABLE credentials ADD COLUMN managed INTEGER NOT NULL DEFAULT 0 CHECK (managed IN (0,1))")
-            .execute(&mut *tx).await?;
-        sqlx::query("UPDATE credentials SET managed=1 WHERE EXISTS (SELECT 1 FROM settings WHERE representation='secret' AND value=credentials.id)")
-            .execute(&mut *tx).await?;
-        validate_migration(&mut tx).await?;
-        sqlx::query(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))
-            .execute(&mut *tx)
-            .await?;
-        tx.commit().await?;
-        return Ok(());
-    }
     let tables: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
     )
@@ -105,12 +69,7 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
     if version != 0 || app != 0 || tables != 0 {
         return Err(ClientError::Schema);
     }
-    sqlx::raw_sql(include_str!("schema.sql"))
-        .execute(&mut *tx)
-        .await?;
-    sqlx::raw_sql(include_str!("ssh_credentials.sql"))
-        .execute(&mut *tx)
-        .await?;
+    sqlx::Executor::execute(&mut *tx, include_str!("schema.sql")).await?;
     sqlx::query("INSERT INTO installation(id) VALUES (?)")
         .bind(uuid::Uuid::new_v4().to_string())
         .execute(&mut *tx)
@@ -122,29 +81,5 @@ pub(super) async fn initialize(pool: &SqlitePool, directory: &std::path::Path) -
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    Ok(())
-}
-
-async fn validate_migration(connection: &mut SqliteConnection) -> Result<()> {
-    if sqlx::query("PRAGMA foreign_key_check")
-        .fetch_optional(&mut *connection)
-        .await?
-        .is_some()
-    {
-        return Err(ClientError::Schema);
-    }
-    let servers: Vec<String> = sqlx::query_scalar("SELECT id FROM connections")
-        .fetch_all(&mut *connection)
-        .await?;
-    for server in servers {
-        let layer = super::codec::load(connection, &server).await?;
-        crate::config::resolve(&layer)?;
-    }
-    let missing: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM settings s WHERE representation='secret' AND NOT EXISTS(SELECT 1 FROM credentials c WHERE c.id=s.value AND c.state='active'))",
-    ).fetch_one(connection).await?;
-    if missing {
-        return Err(ClientError::Credentials);
-    }
     Ok(())
 }

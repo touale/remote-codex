@@ -138,9 +138,17 @@ async fn replace_idle(root: &Path, identity: &str, pid: i32) -> Result<Preparati
     }
     let (channels, jobs): (i64, i64) = sqlx::query_as("SELECT (SELECT count(*) FROM execution_channels WHERE state='running'), (SELECT count(*) FROM jobs WHERE state IN ('starting','running'))")
         .fetch_one(&mut *tx).await.checked("SERVICE_UPDATE", "cannot inspect active execution")?;
-    if channels != 0 || jobs != 0 {
-        return Ok(Preparation::Waiting(ServiceActivity { channels, jobs }));
+    let transfer_file = paths::file(&root.join("transfer.lock"))?;
+    let transfer_lock =
+        nix::fcntl::Flock::lock(transfer_file, nix::fcntl::FlockArg::LockExclusiveNonblock);
+    if channels != 0 || jobs != 0 || transfer_lock.is_err() {
+        return Ok(Preparation::Waiting(ServiceActivity {
+            channels,
+            jobs,
+            transfers: i64::from(transfer_lock.is_err()),
+        }));
     }
+    let _transfer_lock = transfer_lock;
     nix::sys::signal::kill(
         nix::unistd::Pid::from_raw(pid),
         nix::sys::signal::Signal::SIGTERM,

@@ -60,6 +60,7 @@ impl Remote {
         let access = store.server_access(&server.id).await?;
         let ssh = SshTransport::connect_with(
             ConnectOptions {
+                interaction: crate::ssh::interaction::current(),
                 config: config.or_else(|| access.ssh_config.clone()),
                 identity_file: access.identity_file.clone(),
                 batch,
@@ -115,10 +116,24 @@ impl Remote {
     }
 
     pub(crate) async fn recover(&self, interactive: bool) -> Result<Hello> {
+        self.recover_with(interactive, false).await
+    }
+
+    pub(crate) async fn recover_silent(&self) -> Result<Hello> {
+        self.recover_with(false, true).await
+    }
+
+    async fn recover_with(&self, interactive: bool, silent: bool) -> Result<Hello> {
         let _guard = self.reconnect.lock().await;
-        self.ssh
-            .ensure_connected(&self.server.endpoint, interactive)
-            .await?;
+        if silent {
+            self.ssh
+                .ensure_connected_silent(&self.server.endpoint)
+                .await?;
+        } else {
+            self.ssh
+                .ensure_connected(&self.server.endpoint, interactive)
+                .await?;
+        }
         // A healthy supervisor is never replaced as a side effect of reconnect.
         let response = match self.call(Request::Hello).await {
             Ok(value) => value,

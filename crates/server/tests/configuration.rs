@@ -5,50 +5,35 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 use std::collections::BTreeMap;
 
 #[tokio::test]
-async fn migrated_configuration_replaces_the_legacy_mirror_at_a_new_revision()
--> Result<(), Box<dyn std::error::Error>> {
+async fn invalid_configuration_never_replaces_acknowledged_values() -> TestResult {
     let root = tempfile::tempdir()?;
     let service = Service::open(&root.path().join("state")).await?;
-    let previous = RemoteConfig {
+    let config = RemoteConfig {
         codex: "/bin/sh".into(),
-        revision: 11,
-        values: BTreeMap::from([
-            ("codex.update_policy".into(), "manual".into()),
-            ("background".into(), "false".into()),
-            ("disconnect_grace_seconds".into(), "42".into()),
-            ("proxy.mode".into(), "direct".into()),
-            ("execution.mode".into(), "unrestricted".into()),
-        ]),
+        revision: 1,
+        values: BTreeMap::from([("background".into(), "true".into())]),
     };
-    // Seed a profile persisted by the previous service version.
-    service.store.save_config("profile", &previous).await?;
-    let call = |config| Call {
+    service.store.save_config("profile", &config).await?;
+    let mut invalid = config.clone();
+    invalid.revision += 1;
+    invalid
+        .values
+        .insert("unknown.setting".into(), "invalid".into());
+    let call = Call {
         protocol: VERSION,
         id: uuid::Uuid::new_v4().to_string(),
         profile: "profile".into(),
         expected_identity: Some(service.store.identity.clone()),
-        request: Request::Configure(config),
+        request: Request::Configure(invalid),
     };
-    let mut cleaned = previous.clone();
-    cleaned.values.remove("codex.update_policy");
     assert!(
         service
-            .dispatch(&call(cleaned.clone()))
-            .await
-            .err()
-            .is_some_and(|fault| fault.code == "REVISION_CONFLICT")
-    );
-    cleaned.revision += 1;
-    service.dispatch(&call(cleaned.clone())).await?;
-    assert!(service.store.config("profile").await? == cleaned);
-    assert!(
-        service
-            .dispatch(&call(previous))
+            .dispatch(&call)
             .await
             .err()
             .is_some_and(|fault| fault.code == "INVALID_CONFIG")
     );
-    assert!(service.store.config("profile").await? == cleaned);
+    assert!(service.store.config("profile").await? == config);
     service.shutdown().await;
     Ok(())
 }
@@ -78,20 +63,26 @@ async fn stale_or_conflicting_config_never_replaces_acknowledged_values() -> Tes
 }
 
 #[tokio::test]
-async fn foreign_database_is_rejected_without_changing_its_bytes() -> TestResult {
-    let root = tempfile::tempdir()?;
-    let state = root.path().join("state");
-    paths::private(&state)?;
-    let path = state.join("execution.sqlite3");
-    paths::file(&path)?;
-    let mut db =
-        SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&path)).await?;
-    sqlx::query("CREATE TABLE unrelated(value TEXT)")
-        .execute(&mut db)
-        .await?;
-    db.close().await?;
-    let before = std::fs::read(&path)?;
-    assert!(Store::open(&state).await.is_err());
-    assert_eq!(before, std::fs::read(&path)?);
+async fn unsupported_formats_are_rejected_without_changing_their_bytes() -> TestResult {
+    for (application, version) in [(0x52435356, 1), (0x52435356, 99), (0, 0)] {
+        let root = tempfile::tempdir()?;
+        let state = root.path().join("state");
+        paths::private(&state)?;
+        let path = state.join("execution.sqlite3");
+        paths::file(&path)?;
+        let mut db =
+            SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&path)).await?;
+        sqlx::raw_sql(&format!("CREATE TABLE preserved(value TEXT); INSERT INTO preserved VALUES('keep'); PRAGMA application_id={application}; PRAGMA user_version={version};"))
+            .execute(&mut db).await?;
+        db.close().await?;
+        let before = std::fs::read(&path)?;
+        assert!(
+            Store::open(&state)
+                .await
+                .err()
+                .is_some_and(|fault| fault.code == "UNSUPPORTED_SCHEMA")
+        );
+        assert_eq!(before, std::fs::read(&path)?);
+    }
     Ok(())
 }

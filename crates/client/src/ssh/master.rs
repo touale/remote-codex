@@ -91,8 +91,12 @@ pub(super) async fn start(
         })
     });
     let mut master = Master { child, diagnostic };
-    let deadline =
-        tokio::time::Instant::now() + Duration::from_secs(if interactive { 120 } else { 20 });
+    let deadline = tokio::time::Instant::now()
+        + Duration::from_secs(if interactive || options.interaction.is_some() {
+            180
+        } else {
+            20
+        });
     loop {
         if let Some(status) = master.child.try_wait()? {
             let detail = match master.diagnostic.take() {

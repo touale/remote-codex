@@ -1,7 +1,10 @@
 mod approval;
 pub mod codec;
+mod files;
 mod models;
 mod service;
+pub mod transfer;
+pub use files::*;
 
 pub use approval::*;
 pub use models::*;
@@ -24,6 +27,14 @@ pub struct Call {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "snake_case")]
 pub enum Request {
+    Transfer {
+        workspace: String,
+        expected_root: Option<transfer::RootIdentity>,
+    },
+    WorkspaceFiles {
+        workspace: String,
+        operation: FileRequest,
+    },
     Hello,
     PrepareUpdate,
     Configure(RemoteConfig),

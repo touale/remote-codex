@@ -104,3 +104,29 @@ async fn unknown_server_cannot_read_or_write_configuration() -> TestResult {
     store.close().await;
     Ok(())
 }
+
+#[tokio::test]
+async fn unsupported_formats_are_rejected_without_modifying_the_database() -> TestResult {
+    for (application, version) in [(0x52434458, 6), (0x52434458, 12), (0x52434458, 99), (7, 13)] {
+        let root = tempfile::tempdir()?;
+        let state = root.path().join("state");
+        let store = LocalStore::open(&state).await?;
+        store.close().await;
+        let path = state.join("state.sqlite3");
+        let mut db =
+            SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&path)).await?;
+        sqlx::raw_sql(&format!(
+            "PRAGMA application_id={application}; PRAGMA user_version={version};"
+        ))
+        .execute(&mut db)
+        .await?;
+        db.close().await?;
+        let before = fs::read(&path)?;
+        assert!(matches!(
+            LocalStore::open(&state).await,
+            Err(ClientError::Schema)
+        ));
+        assert_eq!(fs::read(&path)?, before);
+    }
+    Ok(())
+}

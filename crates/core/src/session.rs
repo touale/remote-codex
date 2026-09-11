@@ -40,6 +40,7 @@ pub enum ApprovalsReviewer {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SessionSettings {
+    pub mode: Option<crate::goals::CollaborationMode>,
     pub model: Option<String>,
     pub effort: Option<String>,
     pub permissions: Option<PermissionPreset>,
@@ -56,16 +57,64 @@ pub enum ApprovalDecision {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionEvent {
+    ActivityChanged {
+        activity: String,
+        active_flags: Vec<String>,
+    },
+    UsageChanged {
+        usage: crate::status::TokenUsage,
+    },
+    RateLimitsChanged {
+        limits: Vec<crate::status::RateLimit>,
+    },
+    UserMessage {
+        item_id: String,
+        client_id: Option<String>,
+        turn_id: String,
+        text: String,
+    },
+    GoalChanged {
+        goal: Option<crate::goals::Goal>,
+    },
+    PlanChanged {
+        plan: crate::goals::Plan,
+    },
+    PlanMessage {
+        item_id: String,
+        turn_id: String,
+        text: String,
+        complete: bool,
+    },
+    ToolChanged {
+        item: crate::desktop::ToolItem,
+        turn_id: String,
+    },
+    SettingsChanged {
+        settings: crate::desktop::ConfirmedSettings,
+    },
+    InteractionRequested {
+        request_id: String,
+        interaction: crate::desktop::Interaction,
+    },
+    InteractionResolved {
+        request_id: String,
+    },
+    Warning {
+        message: String,
+    },
     EnvironmentChanged {
         state: EnvironmentState,
     },
     Message {
         item_id: String,
+        turn_id: String,
+        phase: Option<String>,
         text: String,
         complete: bool,
     },
     ToolOutput {
         item_id: String,
+        turn_id: String,
         text: String,
     },
     ApprovalRequested {
@@ -78,9 +127,11 @@ pub enum SessionEvent {
     },
     TurnStarted {
         id: String,
+        timing: crate::status::TurnTiming,
     },
     TurnCompleted {
         id: String,
+        timing: crate::status::TurnTiming,
         outcome: TurnOutcome,
     },
     PermissionsUpdated {
@@ -120,6 +171,8 @@ pub struct HistoryPage {
 pub struct HistoryTurn {
     pub id: String,
     pub status: String,
+    #[serde(default)]
+    pub timing: crate::status::TurnTiming,
     pub items: Vec<HistoryItem>,
 }
 
@@ -127,8 +180,16 @@ pub struct HistoryTurn {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HistoryItem {
     pub id: String,
+    #[serde(default)]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub sent_at: Option<i64>,
+    #[serde(default)]
+    pub phase: Option<String>,
     pub kind: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<crate::desktop::ToolItem>,
 }
 
 #[derive(Debug, Clone, Serialize)]

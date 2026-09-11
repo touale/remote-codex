@@ -1,0 +1,37 @@
+.disclosure {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure > summary:hover {
+  background: var(--hover);
+}
+.disclosure > summary:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+.disclosure > summary svg {
+  flex: none;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.disclosure[open] > summary svg {
+  transform: rotate(90deg);
+}
+.disclosure-content {
+  padding: 0 9px 4px;
+}

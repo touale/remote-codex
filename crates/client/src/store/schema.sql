@@ -1,15 +1,21 @@
-CREATE TABLE installation (id TEXT NOT NULL PRIMARY KEY);
+CREATE TABLE installation (
+    id TEXT NOT NULL PRIMARY KEY
+);
+
 CREATE TABLE server_revisions (
     id TEXT NOT NULL PRIMARY KEY,
     revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0)
 );
+
 CREATE TABLE connections (
     id TEXT NOT NULL PRIMARY KEY REFERENCES server_revisions(id),
     name TEXT NOT NULL UNIQUE,
     endpoint TEXT NOT NULL,
     runtime TEXT
 );
+
 CREATE INDEX connection_endpoint ON connections(endpoint);
+
 CREATE TABLE settings (
     server TEXT NOT NULL REFERENCES server_revisions(id) ON DELETE CASCADE,
     key TEXT NOT NULL,
@@ -18,21 +24,32 @@ CREATE TABLE settings (
     value TEXT NOT NULL,
     PRIMARY KEY(server, key)
 );
+
 CREATE TABLE credentials (
     id TEXT NOT NULL PRIMARY KEY,
     state TEXT NOT NULL CHECK (state IN ('pending','active','retired')),
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     managed INTEGER NOT NULL DEFAULT 0 CHECK (managed IN (0,1))
 );
-CREATE TABLE server_access(
+
+CREATE TABLE server_access (
     server TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE,
-    identity_file TEXT, managed_public_key TEXT, ssh_config TEXT,
-    remote_identity TEXT, service_executable TEXT, service_root TEXT,
-    applied_revision INTEGER, checked_at INTEGER, health TEXT NOT NULL DEFAULT 'unknown'
+    identity_file TEXT,
+    managed_public_key TEXT,
+    ssh_config TEXT,
+    remote_identity TEXT,
+    service_executable TEXT,
+    service_root TEXT,
+    applied_revision INTEGER,
+    checked_at INTEGER,
+    health TEXT NOT NULL DEFAULT 'unknown'
 );
-CREATE TABLE workspace_history(
+
+CREATE TABLE workspaces (
     server TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
-    path TEXT NOT NULL,used_at INTEGER NOT NULL DEFAULT(unixepoch()),PRIMARY KEY(server,path)
+    path TEXT NOT NULL,
+    used_at INTEGER NOT NULL DEFAULT(unixepoch()),
+    PRIMARY KEY(server,path)
 );
 
 CREATE TABLE local_sessions (
@@ -41,8 +58,43 @@ CREATE TABLE local_sessions (
     record TEXT NOT NULL,
     updated_at INTEGER NOT NULL DEFAULT(unixepoch())
 );
+
 CREATE INDEX local_sessions_server ON local_sessions(server,updated_at);
+
 CREATE TABLE project_trust (
     server TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
-    path TEXT NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(server,path)
+    path TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    PRIMARY KEY(server,path)
 );
+
+CREATE TABLE transfer_tasks (
+    id TEXT PRIMARY KEY,
+    server TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+    record TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE transfer_items (
+    task TEXT NOT NULL REFERENCES transfer_tasks(id) ON DELETE CASCADE,
+    ordinal INTEGER NOT NULL,
+    record TEXT NOT NULL,
+    PRIMARY KEY(task, ordinal)
+);
+
+CREATE TABLE message_times (
+    session TEXT NOT NULL REFERENCES local_sessions(id) ON DELETE CASCADE,
+    client_id TEXT NOT NULL,
+    sent_at INTEGER NOT NULL,
+    PRIMARY KEY(session, client_id)
+);
+
+CREATE TABLE ssh_credentials (
+    id TEXT PRIMARY KEY,
+    server TEXT NOT NULL,
+    target TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('pending','active','retired')),
+    created_at INTEGER NOT NULL DEFAULT(unixepoch())
+);
+
+CREATE UNIQUE INDEX ssh_credentials_active ON ssh_credentials(server) WHERE state='active';

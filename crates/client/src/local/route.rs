@@ -27,6 +27,8 @@ pub(super) async fn request(
     } else {
         None
     };
+    let plan_change =
+        method == "thread/settings/update" && params["collaborationMode"]["mode"] == "plan";
     let prepared = generation.native.prepare(
         method,
         params,
@@ -34,7 +36,18 @@ pub(super) async fn request(
         runtime.has_history.load(Ordering::Acquire),
         generation.skills.mappings(),
     )?;
+    if matches!(method, "thread/goal/set" | "thread/goal/clear") {
+        runtime
+            .intent
+            .lock()
+            .map_err(|_| Fault::new("SESSION_STATE", "Session state unavailable"))?
+            .resume_goal = None;
+    }
+    if plan_change {
+        runtime.pause_goal().await.map_err(fault)?;
+    }
     if let Some(turn) = interrupted {
+        runtime.pause_goal().await.map_err(fault)?;
         runtime.cancel_continuation(&turn).map_err(fault)?;
         if runtime.recovery.ready().is_err() {
             let _ = generation.native.queue_interrupt(&turn);
@@ -83,7 +96,13 @@ async fn dispatch(
         Prepared::Immediate(value) => return Ok(value),
         Prepared::Operation(operation) => operation,
     };
-    let _turn = if operation.kind == OperationKind::Turn {
+    let _turn = if matches!(
+        operation.kind,
+        OperationKind::Turn
+            | OperationKind::Steer
+            | OperationKind::GoalStart
+            | OperationKind::GoalDefine
+    ) {
         Some(runtime.turn_gate.lock().await)
     } else {
         None
@@ -110,16 +129,22 @@ async fn dispatch(
         ));
     }
     let ticket = match operation.kind {
-        OperationKind::Turn => {
-            if !(recovery_turn.is_some()
-                && matches!(
-                    *runtime.recovery.state.borrow(),
-                    remote_codex_core::session::EnvironmentState::Recovering { .. }
-                ))
+        OperationKind::Turn
+        | OperationKind::Steer
+        | OperationKind::GoalStart
+        | OperationKind::GoalDefine => {
+            if operation.kind != OperationKind::GoalDefine
+                && !(recovery_turn.is_some()
+                    && matches!(
+                        *runtime.recovery.state.borrow(),
+                        remote_codex_core::session::EnvironmentState::Recovering { .. }
+                    ))
             {
                 runtime.recovery.ready().map_err(fault)?;
             }
-            generation.bridge.check().map_err(fault)?;
+            if operation.kind != OperationKind::GoalDefine {
+                generation.bridge.check().map_err(fault)?;
+            }
             if !runtime.has_history.load(Ordering::Acquire) {
                 runtime
                     .store
@@ -147,8 +172,15 @@ async fn dispatch(
                     .any(|c| c == remote_codex_protocol::SESSION_PERMISSIONS_CAPABILITY),
             )?
         }
-        OperationKind::Read => None,
+        OperationKind::Read | OperationKind::GoalControl => None,
     };
+    if let Some(id) = operation.client_message_id() {
+        runtime
+            .store
+            .remember_message(&runtime.binding.session.id, id, super::status::now())
+            .await
+            .map_err(fault)?;
+    }
     let result = generation.native.execute(operation).await;
     if let Some(ticket) = ticket {
         generation

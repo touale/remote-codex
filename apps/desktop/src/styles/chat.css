@@ -1,0 +1,259 @@
+.chat {
+  flex: 1;
+  min-width: 320px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.messages {
+  padding: 12px 24px 20px;
+  max-width: 920px;
+  margin: auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.messages > .empty {
+  min-height: 220px;
+}
+.message {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.message.user {
+  max-width: 86%;
+  align-self: flex-end;
+  margin: 10px 0 18px;
+}
+.message.assistant {
+  align-self: stretch;
+}
+.message-body p {
+  margin: 0 0 12px;
+}
+.message-body p:last-child {
+  margin-bottom: 0;
+}
+.message-body h1,
+.message-body h2,
+.message-body h3 {
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 18px 0 10px;
+}
+.message-body ul,
+.message-body ol {
+  padding-left: 24px;
+  margin: 8px 0 12px;
+}
+.message-body li {
+  margin: 4px 0;
+}
+.message-body pre {
+  background: var(--surface);
+  padding: 12px;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.message-body code {
+  font-family: SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.message-body pre code {
+  background: none;
+  padding: 0;
+}
+.message-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  display: block;
+  overflow-x: auto;
+}
+.message-body td,
+.message-body th {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+}
+.message-body blockquote {
+  margin-left: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.tool {
+  margin: 5px 0;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.tool summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.tool summary::-webkit-details-marker {
+  display: none;
+}
+.tool summary > span {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tool summary > svg {
+  flex: none;
+}
+.tool pre {
+  overflow: auto;
+  max-height: 300px;
+  padding: 10px;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-link {
+  font-size: 11px;
+  border: none;
+  background: none;
+  width: 100%;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+.working {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 14px 0;
+}
+.questions {
+  margin-top: 8px;
+}
+.question {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 10px 0;
+}
+.question-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.question > p {
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.question .actions {
+  margin-top: 12px;
+}
+.environment-alert {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.environment-alert button {
+  margin-left: auto;
+}
+.closed-session {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.load-history {
+  align-self: center;
+  background: transparent;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.conversation-turn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.message.user .message-body {
+  background: var(--surface);
+  padding: 9px 14px;
+  border-radius: 18px;
+}
+.message-time {
+  display: block;
+  text-align: right;
+  margin: 5px 10px 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.turn-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  min-height: 24px;
+  margin: 0 0 18px;
+}
+.turn-footer .icon-button {
+  margin-left: -6px;
+}
+
+.pending-message {
+  white-space: pre-wrap;
+}
+.submission-error {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 0 16px;
+}
+.submission-error p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.defaults-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 8px 4px;
+}
+.defaults-error span {
+  flex: 1;
+}
+.defaults-error button {
+  flex: none;
+  font-size: 11px;
+}

@@ -1,0 +1,25 @@
+{
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "desktop",
+        {
+          "identifier": "webdriver-tests",
+          "windows": [
+            "main",
+            "workspace-*"
+          ],
+          "permissions": [
+            "wdio:default",
+            "wdio-webdriver:default"
+          ]
+        }
+      ]
+    }
+  },
+  "bundle": {
+    "active": false
+  },
+  "identifier": "dev.remotecodex.desktop.e2e"
+}

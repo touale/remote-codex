@@ -9,6 +9,9 @@ use zeroize::Zeroizing;
 pub(super) struct Broker(tokio::task::JoinHandle<()>);
 
 impl Broker {
+    pub(super) fn task(task: tokio::task::JoinHandle<()>) -> Self {
+        Self(task)
+    }
     pub(super) fn start(path: &Path, token: String, password: Zeroizing<String>) -> Result<Self> {
         let listener = UnixListener::bind(path)?;
         Ok(Self(tokio::spawn(async move {

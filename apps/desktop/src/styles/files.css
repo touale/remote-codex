@@ -1,0 +1,63 @@
+.file-tree-skeleton {
+  padding: 8px 12px;
+}
+.file-tree-skeleton > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+}
+.file-tree-skeleton i,
+.file-tree-skeleton span {
+  background: var(--hover);
+  border-radius: 4px;
+  animation: file-tree-loading 1.6s ease-in-out infinite;
+}
+.file-tree-skeleton i {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.file-tree-skeleton span {
+  height: 10px;
+}
+.tree-retry {
+  margin: 4px 12px;
+}
+@keyframes file-tree-loading {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.editor-skeleton {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+.editor-skeleton > div {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  height: 23px;
+}
+.editor-skeleton i,
+.editor-skeleton span {
+  height: 9px;
+  border-radius: 3px;
+  background: var(--hover);
+  animation: file-tree-loading 1.6s ease-in-out infinite;
+}
+.editor-skeleton i {
+  width: 12px;
+  flex: none;
+}
+.editor-skeleton > div:nth-child(3n) span {
+  margin-left: 18px;
+}
+.tree-load-error {
+  padding-right: 8px;
+}

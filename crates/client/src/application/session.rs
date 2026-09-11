@@ -55,14 +55,16 @@ impl SessionService {
     }
 
     pub async fn read(&self, id: &str, cursor: Option<&str>) -> Result<HistoryPage> {
-        let program = remote_codex_adapter::program::discover().await?;
+        let program = self.client.0.program().await?;
         let binding = self.client.0.store.session_binding(id).await?;
-        crate::local::history::read(&program, &binding, cursor).await
+        let mut page = crate::local::history::read(&program, &binding, cursor).await?;
+        self.client.0.store.message_times(&mut page).await?;
+        Ok(page)
     }
 
     pub async fn prepare(&self, options: OpenSession) -> Result<PreparedSession> {
         self.client.0.ensure_open()?;
-        let program = remote_codex_adapter::program::discover().await?;
+        let program = self.client.0.program().await?;
         let state = &self.client.0;
         let record = state.store.find_connection(&options.server).await?;
         let existing = match &options.resume {
@@ -128,7 +130,7 @@ impl PreparedSession {
                 existing: self.existing,
                 takeover: self.options.takeover,
                 mcp,
-                progress: state.options.progress.clone(),
+                progress: crate::progress::current().or_else(|| state.options.progress.clone()),
             },
         )
         .await?;
@@ -137,5 +139,46 @@ impl PreparedSession {
             return Err(error);
         }
         Ok(SessionHandle::new(runtime, self.program))
+    }
+}
+
+impl SessionService {
+    pub async fn update_metadata(
+        &self,
+        id: &str,
+        name: Option<String>,
+        archived: Option<bool>,
+    ) -> Result<()> {
+        if name.as_ref().is_some_and(|n| {
+            n.trim().is_empty() || n.len() > 256 || n.chars().any(char::is_control)
+        }) {
+            return Err(ClientError::Argument(
+                "Session name must contain 1 to 256 characters.",
+            ));
+        }
+        let state = &self.client.0;
+        let mut binding = state.store.session_binding(id).await?;
+        let _workspace = crate::workspace_lock::WorkspaceLock::acquire(
+            &state.directory,
+            &binding.server_id,
+            Some(&binding.session.cwd),
+            false,
+        )?;
+        let _lease = crate::local::lease::Lease::acquire(&state.directory, id, false).await?;
+        let program = state.program().await?;
+        remote_codex_adapter::thread::history::update(
+            &program,
+            &binding,
+            name.as_deref(),
+            archived,
+        )
+        .await?;
+        if let Some(name) = name {
+            binding.session.title = name;
+        }
+        if let Some(archived) = archived {
+            binding.session.archived = archived;
+        }
+        state.store.save_session(&binding).await
     }
 }

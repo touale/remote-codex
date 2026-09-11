@@ -19,4 +19,7 @@ impl<T, E> Checked<T> for std::result::Result<T, E> {
     }
 }
 
+mod files;
 mod profiles;
+
+mod transfers;

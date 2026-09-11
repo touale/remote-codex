@@ -47,6 +47,7 @@ pub(crate) async fn ensure(
     progress(PrepareEvent::Stage(PrepareStage::ConnectSsh));
     let ssh = SshTransport::connect_with(
         ConnectOptions {
+            interaction: crate::ssh::interaction::current(),
             config: ssh_config.or(access.ssh_config),
             identity_file: access.identity_file,
             batch: !interactive,
@@ -97,6 +98,7 @@ pub(crate) async fn add(
         store,
         &record,
         ConnectOptions {
+            interaction: crate::ssh::interaction::current(),
             config: access.ssh_config.clone(),
             identity_file: access.identity_file.clone(),
             batch: !request.interactive,

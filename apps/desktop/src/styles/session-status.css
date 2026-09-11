@@ -1,0 +1,96 @@
+.session-status {
+  font-size: 12px;
+}
+.session-status dl {
+  margin: 0;
+}
+.status-row {
+  display: grid;
+  grid-template-columns: 125px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
+  line-height: 1.5;
+}
+.status-row dt {
+  color: var(--muted);
+}
+.status-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.status-id {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.status-id code {
+  font-size: 10px;
+}
+.status-section {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.status-section h3 {
+  font-size: 12px;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.status-section p {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.status-heading h3 {
+  margin: 0;
+}
+.usage-limit {
+  margin: 12px 0;
+}
+.usage-limit > strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.limit-window {
+  margin: 10px 0;
+}
+.limit-window > div {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+.limit-window strong {
+  font-weight: 400;
+}
+.limit-window progress {
+  width: 100%;
+  height: 5px;
+  display: block;
+  margin: 6px 0;
+  appearance: none;
+}
+.limit-window progress::-webkit-progress-bar {
+  background: var(--surface);
+  border-radius: 4px;
+}
+.limit-window progress::-webkit-progress-value {
+  background: var(--muted);
+  border-radius: 4px;
+}
+.limit-window small {
+  font-size: 10px;
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

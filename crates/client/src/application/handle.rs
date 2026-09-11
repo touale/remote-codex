@@ -17,6 +17,21 @@ pub struct TerminalAttachment {
 }
 
 impl SessionHandle {
+    pub fn snapshot(&self) -> Result<super::SessionSnapshot> {
+        self.runtime.snapshot()
+    }
+    pub fn interact(&self, id: &str, answer: super::InteractionAnswer) -> Result<()> {
+        self.runtime.interact(id, answer)
+    }
+    pub fn current_settings(&self) -> Result<super::ConfirmedSettings> {
+        self.runtime.current_settings()
+    }
+    pub async fn models(&self) -> Result<Vec<super::ModelOption>> {
+        self.runtime.models().await
+    }
+    pub async fn mcp_status(&self) -> Result<Vec<super::McpStatus>> {
+        self.runtime.mcp_status().await
+    }
     pub(super) fn new(runtime: Arc<LocalRuntime>, program: PathBuf) -> Self {
         Self { runtime, program }
     }
@@ -42,8 +57,20 @@ impl SessionHandle {
     pub async fn authenticate(&self) -> Result<()> {
         self.runtime.authenticate().await
     }
-    pub async fn submit(&self, text: impl Into<String>) -> Result<String> {
-        self.runtime.submit(text.into()).await
+    pub async fn message(
+        &self,
+        text: String,
+        client_id: String,
+        expected_turn: Option<String>,
+    ) -> Result<super::Submission> {
+        self.runtime.message(text, client_id, expected_turn).await
+    }
+
+    pub async fn status(&self) -> Result<super::SessionSnapshot> {
+        self.runtime.status().await
+    }
+    pub async fn goal(&self, action: super::GoalAction) -> Result<Option<super::Goal>> {
+        self.runtime.goal(action).await
     }
     pub async fn settings(&self, settings: SessionSettings) -> Result<()> {
         self.runtime.settings(settings).await

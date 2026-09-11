@@ -49,8 +49,13 @@ async fn config_and_connection_survive_reopening_the_database() -> TestResult {
 #[tokio::test]
 async fn independent_process_handles_detect_conflicting_writes() -> TestResult {
     let root = tempfile::tempdir()?;
-    let first = LocalStore::open(&root.path().join("state")).await?;
-    let second = LocalStore::open(&root.path().join("state")).await?;
+    let state = root.path().join("state");
+    let (first, second) = tokio::join!(LocalStore::open(&state), LocalStore::open(&state));
+    let (first, second) = (first?, second?);
+    assert_eq!(
+        first.installation_id().await?,
+        second.installation_id().await?
+    );
     let server = first
         .save_connection(&SshEndpoint::parse("example.invalid", None)?, Some("dev"))
         .await?

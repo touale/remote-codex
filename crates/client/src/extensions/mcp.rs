@@ -132,9 +132,7 @@ impl ProjectMcp {
                     Some("local") => continue,
                     Some("remote") => {}
                     _ => {
-                        return Err(ClientError::Argument(
-                            "local and project MCP names conflict; select --mcp-source local or --mcp-source remote",
-                        ));
+                        return Err(ClientError::McpNameConflict);
                     }
                 }
             }
@@ -163,7 +161,7 @@ impl ProjectMcp {
     }
 }
 
-fn validate(value: &Value) -> Result<()> {
+pub(crate) fn validate(value: &Value) -> Result<()> {
     let object = value
         .as_object()
         .ok_or(ClientError::Argument("MCP server must be a table"))?;

@@ -47,6 +47,9 @@ async fn status(
         });
         match &state {
             EnvironmentState::Reconnecting { .. } => {
+                if let Err(error) = runtime.suspend_goal().await {
+                    runtime.announce(&format!("Could not suspend goal: {error}"));
+                }
                 if let Ok(mut intent) = runtime.intent.lock() {
                     intent.disconnect();
                 }
@@ -58,6 +61,9 @@ async fn status(
                 if !matches!(previous, EnvironmentState::Ready) {
                     runtime.announce("Execution connection restored.");
                     let _ = runtime.continue_interrupted(false).await;
+                    if let Err(error) = runtime.restore_goal().await {
+                        runtime.announce(&format!("Goal remains paused: {error}"));
+                    }
                 }
             }
             EnvironmentState::ActionRequired { message, .. } => runtime.announce(message),
@@ -75,7 +81,7 @@ async fn pump(
     mut closed: tokio::sync::watch::Receiver<Option<Option<String>>>,
 ) {
     let result = async {
-        let mut input = generation.native.subscribe();
+        let mut input = generation.native.take_events()?;
         let mut finished = generation.bridge.finished.clone();
         loop {
             let incoming = tokio::select! {
@@ -94,7 +100,7 @@ async fn pump(
                     _ = revoked.changed() => return Ok(()),
                     _ = closed.changed() => return Ok(()),
                 };
-                input = generation.native.subscribe();
+                input = generation.native.take_events()?;
                 finished = generation.bridge.finished.clone();
                 runtime.continue_interrupted(true).await?;
                 if !matches!(*runtime.recovery.state.borrow(), EnvironmentState::ActionRequired { .. }) { runtime.recovery.publish(EnvironmentState::Ready); }
@@ -146,13 +152,19 @@ async fn process(
     }
     if let Some(id) = event.get("id") {
         let mut pending = generation
-            .pending_approvals
+            .pending_requests
             .lock()
             .map_err(|_| ClientError::RemoteResponse)?;
         if pending.len() >= 64 {
             return Err(ClientError::Argument("too many pending approvals"));
         }
-        pending.insert(id.to_string(), command_approval);
+        pending.insert(
+            id.to_string(),
+            super::generation::PendingRequest {
+                event: event.clone(),
+                command_approval,
+            },
+        );
     }
     {
         let mut intent = runtime
@@ -161,21 +173,41 @@ async fn process(
             .map_err(|_| ClientError::RemoteResponse)?;
         if event["method"] == "turn/started" {
             intent.active = event["params"]["turn"]["id"].as_str().map(str::to_owned);
+            intent.plan = None;
         }
         if event["method"] == "turn/completed" {
-            intent.active = None;
+            intent.completed = event["params"]["turn"]["id"].as_str().map(str::to_owned);
+            if intent.active == intent.completed {
+                intent.active = None;
+            }
             if event["params"]["turn"]["status"] == "completed" {
                 intent.interrupted = None;
             }
         }
     }
+    if event["method"] == "serverRequest/resolved" {
+        let id = event["params"]["requestId"].to_string();
+        generation
+            .pending_requests
+            .lock()
+            .map_err(|_| ClientError::RemoteResponse)?
+            .remove(&id);
+    }
     let completed = event["method"] == "turn/completed";
     if let Some(public) = events::public_event(&event) {
+        {
+            let mut intent = runtime
+                .intent
+                .lock()
+                .map_err(|_| ClientError::RemoteResponse)?;
+            intent.observe(&public);
+        }
         let _ = runtime.events.send(public);
     }
     let _ = runtime.native_events.send(event);
     if completed && runtime.recovery.ready().is_ok() {
         runtime.continue_interrupted(false).await?;
+        runtime.restore_goal().await?;
     }
     Ok(true)
 }
@@ -192,13 +224,13 @@ impl LocalRuntime {
             .ok_or(ClientError::RemoteResponse)?
             .to_string();
         let generation = self.current()?;
-        let command = generation
-            .pending_approvals
+        let request = generation
+            .pending_requests
             .lock()
             .map_err(|_| ClientError::RemoteResponse)?
             .remove(&id)
             .ok_or_else(|| Fault::new("STALE_APPROVAL", "approval is no longer pending"))?;
-        if command {
+        if request.command_approval {
             generation
                 .approvals
                 .respond(&id, events::decision(&value)?)?;

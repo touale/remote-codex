@@ -1,8 +1,17 @@
+use remote_codex_core::session::SessionEvent;
 use serde_json::Value;
 
 #[derive(Default)]
 pub(super) struct Intent {
     pub active: Option<String>,
+    pub status: remote_codex_core::status::SessionStatus,
+    pub current_turn: Option<remote_codex_core::status::TurnState>,
+    pub limits_revision: u64,
+    pub completed: Option<String>,
+    pub goal: Option<remote_codex_core::goals::Goal>,
+    pub goal_revision: u64,
+    pub plan: Option<remote_codex_core::goals::Plan>,
+    pub resume_goal: Option<String>,
     pub interrupted: Option<String>,
     pub episode: Option<String>,
     pub settings: Value,
@@ -11,6 +20,72 @@ pub(super) struct Intent {
 }
 
 impl Intent {
+    pub(super) fn observe(&mut self, event: &SessionEvent) {
+        match event {
+            SessionEvent::GoalChanged { goal } => {
+                self.goal = goal.clone();
+                self.goal_revision = self.goal_revision.wrapping_add(1);
+            }
+            SessionEvent::PlanChanged { plan } => self.plan = Some(plan.clone()),
+            SessionEvent::ActivityChanged {
+                activity,
+                active_flags,
+            } => {
+                self.status.activity = activity.clone();
+                self.status.active_flags = active_flags.clone();
+            }
+            SessionEvent::UsageChanged { usage } => self.status.usage = Some(usage.clone()),
+            SessionEvent::RateLimitsChanged { limits } => {
+                self.status.limits = limits.clone();
+                self.status.limits_error = None;
+                self.status.limits_updated_at = Some(super::status::now());
+                self.limits_revision = self.limits_revision.wrapping_add(1);
+            }
+            SessionEvent::TurnStarted { id, timing } => {
+                self.current_turn = Some(remote_codex_core::status::TurnState {
+                    id: id.clone(),
+                    status: "inProgress".into(),
+                    timing: timing.clone(),
+                });
+            }
+            SessionEvent::TurnCompleted {
+                id,
+                timing,
+                outcome,
+            } => {
+                let mut timing = timing.clone();
+                if let Some(previous) = &self.current_turn
+                    && previous.id == *id
+                {
+                    timing.started_at = timing.started_at.or(previous.timing.started_at);
+                }
+                if self
+                    .current_turn
+                    .as_ref()
+                    .is_some_and(|current| current.id != *id)
+                {
+                    return;
+                }
+                self.current_turn = Some(remote_codex_core::status::TurnState {
+                    id: id.clone(),
+                    timing,
+                    status: match outcome {
+                        remote_codex_core::session::TurnOutcome::Completed => "completed",
+                        remote_codex_core::session::TurnOutcome::Interrupted => "interrupted",
+                        remote_codex_core::session::TurnOutcome::Failed { .. } => "failed",
+                    }
+                    .into(),
+                });
+            }
+            _ => {}
+        }
+    }
+    pub(super) fn with_status(status: remote_codex_core::status::SessionStatus) -> Self {
+        Self {
+            status,
+            ..Default::default()
+        }
+    }
     pub(super) fn disconnect(&mut self) {
         if self.episode.is_none() {
             self.episode = Some(uuid::Uuid::new_v4().to_string());

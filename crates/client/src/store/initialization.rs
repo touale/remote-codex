@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-/// Serialize first-open journal setup and migration across CLI/App processes.
+/// Serialize first-open journal and schema setup across CLI/App processes.
 /// SQLite transactions still protect ordinary operations after initialization.
 pub(super) async fn lock(directory: &Path) -> Result<Flock<File>> {
     let mut file = OpenOptions::new()

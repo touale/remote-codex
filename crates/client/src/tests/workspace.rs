@@ -20,6 +20,7 @@ async fn recent_directories_are_isolated_persistent_and_do_not_change_configurat
             .await?;
     }
     assert_eq!(store.workspaces(&one.id).await?.len(), 30);
+    assert_eq!(store.workspace_catalog().await?.len(), 36);
     assert_eq!(store.workspaces(&two.id).await?, vec!["/other/project"]);
     for invalid in ["relative", "~/project", "/project\n", "/project\0"] {
         assert!(store.remember_workspace(&one.id, invalid).await.is_err());

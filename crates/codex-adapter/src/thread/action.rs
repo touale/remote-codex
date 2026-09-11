@@ -6,8 +6,14 @@ use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 pub enum Action {
     Submit(String),
+    Message {
+        text: String,
+        client_id: String,
+        expected_turn: Option<String>,
+    },
     Settings(SessionSettings),
     Interrupt(String),
+    Goal(remote_codex_core::goals::GoalAction),
 }
 
 impl Thread {
@@ -21,10 +27,46 @@ impl Thread {
         let thread = &self.binding.session.id;
         let (method, params) = match action {
             Action::Submit(text) => ("turn/start", crate::events::prompt(thread, &text)),
-            Action::Settings(settings) => (
-                "thread/settings/update",
-                crate::events::settings(thread, settings),
-            ),
+            Action::Message {
+                text,
+                client_id,
+                expected_turn,
+            } => {
+                if text.trim().is_empty()
+                    || client_id.is_empty()
+                    || client_id.len() > 128
+                    || client_id.chars().any(char::is_control)
+                {
+                    return Err(Fault::new(
+                        "INVALID_MESSAGE",
+                        "A message requires text and a valid client ID.",
+                    ));
+                }
+                let mut params = crate::events::prompt(thread, &text);
+                params["clientUserMessageId"] = serde_json::json!(client_id);
+                if let Some(turn) = expected_turn {
+                    params["expectedTurnId"] = serde_json::json!(turn);
+                    ("turn/steer", params)
+                } else {
+                    ("turn/start", params)
+                }
+            }
+            Action::Settings(settings) => {
+                if settings.mode.is_some() {
+                    return Err(Fault::new(
+                        "MODE_SETTINGS_REQUIRED",
+                        "Mode changes require the confirmed model and effort.",
+                    ));
+                }
+                (
+                    "thread/settings/update",
+                    crate::events::settings(thread, settings),
+                )
+            }
+            Action::Goal(action) => {
+                let (method, params) = crate::goals::params(thread, action)?;
+                return self.prepare(method, params, full_access, persisted, skills);
+            }
             Action::Interrupt(turn) => ("turn/interrupt", crate::events::interrupt(thread, &turn)),
         };
         self.prepare(method, params, full_access, persisted, skills)

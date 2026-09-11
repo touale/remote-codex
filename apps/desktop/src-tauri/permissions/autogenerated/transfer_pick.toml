@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-pick"
+description = "Enables the transfer_pick command without any pre-configured scope."
+commands.allow = ["transfer_pick"]
+
+[[permission]]
+identifier = "deny-transfer-pick"
+description = "Denies the transfer_pick command without any pre-configured scope."
+commands.deny = ["transfer_pick"]

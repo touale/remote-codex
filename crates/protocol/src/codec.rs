@@ -10,6 +10,10 @@ pub struct Reader<R> {
 }
 
 impl<R: AsyncBufRead + Unpin> Reader<R> {
+    pub fn into_inner(self) -> R {
+        self.input
+    }
+
     pub fn new(input: R) -> Self {
         Self::with_limit(input, MAX_FRAME)
     }

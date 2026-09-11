@@ -1,0 +1,204 @@
+.editor-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.pane-toolbar .icon-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+.editor-header {
+  display: flex;
+  align-items: center;
+  height: var(--content-header-height);
+  flex: 0 0 var(--content-header-height);
+  min-width: 0;
+  gap: 4px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+}
+.editor-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+}
+.editor-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 6px;
+  border-radius: 6px;
+  flex: none;
+  height: 28px;
+}
+.editor-tab.selected {
+  background: var(--surface);
+}
+.editor-tab button {
+  background: none;
+  border: none;
+  font-size: 11px;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+.editor-tab [role='tab'] {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  max-width: 180px;
+}
+.tab-name,
+.diff-heading > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-tab .icon-button {
+  width: 20px;
+  min-width: 20px;
+}
+.editor-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+.editor-actions .icon-button,
+.diff-heading .icon-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+.diff-heading {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  padding-left: 6px;
+}
+.diff-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dirty-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.monaco-surface {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.editor-status {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+.patch-view {
+  margin: 0;
+  padding: 10px 0;
+  font-size: 11px;
+  line-height: 1.65;
+  overflow: auto;
+  flex: 1;
+  font-family: SFMono-Regular, Menlo, monospace;
+}
+.patch-view > div {
+  padding: 0 10px;
+  min-width: max-content;
+}
+.addition {
+  background: #25855020;
+}
+.deletion {
+  background: #b4231820;
+}
+.conflict-labels {
+  display: flex;
+  justify-content: space-around;
+  color: var(--muted);
+  font-size: 11px;
+  margin: 10px 0;
+}
+.conflict-editor {
+  height: 320px;
+  border: 1px solid var(--border);
+}
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+.terminal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+}
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  border-radius: 5px;
+}
+.terminal-tab.selected {
+  background: var(--selected);
+}
+.terminal-tab > button {
+  background: none;
+  border: none;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.terminal-surfaces {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.terminal-view {
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px;
+  min-width: 0;
+}
+.terminal-ended {
+  font-size: 10px;
+  color: var(--muted);
+  padding: 0 0 6px;
+}
+.xterm-host {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.xterm-host .xterm {
+  height: 100%;
+}

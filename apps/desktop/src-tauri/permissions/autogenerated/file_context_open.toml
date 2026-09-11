@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-file-context-open"
+description = "Enables the file_context_open command without any pre-configured scope."
+commands.allow = ["file_context_open"]
+
+[[permission]]
+identifier = "deny-file-context-open"
+description = "Denies the file_context_open command without any pre-configured scope."
+commands.deny = ["file_context_open"]

@@ -1,0 +1,64 @@
+/* Visibility changes never change scrollbar geometry or reserve a second gutter. */
+* {
+  --scroll-thumb-x: transparent;
+  --scroll-thumb-y: transparent;
+}
+[data-scroll-x] {
+  --scroll-thumb-x: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+[data-scroll-y] {
+  --scroll-thumb-y: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb-y);
+  border-radius: 8px;
+  transition: background-color 160ms ease;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-thumb:horizontal {
+  background-color: var(--scroll-thumb-x);
+}
+[data-scroll-x]::-webkit-scrollbar-thumb:horizontal:hover,
+[data-scroll-y]::-webkit-scrollbar-thumb:vertical:hover {
+  background-color: color-mix(in srgb, var(--muted) 65%, transparent);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  [data-scroll-x],
+  [data-scroll-y] {
+    scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
+  }
+}
+
+/* Monaco 0.52 paints its own thumbs, including suggestion lists and diff views. */
+.monaco-scrollable-element > .scrollbar {
+  opacity: 0 !important;
+  transition: opacity 160ms ease !important;
+}
+.monaco-scrollable-element[data-scroll-x] > .scrollbar.horizontal,
+.monaco-scrollable-element[data-scroll-y] > .scrollbar.vertical {
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+.monaco-scrollable-element > .scrollbar > .slider {
+  border-radius: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::-webkit-scrollbar-thumb,
+  .monaco-scrollable-element > .scrollbar {
+    transition: none !important;
+  }
+}

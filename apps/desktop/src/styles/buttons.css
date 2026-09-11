@@ -1,0 +1,51 @@
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--canvas);
+}
+button:not(.primary):hover:not(:disabled) {
+  background: var(--hover);
+}
+button.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: transparent;
+}
+button.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: var(--on-primary);
+}
+button.primary:active:not(:disabled) {
+  background: var(--primary-active);
+  color: var(--on-primary);
+}
+.icon-button {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+}
+.icon-button[aria-pressed='true'] {
+  background: var(--selected);
+}
+.tooltip {
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--on-primary);
+  background: var(--primary);
+  z-index: 100;
+  user-select: none;
+}
+.tooltip svg {
+  fill: var(--primary);
+}

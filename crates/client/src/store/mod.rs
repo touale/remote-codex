@@ -1,15 +1,17 @@
 mod access;
-mod backup;
 mod codec;
 mod configuration;
 mod connections;
 mod credentials;
 mod initialization;
+mod message_times;
 mod schema;
 mod servers;
 mod sessions;
 mod ssh_credentials;
+mod transfers;
 mod trust;
+mod workspaces;
 
 use serde::Serialize;
 use sqlx::{
@@ -83,7 +85,7 @@ impl LocalStore {
             .acquire_timeout(Duration::from_secs(5))
             .connect_with(options)
             .await?;
-        if let Err(error) = schema::initialize(&pool, directory).await {
+        if let Err(error) = schema::initialize(&pool).await {
             pool.close().await;
             return Err(error);
         }

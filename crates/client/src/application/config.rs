@@ -55,6 +55,27 @@ impl ConfigService {
         self.list(name, false).await
     }
 
+    /// Validate all plain settings before committing one optimistic transaction.
+    pub async fn set_many(
+        &self,
+        name: &str,
+        updates: &[(String, String)],
+        expected: i64,
+    ) -> Result<ConfigReport> {
+        let state = &self.client.0;
+        let server = state.store.find_connection(name).await?;
+        let revision = state.store.config_snapshot(&server.id).await?.revision;
+        if revision.saved != expected {
+            return Err(ClientError::RevisionConflict);
+        }
+        state
+            .store
+            .set_many_config(&server.id, updates, revision)
+            .await?;
+        self.synchronize(server).await;
+        self.list(name, false).await
+    }
+
     pub async fn unset(
         &self,
         name: &str,

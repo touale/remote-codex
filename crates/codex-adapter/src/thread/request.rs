@@ -7,13 +7,25 @@ use std::{collections::BTreeMap, path::Path};
 pub enum OperationKind {
     Read,
     Turn,
+    Steer,
     Settings(Option<bool>),
+    GoalStart,
+    GoalDefine,
+    GoalControl,
 }
 
 pub struct Operation {
     pub kind: OperationKind,
     method: String,
     params: Value,
+}
+
+impl Operation {
+    pub fn client_message_id(&self) -> Option<&str> {
+        matches!(self.kind, OperationKind::Turn | OperationKind::Steer)
+            .then(|| self.params["clientUserMessageId"].as_str())
+            .flatten()
+    }
 }
 
 pub enum Prepared {
@@ -57,6 +69,25 @@ impl Thread {
             ));
         }
         let kind = match method {
+            "thread/goal/set" => {
+                settings::known_fields(
+                    &params,
+                    &["threadId", "objective", "status", "tokenBudget"],
+                )?;
+                if params["status"] == "active"
+                    || (params["objective"].is_string() && params["status"] != "paused")
+                {
+                    OperationKind::GoalStart
+                } else if params["objective"].is_string() {
+                    OperationKind::GoalDefine
+                } else {
+                    OperationKind::GoalControl
+                }
+            }
+            "thread/goal/clear" => {
+                settings::known_fields(&params, &["threadId"])?;
+                OperationKind::GoalControl
+            }
             "thread/settings/update" | "turn/settings/update" => {
                 settings::prepare_thread(method, &params, &self.binding)?;
                 OperationKind::Settings(permission_intent(&params))
@@ -68,20 +99,16 @@ impl Thread {
             "turn/start" => {
                 binding::turn_params(&mut params, &self.binding);
                 execution_policy::validate(&params, &self.binding, full_access)?;
-                if let Some(inputs) = params["input"].as_array_mut() {
-                    for input in inputs {
-                        if input["type"] == "skill"
-                            && let Some(path) = input["path"].as_str().and_then(|p| skills.get(p))
-                        {
-                            input["path"] = json!(path);
-                        }
-                    }
-                }
                 OperationKind::Turn
             }
             "turn/steer" => {
-                params["cwd"] = json!(self.binding.session.cwd);
-                OperationKind::Read
+                if params["expectedTurnId"].as_str().is_none_or(str::is_empty) {
+                    return Err(Fault::new(
+                        "EXPECTED_TURN_REQUIRED",
+                        "Select the running turn before sending a follow-up.",
+                    ));
+                }
+                OperationKind::Steer
             }
             "thread/resume"
             | "thread/read"
@@ -91,6 +118,7 @@ impl Thread {
             | "thread/name/set"
             | "turn/interrupt"
             | "model/list"
+            | "collaborationMode/list"
             | "account/read"
             | "account/login/start"
             | "account/login/cancel"
@@ -108,6 +136,17 @@ impl Thread {
                 ));
             }
         };
+        if matches!(kind, OperationKind::Turn | OperationKind::Steer)
+            && let Some(inputs) = params["input"].as_array_mut()
+        {
+            for input in inputs {
+                if input["type"] == "skill"
+                    && let Some(path) = input["path"].as_str().and_then(|p| skills.get(p))
+                {
+                    input["path"] = json!(path);
+                }
+            }
+        }
         Ok(Prepared::Operation(Operation {
             kind,
             method: method.into(),

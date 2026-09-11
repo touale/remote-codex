@@ -6,6 +6,7 @@ use std::{
 };
 use tokio::process::Command;
 mod broker;
+mod graphical;
 
 pub(super) struct Askpass {
     _broker: broker::Broker,
@@ -19,6 +20,11 @@ impl Askpass {
         interactive: bool,
         command: &mut Command,
     ) -> Result<Option<Self>> {
+        if let Some(handler) = &options.interaction {
+            return graphical::prepare(options, endpoint, command, handler.clone())
+                .await
+                .map(Some);
+        }
         let Some(credentials) = &options.credentials else {
             return Ok(None);
         };

@@ -6,7 +6,7 @@ use crate::{
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::test]
-async fn local_session_identity_cannot_be_rebound_to_another_environment() -> TestResult {
+async fn session_bindings_and_message_times_survive_reopening_without_rebinding() -> TestResult {
     let root = tempfile::tempdir()?;
     let store = LocalStore::open(&root.path().join("state")).await?;
     let first = store
@@ -34,6 +34,27 @@ async fn local_session_identity_cannot_be_rebound_to_another_environment() -> Te
         },
     };
     store.save_session(&binding).await?;
+    store
+        .remember_message("local-thread", "message", 123)
+        .await?;
+    store
+        .remember_message("local-thread", "message", 456)
+        .await?;
+    store.close().await;
+    let store = LocalStore::open(&root.path().join("state")).await?;
+    let mut page = remote_codex_core::session::HistoryPage {
+        session: store.session_binding("local-thread").await?.session,
+        next_cursor: None,
+        turns: vec![serde_json::from_value(
+            serde_json::json!({"id":"turn", "status":"completed", "items":[
+                {"id":"native", "client_id":"message", "kind":"userMessage", "text":"example"},
+                {"id":"old", "kind":"userMessage", "text":"example"}
+            ]}),
+        )?],
+    };
+    store.message_times(&mut page).await?;
+    assert_eq!(page.turns[0].items[0].sent_at, Some(123));
+    assert_eq!(page.turns[0].items[1].sent_at, None);
     binding.server_id = second.id;
     assert!(store.save_session(&binding).await.is_err());
     assert_eq!(

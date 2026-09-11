@@ -37,6 +37,29 @@ impl LocalStore {
         Ok(())
     }
 
+    pub(crate) async fn replace_identity(
+        &self,
+        id: &str,
+        expected: Option<&Path>,
+        next: Option<&Path>,
+    ) -> Result<()> {
+        let mut tx = self.access_write(id).await?;
+        let count = sqlx::query(
+            "UPDATE server_access SET identity_file=? WHERE server=? AND identity_file IS ?",
+        )
+        .bind(next.map(|p| p.to_string_lossy().into_owned()))
+        .bind(id)
+        .bind(expected.map(|p| p.to_string_lossy().into_owned()))
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if count != 1 {
+            return Err(ClientError::RevisionConflict);
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub(crate) async fn set_managed_key(&self, id: &str, path: &Path, public: &str) -> Result<()> {
         let mut tx = self.access_write(id).await?;
         sqlx::query("UPDATE server_access SET identity_file=?,managed_public_key=? WHERE server=?")

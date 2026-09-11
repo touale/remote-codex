@@ -1,0 +1,70 @@
+.root {
+  min-width: 0;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+}
+.search {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 16px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding-left: 9px;
+  color: var(--muted);
+}
+.search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.list {
+  min-height: 150px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.row > svg {
+  flex: none;
+  color: var(--muted);
+}
+.details {
+  flex: 1;
+  min-width: 0;
+}
+.details strong,
+.details small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.details strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.details small {
+  margin: 4px 0;
+  font-size: 11px;
+}
+.details time {
+  font-size: 10px;
+  color: var(--muted);
+}
+.row button {
+  flex: none;
+  font-size: 11px;
+}

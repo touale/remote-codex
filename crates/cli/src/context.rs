@@ -50,6 +50,7 @@ impl Context {
                     let _ = crate::output::notice(&mut std::io::stderr(), notice, json);
                 }
             })),
+            ..Default::default()
         })
         .await?;
         Ok(Self { client, display })

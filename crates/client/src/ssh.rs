@@ -14,6 +14,7 @@ use crate::{ClientError, Result, connection::SshEndpoint};
 mod askpass;
 mod capture;
 pub(crate) mod credentials;
+pub(crate) mod interaction;
 mod master;
 pub(crate) mod target;
 mod transfer;
@@ -26,6 +27,7 @@ pub(crate) struct SshTransport {
 
 #[derive(Clone, Default)]
 pub(crate) struct ConnectOptions {
+    pub(crate) interaction: Option<interaction::AuthenticationHandler>,
     pub(crate) config: Option<PathBuf>,
     pub(crate) identity_file: Option<PathBuf>,
     pub(crate) batch: bool,
@@ -38,10 +40,13 @@ impl SshTransport {
     }
 
     pub(crate) async fn connect_with(
-        options: ConnectOptions,
+        mut options: ConnectOptions,
         endpoint: &SshEndpoint,
     ) -> Result<Self> {
         endpoint.validate()?;
+        if options.interaction.is_none() {
+            options.interaction = interaction::current();
+        }
         let socket_dir = tempfile::Builder::new()
             .prefix("rc-ssh-")
             .tempdir_in("/tmp")?;
@@ -66,6 +71,19 @@ impl SshTransport {
         endpoint: &SshEndpoint,
         interactive: bool,
     ) -> Result<()> {
+        self.reconnect(endpoint, interactive, false).await
+    }
+
+    pub(crate) async fn ensure_connected_silent(&self, endpoint: &SshEndpoint) -> Result<()> {
+        self.reconnect(endpoint, false, true).await
+    }
+
+    async fn reconnect(
+        &self,
+        endpoint: &SshEndpoint,
+        interactive: bool,
+        silent: bool,
+    ) -> Result<()> {
         let mut current = self.master.lock().await;
         let socket = self.socket_dir.path().join("control");
         if current.alive()? && socket.try_exists()? {
@@ -79,6 +97,10 @@ impl SshTransport {
         }
         let mut options = self.options.clone();
         options.batch = !interactive;
+        if silent {
+            options.interaction = None;
+            options.credentials = None;
+        }
         *current = master::start(&options, endpoint, &socket, interactive).await?;
         Ok(())
     }

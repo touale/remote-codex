@@ -211,7 +211,7 @@ fn preference_key(key: &str) -> bool {
         && KEYS.contains(&key)
 }
 
-fn known_fields(value: &Value, allowed: &[&str]) -> Result<(), Fault> {
+pub(super) fn known_fields(value: &Value, allowed: &[&str]) -> Result<(), Fault> {
     let object = value.as_object().ok_or_else(invalid)?;
     if object.keys().any(|key| !allowed.contains(&key.as_str())) {
         return Err(invalid());

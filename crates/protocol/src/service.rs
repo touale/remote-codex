@@ -7,6 +7,8 @@ pub const IDLE_RETIREMENT_CAPABILITY: &str = "idle-retirement-v1";
 pub struct ServiceActivity {
     pub channels: i64,
     pub jobs: i64,
+    #[serde(default)]
+    pub transfers: i64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -22,8 +24,8 @@ impl ServiceActivity {
         Fault::new(
             "SERVICE_UPDATE_BUSY",
             &format!(
-                "remote service update is waiting for {} execution channel(s) and {} unfinished job(s)",
-                self.channels, self.jobs
+                "remote service update is waiting for {} execution channel(s) {} unfinished job(s), and {} active transfer connection(s)",
+                self.channels, self.jobs, self.transfers
             ),
         )
     }

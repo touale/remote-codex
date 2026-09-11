@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-server-authentication"
+description = "Enables the server_authentication command without any pre-configured scope."
+commands.allow = ["server_authentication"]
+
+[[permission]]
+identifier = "deny-server-authentication"
+description = "Denies the server_authentication command without any pre-configured scope."
+commands.deny = ["server_authentication"]

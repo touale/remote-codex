@@ -4,6 +4,12 @@ pub type Result<T> = std::result::Result<T, ClientError>;
 pub enum ClientError {
     #[error("{0}")]
     Argument(&'static str),
+    #[error("session is already open in another frontend; use --takeover to transfer control")]
+    SessionInUse,
+    #[error(
+        "local and project MCP names conflict; select --mcp-source local or --mcp-source remote"
+    )]
+    McpNameConflict,
     #[error(transparent)]
     Config(#[from] remote_codex_core::config::ConfigError),
     #[error(transparent)]
@@ -14,7 +20,7 @@ pub enum ClientError {
     Io(#[from] std::io::Error),
     #[error("invalid stored data")]
     Data(#[from] serde_json::Error),
-    #[error("database schema is newer or belongs to another application")]
+    #[error("unsupported database format; this release requires local schema 13")]
     Schema,
     #[error("state directory and database must be private, regular paths")]
     PrivatePath,
@@ -47,6 +53,8 @@ pub enum ClientError {
 impl ClientError {
     pub fn code(&self) -> &str {
         match self {
+            Self::SessionInUse => "SESSION_IN_USE",
+            Self::McpNameConflict => "MCP_NAME_CONFLICT",
             Self::Argument(_) => "INVALID_ARGUMENT",
             Self::Config(_) => "INVALID_CONFIGURATION",
             Self::Endpoint(_) => "INVALID_SSH_TARGET",
@@ -101,7 +109,11 @@ impl ClientError {
             Self::Ssh(75) => 6,
             Self::RemoteFault(code, _, _) if code == "SERVICE_UPDATE_BUSY" => 6,
             Self::Unsupported(_) | Self::Integrity | Self::Schema => 5,
-            Self::Config(_) | Self::Endpoint(_) | Self::NotFound | Self::Argument(_) => 2,
+            Self::Config(_)
+            | Self::Endpoint(_)
+            | Self::NotFound
+            | Self::Argument(_)
+            | Self::McpNameConflict => 2,
             _ => 7,
         }
     }

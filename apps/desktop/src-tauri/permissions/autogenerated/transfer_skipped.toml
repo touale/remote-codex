@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-skipped"
+description = "Enables the transfer_skipped command without any pre-configured scope."
+commands.allow = ["transfer_skipped"]
+
+[[permission]]
+identifier = "deny-transfer-skipped"
+description = "Denies the transfer_skipped command without any pre-configured scope."
+commands.deny = ["transfer_skipped"]

@@ -4,4 +4,9 @@
 pub mod config;
 pub mod connection;
 
+pub mod desktop;
 pub mod session;
+pub mod status;
+pub mod workspace;
+
+pub mod goals;

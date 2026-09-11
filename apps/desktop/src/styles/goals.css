@@ -1,0 +1,33 @@
+.plan-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.plan-card .plan-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+.plan-steps {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.plan-steps summary {
+  cursor: pointer;
+}
+.plan-steps ol {
+  padding-left: 20px;
+  margin-bottom: 0;
+}
+.plan-steps li[data-status='completed'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.plan-steps li[data-status='inProgress'] {
+  font-weight: 600;
+}

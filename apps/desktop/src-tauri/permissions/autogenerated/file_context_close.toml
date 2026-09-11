@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-file-context-close"
+description = "Enables the file_context_close command without any pre-configured scope."
+commands.allow = ["file_context_close"]
+
+[[permission]]
+identifier = "deny-file-context-close"
+description = "Denies the file_context_close command without any pre-configured scope."
+commands.deny = ["file_context_close"]

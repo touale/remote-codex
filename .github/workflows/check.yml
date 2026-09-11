@@ -34,9 +34,29 @@ jobs:
       - name: Formatting
         run: cargo fmt --all --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked --offline -- -D warnings
+        run: cargo clippy --workspace --exclude remote-codex-desktop --all-targets --locked --offline -- -D warnings
       - name: Tests without model credentials
-        run: cargo test --workspace --all-targets --locked --offline
+        run: cargo test --workspace --exclude remote-codex-desktop --all-targets --locked --offline
+
+  desktop:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install pinned toolchains
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          curl --fail --location --output /tmp/node.tar.gz https://nodejs.org/dist/v24.20.0/node-v24.20.0-darwin-arm64.tar.gz
+          echo '40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8  /tmp/node.tar.gz' | shasum -a 256 -c -
+          tar -xzf /tmp/node.tar.gz -C /tmp
+          echo '/tmp/node-v24.20.0-darwin-arm64/bin' >> "$GITHUB_PATH"
+      - run: cargo fetch --locked
+      - run: npm ci --prefix apps/desktop
+      - run: python3 tools/desktop.py check
+      - run: python3 tools/desktop.py e2e
+
 
   release:
     if: github.event_name == 'workflow_dispatch' && inputs.release
@@ -55,3 +75,6 @@ jobs:
           persist-credentials: false
       - run: cargo fetch --locked
       - run: python3 tools/release.py
+      - name: Desktop SSH acceptance
+        run: python3 tools/desktop.py e2e --target "$REMOTE_CODEX_SSH_TARGET" --port "$REMOTE_CODEX_SSH_PORT" --identity "$REMOTE_CODEX_SSH_IDENTITY"
+      - run: python3 tools/desktop.py build

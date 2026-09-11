@@ -15,15 +15,17 @@ use tokio::sync::Mutex;
 
 pub struct Service {
     pub store: Store,
-    root: PathBuf,
+    pub(crate) root: PathBuf,
     executions: Mutex<HashMap<String, Arc<Execution>>>,
     build_id: String,
     profiles: crate::profiles::Profiles,
+    files: Arc<std::sync::Mutex<crate::files::Files>>,
 }
 impl Service {
     pub async fn open(root: &Path) -> Result<Arc<Self>> {
         let store = Store::open(root).await?;
         Ok(Arc::new(Self {
+            files: Arc::new(std::sync::Mutex::new(crate::files::Files::default())),
             profiles: crate::profiles::Profiles::new(store.clone()),
             store,
             root: root.into(),
@@ -59,6 +61,23 @@ impl Service {
     pub async fn dispatch(self: &Arc<Self>, call: &Call) -> Result<Value> {
         self.validate(call)?;
         match &call.request {
+            Request::WorkspaceFiles {
+                workspace,
+                operation,
+            } => {
+                let files = self.files.clone();
+                let owner = call.profile.clone();
+                let workspace = workspace.clone();
+                let operation = operation.clone();
+                tokio::task::spawn_blocking(move || {
+                    files
+                        .lock()
+                        .map_err(|_| Fault::new("FILE_SERVICE", "File service is unavailable."))?
+                        .dispatch(&owner, &workspace, &operation)
+                })
+                .await
+                .map_err(|_| Fault::new("FILE_SERVICE", "File service stopped."))?
+            }
             Request::Hello => encode(Hello {
                 protocol: VERSION,
                 identity: self.store.identity.clone(),
@@ -66,6 +85,8 @@ impl Service {
                 user: std::env::var("USER").unwrap_or_default(),
                 version: env!("CARGO_PKG_VERSION").into(),
                 capabilities: vec![
+                    remote_codex_protocol::WORKSPACE_FILES_CAPABILITY.into(),
+                    remote_codex_protocol::transfer::CAPABILITY.into(),
                     remote_codex_protocol::COMMAND_APPROVAL_CAPABILITY.into(),
                     remote_codex_protocol::SESSION_PERMISSIONS_CAPABILITY.into(),
                     remote_codex_protocol::IDLE_RETIREMENT_CAPABILITY.into(),
@@ -191,7 +212,7 @@ impl Service {
             Request::JobOutput { id, after } => {
                 self.store.job_output(&call.profile, id, *after).await
             }
-            Request::AttachExecution { .. } => Err(Fault::new(
+            Request::Transfer { .. } | Request::AttachExecution { .. } => Err(Fault::new(
                 "INVALID_REQUEST",
                 "execution attach requires a streaming connection",
             )),

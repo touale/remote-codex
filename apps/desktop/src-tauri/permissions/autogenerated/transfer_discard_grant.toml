@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-discard-grant"
+description = "Enables the transfer_discard_grant command without any pre-configured scope."
+commands.allow = ["transfer_discard_grant"]
+
+[[permission]]
+identifier = "deny-transfer-discard-grant"
+description = "Denies the transfer_discard_grant command without any pre-configured scope."
+commands.deny = ["transfer_discard_grant"]

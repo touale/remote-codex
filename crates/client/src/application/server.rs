@@ -38,6 +38,31 @@ pub struct ServerService {
 }
 
 impl ServerService {
+    pub async fn terminal(
+        &self,
+        name: &str,
+        columns: u16,
+        rows: u16,
+    ) -> Result<super::ShellHandle> {
+        let state = &self.client.0;
+        state.ensure_open()?;
+        let record = state.store.find_connection(name).await?;
+        let lock = crate::workspace_lock::WorkspaceLock::acquire(
+            &state.directory,
+            &record.id,
+            None,
+            false,
+        )?;
+        let remote = state.connect(record).await?;
+        let path = remote.identity.home.clone();
+        if !std::path::Path::new(&path).is_absolute() {
+            return Err(ClientError::Argument(
+                "Remote home directory is unavailable.",
+            ));
+        }
+        super::shell::open(remote, &path, columns, rows, lock).await
+    }
+
     pub async fn saved(&self) -> Result<Vec<ServerSummary>> {
         Ok(self
             .client
@@ -79,22 +104,25 @@ impl ServerService {
                 "service bundle missing; build this checkout with python3 tools/package.py",
             ));
         }
-        let prepared = servers::add(
-            &state.store,
-            &state.directory,
-            servers::AddServer {
-                name: &request.name,
-                address: &request.address,
-                port: request.port,
-                settings: &request.settings,
-                identity: request.identity,
-                ssh_config: state.options.ssh_config.clone(),
-                install_key: request.install_key,
-                interactive: state.options.interactive,
-                password: request.password,
-            },
-            state.bundle(),
-            |event| state.progress(event),
+        let prepared = crate::ssh::interaction::scope(
+            state.options.authentication.clone(),
+            servers::add(
+                &state.store,
+                &state.directory,
+                servers::AddServer {
+                    name: &request.name,
+                    address: &request.address,
+                    port: request.port,
+                    settings: &request.settings,
+                    identity: request.identity,
+                    ssh_config: state.options.ssh_config.clone(),
+                    install_key: request.install_key,
+                    interactive: state.options.interactive,
+                    password: request.password,
+                },
+                state.bundle(),
+                |event| state.progress(event),
+            ),
         )
         .await;
         state.cleanup_credentials().await;
@@ -113,6 +141,12 @@ impl ServerService {
     pub async fn remove(&self, name: &str, revoke_key: bool) -> Result<()> {
         let state = &self.client.0;
         let record = state.store.find_connection(name).await?;
+        let _lock = crate::workspace_lock::WorkspaceLock::acquire(
+            &state.directory,
+            &record.id,
+            None,
+            true,
+        )?;
         if revoke_key {
             let remote = Remote::connect_running(
                 &state.store,
@@ -160,6 +194,7 @@ impl ServerService {
         let access = state.store.server_access(&record.id).await?;
         let ssh = SshTransport::connect_with(
             ConnectOptions {
+                interaction: crate::ssh::interaction::current(),
                 config: state.options.ssh_config.clone().or(access.ssh_config),
                 identity_file: access.identity_file,
                 batch: false,

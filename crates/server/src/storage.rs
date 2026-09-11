@@ -55,37 +55,26 @@ impl Store {
         .fetch_one(&mut *tx)
         .await
         .checked("STORAGE_ERROR", "cannot inspect database")?;
-        if (application != 0x52435356 && (application != 0 || tables != 0))
-            || (version != 0 && application == 0)
-        {
+        if application == 0 && version == 0 && tables == 0 {
+            sqlx::raw_sql(include_str!("storage/schema.sql"))
+                .execute(&mut *tx)
+                .await
+                .checked("STORAGE_ERROR", "cannot initialize remote schema")?;
+            sqlx::query("INSERT INTO identity(singleton,id) VALUES(1,?)")
+                .bind(uuid::Uuid::new_v4().to_string())
+                .execute(&mut *tx)
+                .await
+                .checked("STORAGE_ERROR", "cannot save remote identity")?;
+            sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=2;")
+                .execute(&mut *tx)
+                .await
+                .checked("STORAGE_ERROR", "cannot save schema version")?;
+        } else if application != 0x52435356 || version != 2 {
             return Err(Fault::new(
                 "UNSUPPORTED_SCHEMA",
-                "database belongs to another application",
+                "this release requires remote schema 2",
             ));
         }
-        if version > 2 {
-            return Err(Fault::new(
-                "UNSUPPORTED_SCHEMA",
-                "remote service database requires a newer version",
-            ));
-        }
-        sqlx::raw_sql(include_str!("storage/schema.sql"))
-            .execute(&mut *tx)
-            .await
-            .checked("STORAGE_ERROR", "cannot initialize remote schema")?;
-        sqlx::query("INSERT OR IGNORE INTO identity(singleton,id) VALUES(1,?)")
-            .bind(uuid::Uuid::new_v4().to_string())
-            .execute(&mut *tx)
-            .await
-            .checked("STORAGE_ERROR", "cannot save remote identity")?;
-        if version < 2 {
-            sqlx::raw_sql("ALTER TABLE execution_channels ADD COLUMN service_instance TEXT NOT NULL DEFAULT ''; ALTER TABLE execution_channels ADD COLUMN boot_id TEXT NOT NULL DEFAULT ''; ALTER TABLE execution_channels ADD COLUMN lost_reason TEXT;")
-                .execute(&mut *tx).await.checked("STORAGE_ERROR", "cannot migrate execution recovery metadata")?;
-        }
-        sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=2;")
-            .execute(&mut *tx)
-            .await
-            .checked("STORAGE_ERROR", "cannot save schema version")?;
         let identity = sqlx::query_scalar("SELECT id FROM identity WHERE singleton=1")
             .fetch_one(&mut *tx)
             .await

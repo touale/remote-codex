@@ -4,12 +4,14 @@ mod binding;
 mod events;
 pub(crate) mod gateway;
 mod generation;
+mod goals;
 pub(crate) mod history;
 mod intent;
-mod lease;
+pub(crate) mod lease;
 pub(crate) mod permissions;
 mod recovery;
 mod route;
+mod status;
 mod supervisor;
 
 use crate::{
@@ -36,11 +38,13 @@ pub(crate) struct LocalRuntime {
     pub(crate) remote: Arc<Remote>,
     store: LocalStore,
     lease: lease::Lease,
+    workspace_lock: crate::workspace_lock::WorkspaceLock,
     has_history: AtomicBool,
     recipe: Recipe,
     pub(crate) recovery: Arc<Recovery>,
     intent: Mutex<intent::Intent>,
     turn_gate: tokio::sync::Mutex<()>,
+    goal_gate: tokio::sync::Mutex<()>,
     events: broadcast::Sender<SessionEvent>,
     native_events: broadcast::Sender<Value>,
     closed: watch::Sender<Option<Option<String>>>,
@@ -66,13 +70,7 @@ impl LocalRuntime {
     ) -> Result<Arc<Self>> {
         let home = codex_home()?;
         let snapshot = store.config_snapshot(&remote.server.id).await?;
-        let mode = match snapshot
-            .effective
-            .get(&crate::config::ConfigKey::ExecutionMode)
-        {
-            Some(crate::config::ConfigValue::Text(mode)) => mode.clone(),
-            _ => return Err(ClientError::RemoteResponse),
-        };
+        let mode = execution_mode(&snapshot.effective)?.to_owned();
         if let Some(binding) = &options.existing {
             binding::validate(binding, &remote, &home, &mode)?;
         }
@@ -94,6 +92,12 @@ impl LocalRuntime {
         let project = remote
             .call(remote_codex_protocol::Request::ProjectConfig { path: cwd.clone() })
             .await?;
+        let workspace_lock = crate::workspace_lock::WorkspaceLock::acquire(
+            options.directory,
+            &remote.server.id,
+            Some(&cwd),
+            false,
+        )?;
         let recipe = Recipe {
             program: options.program.into(),
             home,
@@ -137,6 +141,7 @@ impl LocalRuntime {
                 return Err(error);
             }
         };
+        let status = generation.native.initial_status();
         let runtime = Arc::new(Self {
             generation: RwLock::new(Arc::new(generation)),
             binding,
@@ -144,16 +149,22 @@ impl LocalRuntime {
             store: store.clone(),
             lease,
             recipe,
+            workspace_lock,
             recovery,
             has_history: AtomicBool::new(options.existing.is_some()),
-            intent: Mutex::new(intent::Intent::default()),
+            intent: Mutex::new(intent::Intent::with_status(status)),
             turn_gate: tokio::sync::Mutex::new(()),
+            goal_gate: tokio::sync::Mutex::new(()),
             events: broadcast::channel(256).0,
             native_events: broadcast::channel(256).0,
             closed: watch::channel(None).0,
             event_task: Mutex::new(Vec::new()),
             shutdown_once: tokio::sync::OnceCell::new(),
         });
+        if let Err(error) = runtime.load_goal().await {
+            runtime.shutdown().await;
+            return Err(error);
+        }
         events::start(&runtime)?;
         Ok(runtime)
     }
@@ -199,6 +210,14 @@ impl LocalRuntime {
             generation.close().await;
         }
         self.lease.release();
+        self.workspace_lock.release();
+    }
+}
+
+pub(crate) fn execution_mode(config: &crate::config::EffectiveConfig) -> Result<&str> {
+    match config.get(&crate::config::ConfigKey::ExecutionMode) {
+        Some(crate::config::ConfigValue::Text(mode)) => Ok(mode),
+        _ => Err(ClientError::RemoteResponse),
     }
 }
 
