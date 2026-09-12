@@ -29,18 +29,13 @@ impl LocalStore {
         changes: &[(String, String)],
         expected: Revision,
     ) -> Result<Revision> {
-        let mut tx = self.begin_write().await?;
-        let mut state = snapshot(&mut tx, server).await?;
-        if state.revision != expected {
-            return Err(ClientError::RevisionConflict);
-        }
-        let before = state.layer.clone();
-        for (key, value) in changes {
-            state.layer.set(key, ConfigInput::Plain(value))?;
-        }
-        let revision = replace(&mut tx, server, &before, &state.layer).await?;
-        tx.commit().await?;
-        Ok(revision)
+        self.update_config(server, expected, |layer| {
+            for (key, value) in changes {
+                layer.set(key, ConfigInput::Plain(value))?;
+            }
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn config_snapshot(&self, server: &str) -> Result<ConfigSnapshot> {
@@ -123,16 +118,8 @@ impl LocalStore {
         input: ConfigInput<'_>,
         expected: Revision,
     ) -> Result<Revision> {
-        let mut tx = self.begin_write().await?;
-        let mut state = snapshot(&mut tx, server).await?;
-        if state.revision != expected {
-            return Err(ClientError::RevisionConflict);
-        }
-        let before = state.layer.clone();
-        state.layer.set(key, input)?;
-        let revision = replace(&mut tx, server, &before, &state.layer).await?;
-        tx.commit().await?;
-        Ok(revision)
+        self.update_config(server, expected, |layer| Ok(layer.set(key, input)?))
+            .await
     }
 
     pub(crate) async fn unset_config(
@@ -141,13 +128,26 @@ impl LocalStore {
         key: &str,
         expected: Revision,
     ) -> Result<Revision> {
+        self.update_config(server, expected, |layer| {
+            layer.unset(key)?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn update_config(
+        &self,
+        server: &str,
+        expected: Revision,
+        change: impl FnOnce(&mut ConfigLayer) -> Result<()>,
+    ) -> Result<Revision> {
         let mut tx = self.begin_write().await?;
         let mut state = snapshot(&mut tx, server).await?;
         if state.revision != expected {
             return Err(ClientError::RevisionConflict);
         }
         let before = state.layer.clone();
-        state.layer.unset(key)?;
+        change(&mut state.layer)?;
         let revision = replace(&mut tx, server, &before, &state.layer).await?;
         tx.commit().await?;
         Ok(revision)

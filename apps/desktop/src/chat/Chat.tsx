@@ -33,17 +33,22 @@ export function Chat({
   onHistory: () => void;
   onRevert: (turn: string) => Promise<void>;
   onReloadEdit: () => Promise<void>;
-  onDiff: (change: FileChange) => void;
+  onDiff: (change: FileChange, newWindow?: boolean) => void;
   report: (error: unknown) => void;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
+  const messages = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
+  const previousTop = useRef(0);
   const following = useRef<number | null>(null);
   const follow = useCallback(() => {
     if (following.current !== null) return;
     following.current = requestAnimationFrame(() => {
       following.current = null;
-      if (nearBottom.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
+      if (nearBottom.current && scroll.current) {
+        scroll.current.scrollTop = scroll.current.scrollHeight;
+        previousTop.current = scroll.current.scrollTop;
+      }
     });
   }, []);
   const latest = useRef(chat);
@@ -58,7 +63,9 @@ export function Chat({
     const observer = new ResizeObserver(follow);
     if (element) {
       element.scrollTop = chat?.scroll ?? element.scrollHeight;
+      previousTop.current = element.scrollTop;
       observer.observe(element);
+      if (messages.current) observer.observe(messages.current);
       nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
     }
     return () => {
@@ -136,10 +143,14 @@ export function Chat({
         ref={scroll}
         onScroll={(event) => {
           const element = event.currentTarget;
-          nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+          const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+          // Content growth can emit a scroll event before the next follow frame.
+          // Only an upward move leaves follow mode; returning to the bottom restores it.
+          if (atBottom || element.scrollTop < previousTop.current) nearBottom.current = atBottom;
+          previousTop.current = element.scrollTop;
         }}
       >
-        <div className="messages">
+        <div className="messages" ref={messages}>
           {chat.nextCursor && (
             <button className="subtle load-history" disabled={!!chat.edit} onClick={onHistory}>
               Load earlier messages

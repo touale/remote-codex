@@ -53,6 +53,8 @@ pub(crate) const COMMANDS: &[&str] = &[
     "acknowledge",
     "authentication_answer",
     "cancel_operation",
+    "editor_window_ready",
+    "editor_window_cancel",
     "new_window",
     "close_window",
     "external_link",

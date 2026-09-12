@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, Circle, MessageSquare } from 'lucide-react';
 import type { CachedSession, Workspace } from '../bridge/types';
+import { LastActive } from '../chat/LastActive';
 import { Menu, type MenuItem } from '../ui/controls';
 import { FolderIcon } from '../ui/FolderIcon';
 import { RowMenu } from '../ui/RowMenu';
@@ -146,6 +147,7 @@ function SessionRow({
               <MessageSquare size={13} />
             )}
             <span>{session.title || 'New conversation'}</span>
+            <LastActive timestamp={session.updated_at} />
           </button>
           <Menu items={items} />
         </div>

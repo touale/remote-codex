@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-editor-window-cancel"
+description = "Enables the editor_window_cancel command without any pre-configured scope."
+commands.allow = ["editor_window_cancel"]
+
+[[permission]]
+identifier = "deny-editor-window-cancel"
+description = "Denies the editor_window_cancel command without any pre-configured scope."
+commands.deny = ["editor_window_cancel"]

@@ -20,6 +20,9 @@ export async function contextAt(selector: string, bubbles = true) {
   const cancelled = await browser.execute(
     (selector, bubbles) => {
       const target = document.querySelector(selector)!;
+      // Scroll and sample coordinates in one browser task: asynchronous directory
+      // expansion can otherwise move the row between WebDriver calls.
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const bounds = target.getBoundingClientRect();
       const event = new MouseEvent('contextmenu', {
         bubbles,
@@ -37,12 +40,14 @@ export async function contextAt(selector: string, bubbles = true) {
   );
   expect(cancelled).toBe(true);
   await $('[role="menu"]').waitForDisplayed();
-  expect(
-    await browser.execute(() => {
-      const bounds = document.querySelector('[role="menu"]')!.getBoundingClientRect();
-      return bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight;
-    }),
-  ).toBe(true);
+  await browser.waitUntil(
+    () =>
+      browser.execute(() => {
+        const bounds = document.querySelector('[role="menu"]')!.getBoundingClientRect();
+        return bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight;
+      }),
+    { timeoutMsg: 'Context menu must settle inside the viewport' },
+  );
 }
 
 // These are WebKit DOM-boundary checks; physical mouse/trackpad acceptance is separate.

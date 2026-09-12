@@ -5,6 +5,7 @@ import type { ToolItem } from '../bridge/types';
 import type { FileChange } from '../files/useFiles';
 import { MarkdownBody } from './MarkdownBody';
 import './ToolMessage.css';
+import { RowMenu } from '../ui/RowMenu';
 
 const kinds = {
   commandExecution: { icon: Terminal, title: 'Command' },
@@ -31,7 +32,7 @@ export const ToolMessage = memo(function ToolMessage({
   report,
 }: {
   tool: ToolItem;
-  onDiff: (change: FileChange) => void;
+  onDiff: (change: FileChange, newWindow?: boolean) => void;
   report: (error: unknown) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -105,10 +106,18 @@ export const ToolMessage = memo(function ToolMessage({
               </section>
             ))}
           {tool.changes.map((change) => (
-            <button key={change.path} className="diff-link" onClick={() => onDiff(change)}>
-              <FileDiff size={14} />
-              {change.path}
-            </button>
+            <RowMenu
+              key={change.path}
+              items={[
+                { label: 'View changes', action: () => onDiff(change) },
+                { label: 'Open in New Window', action: () => onDiff(change, true) },
+              ]}
+            >
+              <button className="diff-link" onClick={() => onDiff(change)}>
+                <FileDiff size={14} />
+                {change.path}
+              </button>
+            </RowMenu>
           ))}
         </div>
       )}

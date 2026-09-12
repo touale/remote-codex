@@ -18,8 +18,14 @@ export async function messageEditing(invoke: Invoke, id: string) {
   await expect($('.question-result')).toHaveText(expect.stringContaining('Implementation'));
   for (const message of await $$('.message.user'))
     await expect(message).not.toHaveText(expect.stringContaining('Which scope?'));
+  await browser.execute(() => {
+    document.documentElement.dataset.reloadProbe = 'pending';
+  });
   await browser.refresh();
+  await browser.waitUntil(() => browser.execute(() => !document.documentElement.dataset.reloadProbe));
+  await $('button=Settings').waitForDisplayed();
   await $(`[data-session-id="${id}"] .tree-label`).click();
+  await $('textarea[aria-label="Message Codex"]').waitForDisplayed({ timeout: 60000 });
   await expect($('.question-result')).toHaveText(expect.stringContaining('Implementation'));
   for (const message of await $$('.message.user'))
     await expect(message).not.toHaveText(expect.stringContaining('Which scope?'));

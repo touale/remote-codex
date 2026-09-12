@@ -11,3 +11,5 @@ pub(crate) mod terminals;
 pub(crate) mod transfer_selection;
 pub(crate) mod transfers;
 pub(crate) mod window;
+
+pub(crate) mod editor_windows;

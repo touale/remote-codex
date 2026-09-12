@@ -128,6 +128,8 @@ export interface Commands {
   authentication_answer: Command<Id & { answer: string | null }>;
   cancel_operation: Command<Id>;
   new_window: Command<{ target: WindowTarget | null }, string>;
+  editor_window_ready: Command<{ error: string | null }>;
+  editor_window_cancel: Command<{ transfer: string }, boolean>;
   close_window: Command<{ cancel: boolean }>;
   external_link: Command<{ url: string }>;
 }

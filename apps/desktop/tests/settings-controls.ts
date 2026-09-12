@@ -118,6 +118,7 @@ export async function startupWithoutConnection(
     }, 50);
     return true;
   }, withExecuteOptions({ windowLabel }));
+  await browser.waitUntil(async () => !(await browser.getWindowHandles()).includes(label));
   windowLabel = 'main';
   await browser.switchToWindow(main);
 }

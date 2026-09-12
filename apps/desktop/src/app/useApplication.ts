@@ -36,6 +36,7 @@ export function useApplication() {
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const closeHandler = useRef<() => void>(() => {});
   const loaded = useRef(false);
+  const contentWindow = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const pendingRefresh = useRef<Promise<void> | null>(null);
   const invalidated = useRef(false);
@@ -63,7 +64,7 @@ export function useApplication() {
   useEffect(() => {
     const stop = listen((event) => {
       if (event.kind === 'app_preferences_changed') acceptPreferences(event.preferences);
-      if (event.kind === 'catalog_changed') void refresh(true).catch(report);
+      if (event.kind === 'catalog_changed' && !contentWindow.current) void refresh(true).catch(report);
       if (event.kind === 'operation_finished')
         setProgress((previous) => {
           const next = { ...previous };
@@ -80,10 +81,11 @@ export function useApplication() {
     });
     void attach()
       .then(async (requestedTarget) => {
+        contentWindow.current = requestedTarget?.kind === 'file' || requestedTarget?.kind === 'diff';
         acceptPreferences(await call('app_preferences', { patch: null }));
         const preferences = await call('preferences', { value: null });
         setPreferences(preferences);
-        await refresh();
+        if (!contentWindow.current) await refresh();
         loaded.current = true;
         setStartupTarget(requestedTarget);
         setReady(true);
@@ -113,15 +115,6 @@ export function useApplication() {
       setPreferences((previous) => ({ ...previous, ...(typeof value === 'function' ? value(previous) : value) })),
     [],
   );
-  const finishOperation = useCallback(
-    (id: string) =>
-      setProgress((previous) => {
-        const next = { ...previous };
-        delete next[id];
-        return next;
-      }),
-    [],
-  );
   const answer = (id: string, answer: string | null) => {
     setPrompts((previous) => previous.filter((prompt) => prompt.id !== id));
     void call('authentication_answer', { id, answer }).catch(report);
@@ -141,7 +134,6 @@ export function useApplication() {
     prompts,
     answer,
     progress,
-    finishOperation,
     closeHandler,
   };
 }

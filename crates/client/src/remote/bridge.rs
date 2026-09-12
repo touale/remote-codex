@@ -130,7 +130,6 @@ impl Bridge {
             }),
         )
         .await;
-        self.task.abort();
     }
 
     pub(crate) fn close(&self) {
@@ -153,7 +152,6 @@ impl Bridge {
 
 impl Drop for Bridge {
     fn drop(&mut self) {
-        let _ = self.stop.send(true);
-        self.task.abort();
+        self.close();
     }
 }

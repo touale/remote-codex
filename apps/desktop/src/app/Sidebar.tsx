@@ -4,6 +4,7 @@ import { call } from '../bridge/client';
 import type { Server, Workspace } from '../bridge/types';
 import type { useChats } from '../chat/useChats';
 import { FileTree } from '../files/FileTree';
+import { fileKey } from '../files/tabs';
 import type { useFileActions } from '../files/useFileActions';
 import type { useFiles } from '../files/useFiles';
 import { ConnectionTree } from '../navigation/ConnectionTree';
@@ -53,7 +54,7 @@ export function Sidebar({
   fileActions: Pick<ReturnType<typeof useFileActions>, 'create' | 'change' | 'move'>;
   resources: Pick<ReturnType<typeof useResourceActions>, 'removeWorkspace' | 'removeServer'>;
   chats: Pick<ReturnType<typeof useChats>, 'chats' | 'metadata'>;
-  files: Pick<ReturnType<typeof useFiles>, 'open'>;
+  files: Pick<ReturnType<typeof useFiles>, 'open' | 'moveWindow'>;
   fileRevision: number;
   transfers: TransferActions;
   onSettings: () => void;
@@ -159,6 +160,16 @@ export function Sidebar({
                   run(files.open(nav.fileContext.id, path, nav.fileContext.server, nav.fileContext.path));
                   app.changePreferences({ editor_visible: true });
                 }
+              }}
+              onWindow={(path) => {
+                const context = nav.fileContext;
+                if (!context) return;
+                app.changePreferences({ editor_visible: true });
+                run(
+                  files
+                    .open(context.id, path, context.server, context.path)
+                    .then(() => files.moveWindow(fileKey(context.server, context.path, path))),
+                );
               }}
               onCreate={(directory, parent) =>
                 fileActions.create(directory, parent).catch((error) => {

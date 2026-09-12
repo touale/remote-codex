@@ -3,7 +3,9 @@ import type { WorkspaceTarget } from '../bridge/files';
 import type { CachedSession, Catalog, Server, Workspace } from '../bridge/types';
 import type { ChatSummary } from '../chat/store';
 
-import { fullTime } from '../chat/time';
+import { compareActivity } from '../chat/activity';
+import { mergeSessions } from '../chat/catalog';
+import { LastActive } from '../chat/LastActive';
 import styles from './SessionHome.module.css';
 
 export function SessionHome({
@@ -29,18 +31,14 @@ export function SessionHome({
   onAddServer: () => void;
   onOpen: (session: CachedSession) => void;
 }) {
-  const sessions = new Map(catalog.sessions.map((item) => [item.session.id, item]));
-  for (const chat of Object.values(chats))
-    if (!chat.closed || !sessions.has(chat.session.id))
-      sessions.set(chat.session.id, { server_id: '', server: chat.server, session: chat.session });
-  const recent = [...sessions.values()]
+  const recent = mergeSessions(catalog.sessions, chats)
     .filter(
       (item) =>
         !item.session.archived &&
         (!server || item.server === server.name) &&
         (!target || (item.server === target.server && item.session.cwd === target.path)),
     )
-    .sort((a, b) => b.session.updated_at - a.session.updated_at)
+    .sort((a, b) => compareActivity(a.session, b.session))
     .slice(0, 6);
   const noServers = !catalog.servers.length;
   const workspaces = server ? catalog.workspaces.filter((w) => w.server_id === server.id) : catalog.workspaces;
@@ -104,12 +102,7 @@ export function SessionHome({
                     {item.server} · {item.session.cwd}
                   </small>
                 </span>
-                <time
-                  title={fullTime(item.session.updated_at)}
-                  dateTime={new Date(item.session.updated_at * 1000).toISOString()}
-                >
-                  {new Date(item.session.updated_at * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                </time>
+                <LastActive timestamp={item.session.updated_at} />
                 <ArrowUpRight size={14} />
               </button>
             ))}

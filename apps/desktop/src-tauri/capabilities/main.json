@@ -64,6 +64,8 @@
     "allow-transfer-run",
     "allow-transfer-action",
     "allow-transfer-skipped",
-    "allow-transfer-reveal"
+    "allow-transfer-reveal",
+    "allow-editor-window-ready",
+    "allow-editor-window-cancel"
   ]
 }

@@ -28,9 +28,45 @@ import { useApplication } from './useApplication';
 import { useNavigation } from './useNavigation';
 import { useResourceActions } from './useResourceActions';
 import { useWindowActions } from './useWindowActions';
+import { ContentWindow } from './ContentWindow';
+import { EditorSkeleton } from '../files/FileLoading';
 
 export default function App() {
   const app = useApplication();
+  if (!app.ready)
+    return (
+      <main className={styles.app}>
+        <header className={styles.titlebar} data-tauri-drag-region />
+        <EditorSkeleton />
+        {app.error && <p role="alert">{app.error}</p>}
+      </main>
+    );
+  const target = app.startupTarget;
+  if (target?.kind === 'file' || target?.kind === 'diff') return <ContentWindow app={app} target={target} />;
+  return <WorkspaceApp app={app} />;
+}
+function WorkspaceApp({
+  app,
+}: {
+  app: Pick<
+    ReturnType<typeof useApplication>,
+    | 'ready'
+    | 'startupTarget'
+    | 'error'
+    | 'setError'
+    | 'report'
+    | 'catalog'
+    | 'refresh'
+    | 'refreshing'
+    | 'preferences'
+    | 'changePreferences'
+    | 'dark'
+    | 'prompts'
+    | 'answer'
+    | 'progress'
+    | 'closeHandler'
+  >;
+}) {
   const dialog = useDialog();
   const chats = useChats(app.report, dialog.ask);
   const files = useFiles();
@@ -42,7 +78,6 @@ export default function App() {
   const terminals = useTerminals({
     visible: app.preferences.terminal_visible,
     onVisibility: (terminal_visible) => app.changePreferences({ terminal_visible }),
-    finishOperation: app.finishOperation,
   });
   const [picker, setPicker] = useState<'session' | 'terminal' | null>(null);
   const [fileRevision, setFileRevision] = useState(0);
@@ -176,7 +211,11 @@ export default function App() {
                     onResume={() => {
                       if (selected) run(nav.openSession(selected.server, selected.session.id, selected.session.cwd));
                     }}
-                    onDiff={(change) => {
+                    onDiff={(change, separate) => {
+                      if (separate && conversationTarget) {
+                        run(files.openDiffWindow(conversationTarget, change));
+                        return;
+                      }
                       files.setDiff({ ...change, workspace: nav.workspace?.id });
                       app.changePreferences({ editor_visible: true });
                     }}

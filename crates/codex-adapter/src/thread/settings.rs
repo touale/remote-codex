@@ -101,7 +101,11 @@ pub(crate) fn prepare_thread(
 
 /// Persist native preferences only in the local Codex user configuration.
 /// Validate the complete batch before forwarding any write to native Codex.
-pub(crate) fn prepare_config(method: &str, params: &mut Value, home: &Path) -> Result<(), Fault> {
+pub(crate) fn prepare_config(
+    method: &str,
+    params: &mut Value,
+    binding: &SessionBinding,
+) -> Result<(), Fault> {
     let batch = method == "config/batchWrite";
     known_fields(
         params,
@@ -117,7 +121,7 @@ pub(crate) fn prepare_config(method: &str, params: &mut Value, home: &Path) -> R
             ]
         },
     )?;
-    let target = home.join("config.toml");
+    let target = Path::new(&binding.codex_home).join("config.toml");
     if let Some(path) = params.get("filePath").filter(|value| !value.is_null()) {
         let path = path.as_str().ok_or_else(invalid)?;
         if Path::new(path) != target
@@ -148,10 +152,10 @@ pub(crate) fn prepare_config(method: &str, params: &mut Value, home: &Path) -> R
         }
         for edit in edits {
             known_fields(edit, &["keyPath", "value", "mergeStrategy"])?;
-            validate_edit(edit)?;
+            validate_edit(edit, &binding.session.cwd)?;
         }
     } else {
-        validate_edit(params)?;
+        validate_edit(params, &binding.session.cwd)?;
     }
     params["filePath"] = json!(target.to_str().ok_or_else(invalid)?);
     if batch {
@@ -162,12 +166,15 @@ pub(crate) fn prepare_config(method: &str, params: &mut Value, home: &Path) -> R
     Ok(())
 }
 
-fn validate_edit(edit: &Value) -> Result<(), Fault> {
+fn validate_edit(edit: &Value, cwd: &str) -> Result<(), Fault> {
     let key = edit["keyPath"].as_str().ok_or_else(invalid)?;
-    if !preference_key(key) {
+    // Match the complete quoted path, never a projects.* prefix: a bound TUI
+    // can record the user's trust choice only for its own remote workspace.
+    let project_trust = key == format!("projects.{}.trust_level", json!(cwd));
+    if !preference_key(key) && !project_trust {
         return Err(Fault::new(
             "UNSUPPORTED_CONFIG_SETTING",
-            "this workspace can save native model and reviewer preferences; the execution ceiling is managed by remote-codex config -n NAME",
+            "this workspace can save native model and reviewer preferences and its own project trust; the execution ceiling is managed by remote-codex config -n NAME",
         ));
     }
     if !matches!(edit["mergeStrategy"].as_str(), Some("replace" | "upsert"))
@@ -175,6 +182,9 @@ fn validate_edit(edit: &Value) -> Result<(), Fault> {
             .get("value")
             .is_none_or(|value| !value.is_null() && !value.is_string())
     {
+        return Err(invalid());
+    }
+    if project_trust && !matches!(edit["value"].as_str(), Some("trusted" | "untrusted")) {
         return Err(invalid());
     }
     if key.rsplit('.').next() == Some("approvals_reviewer") {

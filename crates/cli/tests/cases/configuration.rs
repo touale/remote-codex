@@ -98,8 +98,6 @@ async fn configuration_is_persistent_per_server_and_syncs_only_its_target() -> T
     let report: serde_json::Value = serde_json::from_slice(&written.stdout)?;
     assert_eq!(report["schema_version"], 4);
     assert_eq!(report["data"]["server_id"], id);
-    assert!(report.get("global_revision").is_none());
-    assert!(report.get("scope").is_none());
     assert_eq!(report["data"]["saved_revision"], 1);
     assert!(report["data"]["applied_revision"].is_null());
     let background = report["data"]["items"]

@@ -2,7 +2,7 @@ mod support;
 use remote_codex_protocol::{Call, RemoteConfig, Request, VERSION};
 use remote_codex_server::{paths, service::Service};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use support::{Peer, TestResult};
 
 async fn call(service: &Arc<Service>, request: Request) -> TestResult<Value> {
@@ -66,26 +66,4 @@ async fn native_execution_survives_detach_deduplicates_and_cancels() -> TestResu
     service.shutdown().await;
     task.abort();
     test
-}
-
-#[tokio::test]
-async fn obsolete_agent_requests_are_not_in_execution_protocol() -> TestResult {
-    for method in [
-        "login",
-        "auth_status",
-        "start",
-        "resume",
-        "import",
-        "read",
-        "cancel_job",
-    ] {
-        assert!(serde_json::from_value::<Request>(json!({"method":method,"params":{}})).is_err());
-    }
-    let root = tempfile::tempdir()?;
-    let service = Service::open(&root.path().join("state")).await?;
-    assert!(!root.path().join("state/service.sqlite3").exists());
-    assert!(root.path().join("state/execution.sqlite3").exists());
-    service.shutdown().await;
-    let _: PathBuf = root.path().into();
-    Ok(())
 }

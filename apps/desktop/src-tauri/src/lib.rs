@@ -94,11 +94,16 @@ pub fn run() {
             commands::window::acknowledge,
             commands::window::authentication_answer,
             commands::window::cancel_operation,
+            commands::editor_windows::editor_window_ready,
+            commands::editor_windows::editor_window_cancel,
             commands::window::new_window,
             commands::window::close_window,
             commands::window::external_link
         ])
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                commands::window::destroyed(window.app_handle(), window.label());
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
                 && let Some(webview) = window.app_handle().get_webview_window(window.label())
                 && commands::window::request_close(&webview)

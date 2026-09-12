@@ -1,8 +1,10 @@
 import { $, browser, expect } from '@wdio/globals';
 import { edgeScrollbar } from './scroll-controls';
+import { diffContentWindow } from './content-windows';
+import { moveDiffView } from './diff-window-transfer';
 
 export async function toolRecords(setTheme: (theme: 'light' | 'dark') => Promise<unknown>) {
-  await browser.setWindowSize(1000, 800);
+  await browser.setWindowSize(1440, 900);
   await $('button=Fixture tools').click();
   const row = (id: string) => $(`[data-tool-id="${id}"]`);
   await expect(row('empty').$('.tool-title')).toHaveText('Reasoning summary');
@@ -34,7 +36,9 @@ export async function toolRecords(setTheme: (theme: 'light' | 'dark') => Promise
   await command.click();
   await row('patch').$('.tool-heading').click();
   await row('patch').$('.diff-link').click();
-  await expect($('[aria-label="Opened diff"]')).toHaveText(expect.stringContaining('src/main.rs'));
+  await expect($('.editor-pane .diff-heading')).toHaveText(expect.stringContaining('main.rs'));
+  await diffContentWindow(setTheme);
+  await moveDiffView();
   await row('patch').$('.tool-heading').click();
   await row('search').$('.tool-heading').click();
   // Observe the existing external-link IPC boundary without launching a browser.

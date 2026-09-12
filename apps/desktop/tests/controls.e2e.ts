@@ -5,6 +5,8 @@ import path from 'node:path';
 import { invokeWindow } from './invoke';
 import { edgeScrollbar, holdScrollbar, openSelect, pointerAt } from './scroll-controls';
 import { toolRecords } from './tool-records';
+import { activityTimes } from './activity';
+import { treeMenuHighlight } from './tree-menu';
 
 describe('Shared controls in native WebKit', () => {
   let main: string;
@@ -163,5 +165,11 @@ describe('Shared controls in native WebKit', () => {
   });
   it('expands tool records with actual details and keeps them open during updates', async () => {
     await toolRecords((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
+  });
+  it('shows compact activity times without clipping them in narrow session rows', async () => {
+    await activityTimes((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
+  });
+  it('keeps the menu target highlighted without changing the selected session', async () => {
+    await treeMenuHighlight((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });
 });

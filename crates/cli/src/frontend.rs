@@ -72,12 +72,12 @@ async fn attach(
           },
         }
     };
-    gateway.finish().await?;
     if !status.success() {
         return Err(ClientError::CodexExit(
             u8::try_from(status.code().unwrap_or(1)).unwrap_or(1),
         ));
     }
+    gateway.finish().await?;
     Ok(())
 }
 

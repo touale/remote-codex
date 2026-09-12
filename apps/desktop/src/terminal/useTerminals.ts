@@ -9,11 +9,9 @@ type TerminalContext = CurrentWorkspace | { server: string };
 export function useTerminals({
   visible,
   onVisibility,
-  finishOperation,
 }: {
   visible: boolean;
   onVisibility: (visible: boolean) => void;
-  finishOperation: (id: string) => void;
 }) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [selected, setSelected] = useState<Record<string, string>>({});
@@ -52,7 +50,6 @@ export function useTerminals({
         setTabs(current.current);
         setSelected((previous) => ({ ...previous, [workspace.server]: result.id }));
       } finally {
-        finishOperation(operation);
         pending.current.delete(workspace.server);
       }
     })();

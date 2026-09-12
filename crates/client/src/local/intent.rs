@@ -15,7 +15,6 @@ pub(super) struct Intent {
     pub interrupted: Option<String>,
     pub episode: Option<String>,
     pub settings: Value,
-    pub evidence: Value,
     cancelled: Option<String>,
 }
 
@@ -109,7 +108,7 @@ impl Intent {
         self.cancelled.as_deref() == Some(turn)
     }
 
-    pub(super) fn continuation(&mut self, rebuilt: bool) -> Option<(String, String, Value)> {
+    pub(super) fn continuation(&mut self, rebuilt: bool) -> Option<(String, String)> {
         if !rebuilt && self.active.is_some() {
             return None;
         }
@@ -119,7 +118,7 @@ impl Intent {
             self.active = None;
         }
         match (episode, interrupted) {
-            (Some(episode), Some(turn)) => Some((episode, turn, self.evidence.clone())),
+            (Some(episode), Some(turn)) => Some((episode, turn)),
             _ => None,
         }
     }

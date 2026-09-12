@@ -56,7 +56,7 @@ export function RowMenu({
   return (
     <Menu.Root open={open} onOpenChange={setOpen}>
       <Menu.Anchor virtualRef={anchor} />
-      <div ref={trigger} className={className} data-context-menu="">
+      <div ref={trigger} className={className} data-context-menu="" data-context-menu-open={open || undefined}>
         {children}
       </div>
       <Menu.Portal>

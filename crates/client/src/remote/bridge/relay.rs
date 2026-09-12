@@ -44,7 +44,7 @@ pub(super) async fn run(
                     let operation = approval.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                     let frame = Frame::Execute {operation:operation.clone(), message, approval, permissions};
                     outbox.insert(operation, frame.clone());
-                    write(&mut backend, &frame).await.is_err()
+                    codec::write(&mut backend.writer, &frame).await.is_err()
                 }
                 Some(Ok(Message::Ping(_))) => { frontend.flush().await.map_err(|_| ClientError::RemoteResponse)?; false }
                 Some(Ok(Message::Pong(_))) => false,
@@ -62,14 +62,14 @@ pub(super) async fn run(
                         }
                         cursor = next;
                     }
-                    write(&mut backend, &Frame::Ack {cursor}).await.is_err()
+                    codec::write(&mut backend.writer, &Frame::Ack {cursor}).await.is_err()
                 }
                 Ok(Some(Frame::Heartbeat)) => { heard = tokio::time::Instant::now(); false },
                 Ok(Some(Frame::Error(fault))) => return Err(fault.into()),
                 Ok(None) | Err(_) => true,
                 _ => return Err(ClientError::RemoteResponse),
             },
-            _ = heartbeat.tick() => !remote.ssh.healthy() || heard.elapsed() > Duration::from_secs(20) || write(&mut backend, &Frame::Heartbeat).await.is_err(),
+            _ = heartbeat.tick() => !remote.ssh.healthy() || heard.elapsed() > Duration::from_secs(20) || codec::write(&mut backend.writer, &Frame::Heartbeat).await.is_err(),
         };
         if reconnect {
             let mut attempt = 1;
@@ -81,7 +81,7 @@ pub(super) async fn run(
                 backend = restored?;
                 let mut delivered = true;
                 for frame in outbox.values() {
-                    if write(&mut backend, frame).await.is_err() {
+                    if codec::write(&mut backend.writer, frame).await.is_err() {
                         delivered = false;
                         break;
                     }
@@ -95,17 +95,8 @@ pub(super) async fn run(
             }
         }
     }
-    let _ = write(&mut backend, &Frame::Detach).await;
+    let _ = codec::write(&mut backend.writer, &Frame::Detach).await;
     Ok(())
-}
-
-async fn write(channel: &mut Channel, frame: &Frame) -> std::io::Result<()> {
-    tokio::time::timeout(
-        Duration::from_secs(10),
-        codec::write(&mut channel.writer, frame),
-    )
-    .await
-    .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "execution write timed out"))?
 }
 
 fn forwards_account_credentials(message: &Value) -> bool {

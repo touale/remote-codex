@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-editor-window-ready"
+description = "Enables the editor_window_ready command without any pre-configured scope."
+commands.allow = ["editor_window_ready"]
+
+[[permission]]
+identifier = "deny-editor-window-ready"
+description = "Denies the editor_window_ready command without any pre-configured scope."
+commands.deny = ["editor_window_ready"]

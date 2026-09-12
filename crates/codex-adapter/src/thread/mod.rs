@@ -116,6 +116,7 @@ impl Codex {
                 }
             }
             params["threadId"] = json!(id);
+            params["excludeTurns"] = json!(true);
             self.engine.call("thread/resume", params).await?
         } else {
             self.engine.call("thread/start", params).await?

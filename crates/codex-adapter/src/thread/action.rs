@@ -13,7 +13,6 @@ pub enum Action {
     },
     Settings(SessionSettings),
     Interrupt(String),
-    Goal(remote_codex_core::goals::GoalAction),
 }
 
 impl Thread {
@@ -61,10 +60,6 @@ impl Thread {
                     "thread/settings/update",
                     crate::events::settings(thread, settings),
                 )
-            }
-            Action::Goal(action) => {
-                let (method, params) = crate::goals::params(thread, action)?;
-                return self.prepare(method, params, persisted, skills);
             }
             Action::Interrupt(turn) => ("turn/interrupt", crate::events::interrupt(thread, &turn)),
         };

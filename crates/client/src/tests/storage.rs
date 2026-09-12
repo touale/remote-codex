@@ -115,10 +115,8 @@ async fn server_changes_and_unset_do_not_affect_other_servers() -> TestResult {
             .get(&ConfigKey::Background),
         Some(&ConfigValue::Boolean(true))
     );
-    let report = serde_json::to_value(store.config_report(&one, false).await?)?;
-    assert_eq!(report["server_id"], one);
-    assert!(report.get("global_revision").is_none());
-    assert!(report.get("server").is_none());
+    let report = store.config_report(&one, false).await?;
+    assert_eq!(report.server_id, one);
     let overrides = store.config_report(&one, true).await?;
     assert_eq!(overrides.items.len(), 2);
     assert!(
@@ -162,6 +160,63 @@ async fn invalid_change_rolls_back_only_the_target_server() -> TestResult {
             .effective
             .get(&ConfigKey::parse("env.https_proxy")?)
             .is_some()
+    );
+    store.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn batch_config_is_atomic_and_equal_updates_keep_the_revision() -> TestResult {
+    let root = tempfile::tempdir()?;
+    let store = LocalStore::open(&root.path().join("state")).await?;
+    let server = store
+        .save_connection(&SshEndpoint::parse("example.invalid", None)?, Some("dev"))
+        .await?
+        .id;
+    let before = store.config_snapshot(&server).await?;
+    let changes = vec![
+        ("background".into(), "false".into()),
+        ("disconnect_grace_seconds".into(), "10".into()),
+    ];
+    let mut invalid = changes.clone();
+    invalid.push(("proxy.mode".into(), "custom".into()));
+    assert!(
+        store
+            .set_many_config(&server, &invalid, before.revision)
+            .await
+            .is_err()
+    );
+    let unchanged = store.config_snapshot(&server).await?;
+    assert_eq!(unchanged.revision, before.revision);
+    assert_eq!(unchanged.layer, before.layer);
+    let revision = store
+        .set_many_config(&server, &changes, before.revision)
+        .await?;
+    assert_eq!(revision.saved, before.revision.saved + 1);
+    let saved = store.config_snapshot(&server).await?;
+    assert_eq!(
+        saved.effective.get(&ConfigKey::Background),
+        Some(&ConfigValue::Boolean(false))
+    );
+    assert_eq!(
+        saved.effective.get(&ConfigKey::DisconnectGraceSeconds),
+        Some(&ConfigValue::Integer(10))
+    );
+    assert_eq!(
+        store.set_many_config(&server, &changes, revision).await?,
+        revision
+    );
+    assert_eq!(
+        store
+            .set_config(&server, "background", ConfigInput::Plain("false"), revision)
+            .await?,
+        revision
+    );
+    assert_eq!(
+        store
+            .unset_config(&server, "env.no_proxy", revision)
+            .await?,
+        revision
     );
     store.close().await;
     Ok(())

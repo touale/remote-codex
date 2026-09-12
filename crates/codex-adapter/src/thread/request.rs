@@ -96,7 +96,7 @@ impl Thread {
                 OperationKind::Settings(permission_intent(&params))
             }
             "config/batchWrite" | "config/value/write" => {
-                settings::prepare_config(method, &mut params, Path::new(&self.binding.codex_home))?;
+                settings::prepare_config(method, &mut params, &self.binding)?;
                 OperationKind::Read
             }
             "turn/start" => {
@@ -112,8 +112,22 @@ impl Thread {
                 }
                 OperationKind::Steer
             }
-            "thread/resume"
-            | "thread/read"
+            "thread/resume" => {
+                // Native resume requires a rollout. An unsent draft has only its
+                // thread/start response and no history or running turn to restore.
+                if !persisted {
+                    return Ok(Prepared::Immediate(self.bootstrap.clone()));
+                }
+                // The frontend may page history, but cannot replace the bound workspace
+                // or override the live thread's settings while attaching.
+                let page = params.get("initialTurnsPage").cloned();
+                params = json!({"threadId":self.binding.session.id,"excludeTurns":true});
+                if let Some(page) = page {
+                    params["initialTurnsPage"] = page;
+                }
+                OperationKind::Read
+            }
+            "thread/read"
             | "thread/turns/list"
             | "thread/items/list"
             | "thread/goal/get"
@@ -169,19 +183,6 @@ impl Thread {
     }
 
     pub async fn execute(&self, operation: Operation) -> Result<Value, Fault> {
-        if operation.method == "thread/resume" {
-            let current = self
-                .codex
-                .engine
-                .call(
-                    "thread/read",
-                    json!({"threadId":self.binding.session.id,"includeTurns":false}),
-                )
-                .await?;
-            let mut response = self.bootstrap.clone();
-            response["thread"] = current["thread"].clone();
-            return Ok(response);
-        }
         self.codex
             .engine
             .call(&operation.method, operation.params)

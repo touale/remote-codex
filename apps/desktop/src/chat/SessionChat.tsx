@@ -20,7 +20,7 @@ export function SessionChat({
   >;
   onResume: () => void;
   onFreshPlan: (chat: ChatState, plan: Message) => Promise<void>;
-  onDiff: (change: FileChange) => void;
+  onDiff: (change: FileChange, newWindow?: boolean) => void;
   report: (error: unknown) => void;
 }) {
   const { store, update, action, loadHistory, revert, reloadEdit } = controller;

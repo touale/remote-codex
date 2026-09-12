@@ -1,4 +1,4 @@
-//! Application boundary shared by the CLI and future desktop clients.
+//! Application boundary shared by the CLI and desktop clients.
 mod authentication;
 mod config;
 mod directory;

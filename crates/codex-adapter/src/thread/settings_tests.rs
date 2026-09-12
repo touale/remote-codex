@@ -94,7 +94,7 @@ fn defaults_target_local_codex_and_preserve_optimistic_version() -> TestResult {
         {"keyPath":"profiles.work.service_tier", "value":null, "mergeStrategy":"upsert"}
     ], "expectedVersion":"original-version", "filePath":null, "reloadUserConfig":true});
     let edits = params["edits"].clone();
-    prepare_config("config/batchWrite", &mut params, Path::new("/local/.codex"))?;
+    prepare_config("config/batchWrite", &mut params, &binding()?)?;
     assert_eq!(params["edits"], edits);
     assert_eq!(params["filePath"], "/local/.codex/config.toml");
     assert_eq!(params["expectedVersion"], "original-version");
@@ -103,7 +103,7 @@ fn defaults_target_local_codex_and_preserve_optimistic_version() -> TestResult {
 }
 
 #[test]
-fn config_batches_reject_unsafe_edits_before_any_forwarding() {
+fn config_batches_reject_unsafe_edits_before_any_forwarding() -> TestResult {
     for key in [
         "sandbox_mode",
         "mcp_servers.local.command",
@@ -118,22 +118,19 @@ fn config_batches_reject_unsafe_edits_before_any_forwarding() {
         ]});
         let before = params.clone();
         assert!(
-            prepare_config("config/batchWrite", &mut params, Path::new("/local/.codex")).is_err(),
+            prepare_config("config/batchWrite", &mut params, &binding()?).is_err(),
             "{key}"
         );
         assert_eq!(params, before);
     }
+    Ok(())
 }
 
 #[test]
 fn single_writes_validate_file_and_value_type() -> TestResult {
     let valid = json!({"keyPath":"model", "value":"gpt-6-astra", "mergeStrategy":"replace"});
     let mut params = valid.clone();
-    prepare_config(
-        "config/value/write",
-        &mut params,
-        Path::new("/local/.codex"),
-    )?;
+    prepare_config("config/value/write", &mut params, &binding()?)?;
     for (key, value) in [
         ("filePath", json!("/remote/project/.codex/config.toml")),
         ("value", json!({"sandbox_mode":"danger-full-access"})),
@@ -142,14 +139,7 @@ fn single_writes_validate_file_and_value_type() -> TestResult {
     ] {
         let mut params = valid.clone();
         params[key] = value;
-        assert!(
-            prepare_config(
-                "config/value/write",
-                &mut params,
-                Path::new("/local/.codex")
-            )
-            .is_err()
-        );
+        assert!(prepare_config("config/value/write", &mut params, &binding()?).is_err());
     }
     Ok(())
 }
@@ -210,18 +200,84 @@ fn sandboxed_ceiling_rejects_extra_roots_network_and_external_sandbox() -> TestR
 fn reviewer_preferences_can_be_saved_and_invalid_reviewers_are_rejected() -> TestResult {
     for reviewer in [json!("user"), json!("auto_review"), Value::Null] {
         let mut params = json!({"edits":[{"keyPath":"approvals_reviewer", "value":reviewer, "mergeStrategy":"replace"}], "reloadUserConfig":true});
-        prepare_config("config/batchWrite", &mut params, Path::new("/local/.codex"))?;
+        prepare_config("config/batchWrite", &mut params, &binding()?)?;
         assert_eq!(params["reloadUserConfig"], false);
     }
     let mut params =
         json!({"keyPath":"approvals_reviewer", "value":"anyone", "mergeStrategy":"replace"});
-    assert!(
-        prepare_config(
-            "config/value/write",
-            &mut params,
-            Path::new("/local/.codex")
-        )
-        .is_err()
+    assert!(prepare_config("config/value/write", &mut params, &binding()?).is_err());
+    Ok(())
+}
+
+#[test]
+fn project_trust_is_limited_to_the_bound_workspace_and_valid_choices() -> TestResult {
+    let mut bound = binding()?;
+    bound.session.cwd = r#"/remote/a.b/"quoted"\name"#.into();
+    let key = r#"projects."/remote/a.b/\"quoted\"\\name".trust_level"#;
+    for value in [json!("trusted"), json!("untrusted")] {
+        let mut params = json!({"keyPath":key,"value":value,"mergeStrategy":"upsert"});
+        prepare_config("config/value/write", &mut params, &bound)?;
+        assert_eq!(params["keyPath"], key);
+        assert_eq!(params["filePath"], "/local/.codex/config.toml");
+    }
+    for (key, value) in [
+        (key, Value::Null),
+        (key, json!("anything")),
+        (key, json!({"trust_level":"trusted"})),
+        (r#"projects."/remote/other".trust_level"#, json!("trusted")),
+        (r#"projects."/remote".trust_level"#, json!("trusted")),
+        (
+            "projects",
+            json!({"/remote/other":{"trust_level":"trusted"}}),
+        ),
+    ] {
+        let mut params = json!({"edits":[
+            {"keyPath":"model","value":"gpt-6-astra","mergeStrategy":"replace"},
+            {"keyPath":key,"value":value,"mergeStrategy":"upsert"}
+        ]});
+        let before = params.clone();
+        assert!(prepare_config("config/batchWrite", &mut params, &bound).is_err());
+        assert_eq!(params, before);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires REMOTE_CODEX_TEST_BINARY; temporary Codex home, no model turn"]
+async fn native_project_trust_survives_restart_without_changing_execution_defaults() -> TestResult {
+    use crate::engine::Engine;
+    let program = std::path::PathBuf::from(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
+    let home = tempfile::tempdir()?;
+    let mut bound = binding()?;
+    bound.codex_home = home.path().to_str().ok_or("invalid test path")?.into();
+    std::fs::write(
+        home.path().join("config.toml"),
+        "sandbox_mode=\"read-only\"\n",
+    )?;
+    let (engine, _) = Engine::local(&program, home.path()).await?;
+    let result = async {
+        let mut params = json!({"edits":[{
+            "keyPath":"projects.\"/remote/project\".trust_level",
+            "value":"trusted","mergeStrategy":"upsert"
+        }],"reloadUserConfig":true});
+        prepare_config("config/batchWrite", &mut params, &bound)?;
+        assert_eq!(params["reloadUserConfig"], false);
+        engine.call("config/batchWrite", params).await?;
+        Ok::<_, Box<dyn std::error::Error>>(())
+    }
+    .await;
+    engine.shutdown().await;
+    result?;
+    let (reopened, _) = Engine::local(&program, home.path()).await?;
+    let config = reopened
+        .call("config/read", json!({"includeLayers":false}))
+        .await;
+    reopened.shutdown().await;
+    let config = config?;
+    assert_eq!(
+        config["config"]["projects"]["/remote/project"]["trust_level"],
+        "trusted"
     );
+    assert_eq!(config["config"]["sandbox_mode"], "read-only");
     Ok(())
 }

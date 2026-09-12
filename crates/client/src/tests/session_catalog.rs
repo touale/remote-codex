@@ -6,6 +6,69 @@ use crate::{
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::test]
+async fn activity_order_ignores_cache_writes_and_preserves_filters() -> TestResult {
+    let root = tempfile::tempdir()?;
+    let store = LocalStore::open(&root.path().join("state")).await?;
+    let dev = store
+        .save_connection(&SshEndpoint::parse("dev", None)?, Some("dev"))
+        .await?;
+    let test = store
+        .save_connection(&SshEndpoint::parse("test", None)?, Some("test"))
+        .await?;
+    for (id, owner, timestamp, archived) in [
+        ("old", &dev.id, 100, false),
+        ("b", &dev.id, 200, false),
+        ("a", &dev.id, 200, false),
+        ("unknown", &dev.id, 0, false),
+        ("archived", &dev.id, 900, true),
+        ("other", &test.id, 300, false),
+    ] {
+        let binding: SessionBinding = serde_json::from_value(serde_json::json!({
+            "server_id":owner,"remote_identity":"test","environment_id":"test",
+            "codex_home":"/local/.codex","codex_version":"0.153.4","execution_mode":"sandboxed","revision":0,
+            "session":{"id":id,"title":id,"cwd":"/workspace","created_at":1,
+                "updated_at":timestamp,"archived":archived,"state":"idle"}
+        }))?;
+        store.save_session(&binding).await?;
+    }
+    let pool = sqlx::SqlitePool::connect_with(
+        sqlx::sqlite::SqliteConnectOptions::new().filename(root.path().join("state/state.sqlite3")),
+    )
+    .await?;
+    sqlx::query("UPDATE local_sessions SET updated_at=CASE WHEN id='old' THEN 99999 ELSE 1 END")
+        .execute(&pool)
+        .await?;
+    let ids = |entries: Vec<crate::session::CachedSession>| {
+        entries
+            .into_iter()
+            .map(|e| e.session.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        ids(store.cached_sessions(None, false).await?),
+        ["other", "a", "b", "old", "unknown"]
+    );
+    assert_eq!(
+        ids(store.cached_sessions(Some(&dev.id), false).await?),
+        ["a", "b", "old", "unknown"]
+    );
+    assert_eq!(
+        ids(store.cached_sessions(Some(&dev.id), true).await?),
+        ["archived"]
+    );
+    let mut summary = store.session_binding("old").await?.session;
+    summary.title = "Refreshed title".into();
+    store.save_summary(&summary).await?;
+    assert_eq!(
+        ids(store.cached_sessions(Some(&dev.id), false).await?),
+        ["a", "b", "old", "unknown"]
+    );
+    pool.close().await;
+    store.close().await;
+    Ok(())
+}
+
+#[tokio::test]
 async fn session_bindings_and_message_times_survive_reopening_without_rebinding() -> TestResult {
     let root = tempfile::tempdir()?;
     let store = LocalStore::open(&root.path().join("state")).await?;

@@ -53,6 +53,7 @@ interface LiveSession {
   settings: Settings;
 }
 export type WindowTarget =
+  | import('./editor').ContentTarget
   | { kind: 'server'; server: string }
   | { kind: 'workspace'; server: string; path: string }
   | { kind: 'session'; id: string };

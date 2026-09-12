@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import type { ToolItem } from '../src/bridge/types';
 import { Conversation } from '../src/chat/Conversation';
-import type { FileChange } from '../src/files/useFiles';
+import { useFiles } from '../src/files/useFiles';
+import { EditorArea, hasEditorContent } from '../src/app/ResourcePanels';
+import type { useApplication } from '../src/app/useApplication';
+
+const context = { id: 'fixture', server: 'fixture', path: '/workspace', kind: 'workspace' as const };
+const nav = { fileContext: context, workspace: null, target: null, serverHome: null };
 
 const items: ToolItem[] = [
   {
@@ -33,10 +38,13 @@ const items: ToolItem[] = [
   {
     id: 'patch',
     kind: 'fileChange',
-    title: 'File changes · 1 file',
+    title: 'File changes · 2 files',
     status: 'completed',
     output: '',
-    changes: [{ path: 'src/main.rs', diff: '@@ -1 +1 @@\n-old\n+new' }],
+    changes: [
+      { path: 'src/main.rs', diff: '@@ -1 +1 @@\n-old\n+new' },
+      { path: 'src/other.rs', diff: '@@ -1 +1 @@\n-before\n+after' },
+    ],
   },
   {
     id: 'mcp',
@@ -59,10 +67,11 @@ const items: ToolItem[] = [
   { id: 'empty', kind: 'reasoning', title: 'reasoning', status: 'completed', output: '', changes: [] },
 ];
 
-export function ToolRecordsFixture() {
+export function ToolRecordsFixture({ app }: { app: ReturnType<typeof useApplication> }) {
   const [tools, setTools] = useState(items);
-  const [diff, setDiff] = useState<FileChange | null>(null);
+  const files = useFiles();
   const [error, setError] = useState('');
+  const report = (error: unknown) => setError(String((error as { message: string }).message));
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <button
@@ -85,20 +94,35 @@ export function ToolRecordsFixture() {
         Finish tool output
       </button>
       {error && <div role="alert">{error}</div>}
-      {diff && (
-        <output aria-label="Opened diff">
-          {diff.path}
-          {'\n'}
-          {diff.diff}
-        </output>
+      {hasEditorContent(nav, files) && (
+        <div style={{ display: 'flex', height: 260, flexShrink: 0 }}>
+          <EditorArea
+            app={{ ...app, report }}
+            nav={nav}
+            files={files}
+            fileActions={{
+              save: async () => {},
+              close: async (key) => {
+                files.close(key);
+                return true;
+              },
+            }}
+          />
+        </div>
       )}
       <div className="chat-scroll" aria-label="Tool records">
         <div className="messages">
           <Conversation
             messages={tools.map((tool) => ({ id: tool.id, role: 'assistant', text: '', tool }))}
             turns={{}}
-            onDiff={setDiff}
-            report={(error) => setError(String((error as { message: string }).message))}
+            onDiff={(change, separate) => {
+              if (separate) void files.openDiffWindow(context, change).catch(report);
+              else {
+                files.setDiff({ ...change, workspace: context.id });
+                app.changePreferences({ editor_visible: true });
+              }
+            }}
+            report={report}
           />
         </div>
       </div>

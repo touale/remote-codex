@@ -14,11 +14,10 @@ export function useDirectoryFiles(
   target: WorkspaceTarget | null,
   files: Pick<ReturnType<typeof useFiles>, 'tabs' | 'retainedContexts'>,
   report: (error: unknown) => void,
-  finishOperation: (id: string) => void,
 ) {
   const cache = useRef(new Map<string, Access>());
-  const refs = useRef({ report, finishOperation });
-  refs.current = { report, finishOperation };
+  const refs = useRef({ report });
+  refs.current = { report };
   const [, update] = useState(0);
   const server = target?.server;
   const path = target?.path;
@@ -51,7 +50,6 @@ export function useDirectoryFiles(
           throw error;
         })
         .finally(() => {
-          refs.current.finishOperation(operation);
           update((v) => v + 1);
         }),
     };

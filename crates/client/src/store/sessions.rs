@@ -42,7 +42,7 @@ impl LocalStore {
         server: Option<&str>,
         archived: bool,
     ) -> Result<Vec<CachedSession>> {
-        let rows: Vec<(String,String,i64)> = sqlx::query_as("SELECT s.record,c.name,s.updated_at FROM local_sessions s JOIN connections c ON c.id=s.server WHERE (? IS NULL OR s.server=?) ORDER BY s.updated_at DESC,s.id")
+        let rows: Vec<(String,String,i64)> = sqlx::query_as("SELECT s.record,c.name,s.updated_at FROM local_sessions s JOIN connections c ON c.id=s.server WHERE (? IS NULL OR s.server=?) ORDER BY CASE WHEN json_extract(s.record,'$.session.updated_at') BETWEEN 1 AND 8640000000000 THEN json_extract(s.record,'$.session.updated_at') ELSE 0 END DESC,s.id")
             .bind(server).bind(server).fetch_all(&self.pool).await?;
         let mut result = Vec::new();
         for (record, server, checked_at) in rows {

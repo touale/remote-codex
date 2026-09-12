@@ -13,7 +13,8 @@ import 'monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution';
 import 'monaco-editor/esm/vs/editor/editor.all';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { registerEditor } from './editorView';
 import { useTransferLock } from '../transfers/store';
 import { ErrorText, Modal } from '../ui/controls';
 import { EditorSkeleton } from './FileLoading';
@@ -51,6 +52,8 @@ export default function EditorSurface({
   onDismissConflict: (key: string) => void;
   onDiscardConflict: (key: string) => void;
 }) {
+  const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
+  useEffect(() => (editor ? registerEditor(active.key, editor, active.view) : undefined), [editor, active.key]);
   const uploading = useTransferLock(active.server, active.root, active.path);
   useEffect(() => {
     for (const [name, base, background, foreground, border] of [
@@ -91,14 +94,17 @@ export default function EditorSurface({
           theme={theme}
           path={fileUri(active)}
           value={active.text}
-          options={{ ...options, readOnly: uploading }}
+          options={{ ...options, readOnly: uploading || !!active.transferring }}
+          onMount={setEditor}
           onChange={(value) => onChange(active.key, value ?? '')}
         />
       </div>
       <div className="editor-status">
         <span>UTF-8</span>
         <span>
-          {active.pendingMove ? (
+          {active.transferring ? (
+            'Opening in new window…'
+          ) : active.pendingMove ? (
             'Move conflict · Changes kept'
           ) : !active.context ? (
             active.locationError ? (

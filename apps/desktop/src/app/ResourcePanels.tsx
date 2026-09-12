@@ -13,7 +13,16 @@ interface Props {
   nav: Pick<ReturnType<typeof useNavigation>, 'fileContext' | 'workspace' | 'target' | 'serverHome'>;
   files: Pick<
     ReturnType<typeof useFiles>,
-    'tabs' | 'selected' | 'diff' | 'setDiff' | 'select' | 'retry' | 'update' | 'discard'
+    | 'tabs'
+    | 'selected'
+    | 'diff'
+    | 'setDiff'
+    | 'select'
+    | 'retry'
+    | 'update'
+    | 'discard'
+    | 'moveWindow'
+    | 'openDiffWindow'
   >;
   fileActions: Pick<ReturnType<typeof useFileActions>, 'save' | 'close'>;
   terminals: Pick<ReturnType<typeof useTerminals>, 'tabs' | 'selected' | 'select' | 'open' | 'close' | 'ended'>;
@@ -57,6 +66,10 @@ export function EditorArea({ app, nav, files, fileActions }: Pick<Props, 'app' |
               onChange={(key, text) => files.update(key, { text })}
               onHide={() => app.changePreferences({ editor_visible: false })}
               onCloseDiff={() => files.setDiff(null)}
+              onWindow={(key) => run(files.moveWindow(key))}
+              onDiffWindow={() => {
+                if (nav.fileContext && files.diff) run(files.openDiffWindow(nav.fileContext, files.diff));
+              }}
               onDismissConflict={(key) => files.update(key, { conflict: undefined })}
               onDiscardConflict={(key) => {
                 files.discard(key);

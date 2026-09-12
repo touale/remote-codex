@@ -1,5 +1,6 @@
 import { failure } from '../bridge/client';
 import type { TextFile } from '../bridge/types';
+import type { FileDocument, EditorView } from '../bridge/editor';
 import { movedPath, relativePath, remotePath, within } from './context';
 
 interface FileIdentity {
@@ -12,6 +13,8 @@ interface FileIdentity {
   pendingMove?: string;
 }
 export interface Buffer extends FileIdentity, TextFile {
+  transferring?: string;
+  view?: EditorView;
   original: string;
   saving: boolean;
   conflict?: TextFile;
@@ -22,7 +25,7 @@ export type FileTab =
   | (Buffer & { status: 'ready' });
 const isReady = (tab: FileTab): tab is Buffer & { status: 'ready' } => tab.status === 'ready';
 const protectedTab = (tab: FileTab) =>
-  Boolean(tab.pendingMove || (isReady(tab) && (tab.saving || tab.text !== tab.original)));
+  Boolean(tab.pendingMove || (isReady(tab) && (tab.transferring || tab.saving || tab.text !== tab.original)));
 export const fileKey = (server: string, root: string, path: string) => JSON.stringify([server, remotePath(root, path)]);
 
 // Owns read lifetimes independently of tabs: closing a tab invalidates its result,
@@ -46,8 +49,14 @@ export class FileTabs {
     this.listeners.forEach((listener) => listener());
   }
   get = (key: string) => this.tabs.find((tab) => tab.key === key);
+  buffer = (key: string) => {
+    const tab = this.get(key);
+    return tab?.status === 'ready' ? tab : undefined;
+  };
   buffers = () => this.tabs.filter(isReady);
   update = (key: string, values: Partial<Buffer>) => {
+    const current = this.get(key);
+    if (current?.status === 'ready' && current.transferring && values.text !== undefined) return;
     this.publish(this.tabs.map((tab) => (tab.key === key && isReady(tab) ? { ...tab, ...values } : tab)));
   };
   close = (key: string) => {
@@ -67,6 +76,15 @@ export class FileTabs {
   assertWritable = (key: string) => {
     const tab = this.get(key);
     if (tab?.pendingMove) throw new Error(tab.locationError);
+    if (tab?.status === 'ready' && tab.transferring) throw new Error('This file is moving to a new window.');
+  };
+  adopt = (context: string, file: FileDocument) => {
+    const key = fileKey(file.server, file.root, file.path);
+    this.publish([
+      ...this.tabs.filter((t) => t.key !== key),
+      { ...file, key, context, status: 'ready', saving: false },
+    ]);
+    return key;
   };
   assertCanMove = (server: string, source: string, destination: string) => {
     if (

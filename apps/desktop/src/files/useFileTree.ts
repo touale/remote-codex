@@ -73,7 +73,9 @@ export function useFileTree(
     const previous = cache.current.get(cacheKey) ?? emptyTree(saved);
     const snapshot = {
       ...previous,
-      states: Object.fromEntries(['', ...previous.expanded].map((path) => [path, { status: 'loading' as const }])),
+      states: Object.fromEntries(
+        (context ? ['', ...previous.expanded] : []).map((path) => [path, { status: 'loading' as const }]),
+      ),
       pages: Object.fromEntries(
         Object.entries(previous.pages).filter(([path]) => !path || previous.expanded.has(path)),
       ),
@@ -81,6 +83,7 @@ export function useFileTree(
     requests.current.clear();
     cache.current.set(cacheKey, snapshot);
     setTree(snapshot);
+    if (!context) return;
     let cancelled = false;
     const paths = ['', ...snapshot.expanded];
     const worker = async () => {
@@ -100,7 +103,7 @@ export function useFileTree(
           states: Object.fromEntries(Object.entries(latest.states).filter(([, state]) => state.status !== 'loading')),
         });
     };
-  }, [cacheKey, load, refresh, revision]);
+  }, [context, cacheKey, load, refresh, revision]);
   useEffect(() => {
     const refreshed = new Set<string>();
     return listen((event) => {

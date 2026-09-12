@@ -5,7 +5,7 @@ use crate::{
 use remote_codex_client::application::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{State, WebviewWindow, ipc::Channel};
+use tauri::{Manager, State, WebviewWindow, ipc::Channel};
 
 #[derive(Serialize)]
 pub(crate) struct Catalog {
@@ -31,21 +31,33 @@ pub(crate) async fn attach(
     let _gate = state.initialization.lock().await;
     if let Ok(context) = state.window(&window) {
         *context.events.lock().map_err(|_| unavailable())? = channel;
-        return Ok(None);
+    } else {
+        let preferences = super::window::load_preferences(&window)?;
+        let context =
+            Arc::new(WindowState::new(channel, preferences.codex_program.map(Into::into)).await?);
+        if window
+            .app_handle()
+            .get_webview_window(window.label())
+            .is_none()
+        {
+            context.close().await;
+            return Err(unavailable());
+        }
+        state
+            .windows
+            .lock()
+            .map_err(|_| unavailable())?
+            .insert(window.label().into(), context);
     }
-    let preferences = super::window::load_preferences(&window)?;
-    let context =
-        Arc::new(WindowState::new(channel, preferences.codex_program.map(Into::into)).await?);
-    state
-        .windows
-        .lock()
-        .map_err(|_| unavailable())?
-        .insert(window.label().into(), context);
-    Ok(state
-        .startup_targets
-        .lock()
-        .map_err(|_| unavailable())?
-        .remove(window.label()))
+    let mut targets = state.startup_targets.lock().map_err(|_| unavailable())?;
+    if targets
+        .get(window.label())
+        .is_some_and(super::window::WindowTarget::is_content)
+    {
+        Ok(targets.get(window.label()).cloned())
+    } else {
+        Ok(targets.remove(window.label()))
+    }
 }
 #[tauri::command]
 pub(crate) async fn catalog(

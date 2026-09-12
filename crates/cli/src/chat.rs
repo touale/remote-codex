@@ -1,5 +1,6 @@
 use crate::{args::Cli, context::Context, output, selection, ui};
 use remote_codex_client::{ClientError, Result, application::OpenSession};
+mod list;
 
 pub(crate) async fn start(cli: &Cli, context: &Context) -> Result<()> {
     interactive(cli)?;
@@ -40,21 +41,19 @@ pub(crate) async fn resume(
         if cli.json {
             return output::json(&serde_json::json!({"sessions":records}));
         }
-        let labels: Vec<_> = records
-            .iter()
-            .map(|s| format!("{} | {} | {}", s.server, s.session.cwd, s.session.title))
-            .collect();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let rows: Vec<_> = records.iter().map(|s| list::Row::new(s, now)).collect();
         if !ui::interactive() {
-            for (record, label) in records.iter().zip(labels) {
-                println!("{}  {}", ui::text(&record.session.id), ui::text(&label));
-            }
-            return Ok(());
+            return list::print(&rows);
         }
         if records.is_empty() {
             println!("No local sessions. Start one with remote-codex -n NAME.");
             return Ok(());
         }
-        let index = ui::choose("Local sessions — Enter to resume", &labels)?;
+        let index = list::choose(&rows)?;
         records.remove(index)
     };
     if read {

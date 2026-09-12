@@ -4,6 +4,7 @@ import { transferStore } from '../transfers/store';
 import { overlaps, remotePath, within } from './context';
 import type { FileContext } from '../bridge/files';
 import { FileTabs, fileKey } from './tabs';
+import { useFileWindows } from './useFileWindows';
 export interface FileChange {
   path: string;
   diff: string;
@@ -11,6 +12,7 @@ export interface FileChange {
 }
 export function useFiles() {
   const [store] = useState(() => new FileTabs((context, path) => call('file_read', { context, path })));
+  const windows = useFileWindows(store);
   const tabs = useSyncExternalStore(store.subscribe, store.snapshot);
   const commits = useRef(new Map<string, Promise<void>>());
   const [selected, setSelected] = useState<Record<string, string>>({});
@@ -140,7 +142,7 @@ export function useFiles() {
     async (key: string, resolve = false) => {
       await bind(key);
       store.assertWritable(key);
-      const buffer = store.buffers().find((buffer) => buffer.key === key);
+      const buffer = store.buffer(key);
       if (!buffer || (buffer.text === buffer.original && !resolve)) return;
       if (
         moving.current?.server === buffer.server &&
@@ -186,11 +188,11 @@ export function useFiles() {
     },
     [write],
   );
-  const get = useCallback((key: string) => store.buffers().find((buffer) => buffer.key === key), [store]);
+  const get = store.buffer;
   const all = store.buffers;
   const discard = useCallback(
     (key: string) => {
-      const buffer = store.buffers().find((buffer) => buffer.key === key);
+      const buffer = store.buffer(key);
       if (buffer?.conflict) update(key, { ...buffer.conflict, original: buffer.conflict.text, conflict: undefined });
     },
     [store, update],
@@ -217,7 +219,7 @@ export function useFiles() {
           )) {
           void call('file_read', { context: buffer.context, path: buffer.path })
             .then((file) => {
-              const latest = store.buffers().find((b) => b.key === buffer.key);
+              const latest = store.buffer(buffer.key);
               if (latest && !latest.pendingMove && latest.text === latest.original)
                 update(buffer.key, { ...file, original: file.text });
             })
@@ -229,6 +231,19 @@ export function useFiles() {
     [store, update],
   );
   return {
+    openDiffWindow: async (context: Pick<FileContext, 'server' | 'path'>, change: FileChange) => {
+      const label = await call('new_window', {
+        target: {
+          kind: 'diff',
+          document: { server: context.server, root: context.path, path: change.path, diff: change.diff },
+        },
+      });
+      // Close only the source view; another diff may have opened while awaiting native creation.
+      setDiff((current) => (current === change ? null : current));
+      return label;
+    },
+    ...windows,
+    adopt: store.adopt,
     get,
     all,
     discard,

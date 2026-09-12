@@ -14,7 +14,7 @@ export function useResourceActions(
   app: Pick<ReturnType<typeof useApplication>, 'preferences' | 'report'>,
   nav: Pick<ReturnType<typeof useNavigation>, 'target' | 'workspace' | 'forgetWorkspace'>,
   chats: Pick<ReturnType<typeof useChats>, 'chats' | 'close'>,
-  files: Pick<ReturnType<typeof useFiles>, 'all' | 'allTabs'>,
+  files: Pick<ReturnType<typeof useFiles>, 'all' | 'allTabs' | 'cancelTransfers'>,
   ask: Ask,
   terminals: Pick<ReturnType<typeof useTerminals>, 'tabs' | 'close'>,
   fileActions: Pick<ReturnType<typeof useFileActions>, 'save' | 'close'>,
@@ -74,6 +74,7 @@ export function useResourceActions(
     if (closing.current) return;
     closing.current = true;
     try {
+      await files.cancelTransfers();
       const dirty = files.all().filter((buffer) => buffer.text !== buffer.original);
       if (dirty.length) {
         const answer = await ask({

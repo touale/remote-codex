@@ -2,7 +2,7 @@ import { Archive, RotateCw, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, failure, listen } from '../bridge/client';
 import type { CachedSession } from '../bridge/types';
-import { fullTime } from '../chat/time';
+import { LastActive } from '../chat/LastActive';
 import { Empty, ErrorText, IconButton } from '../ui/controls';
 import styles from './ArchivedSessions.module.css';
 
@@ -96,13 +96,7 @@ export function ArchivedSessions() {
                 <small title={`${server} · ${session.cwd}`}>
                   {server} · {session.cwd}
                 </small>
-                <time title={fullTime(session.updated_at)} dateTime={new Date(session.updated_at * 1000).toISOString()}>
-                  {new Date(session.updated_at * 1000).toLocaleDateString([], {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </time>
+                <LastActive timestamp={session.updated_at} />
               </div>
               <button disabled={restoring.has(session.id)} onClick={() => void restore(session.id)}>
                 {restoring.has(session.id) ? 'Restoring…' : 'Restore'}

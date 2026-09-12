@@ -28,7 +28,7 @@ export const MessageView = memo(function MessageView({
   onPlan?: (message: Message, choice: PlanChoice) => void;
   activePlan?: boolean;
   revisingPlan?: boolean;
-  onDiff: (change: FileChange) => void;
+  onDiff: (change: FileChange, newWindow?: boolean) => void;
   report: (error: unknown) => void;
 }) {
   if (message.role === 'user' && message.clientId?.startsWith('question:'))

@@ -25,6 +25,7 @@ export function FileTree({
   refresh,
   cacheKey,
   onOpen,
+  onWindow,
   onCreate,
   onRename,
   onMove,
@@ -45,6 +46,7 @@ export function FileTree({
   refresh: number;
   cacheKey: string;
   onOpen: (path: string) => void;
+  onWindow?: (path: string) => void;
   onCreate: (directory: boolean, parent: string) => Promise<boolean>;
   onRename: (entry: Entry) => void;
   onMove: (entry: Entry, parent: string) => Promise<void>;
@@ -115,6 +117,7 @@ export function FileTree({
     pages[path]?.entries.map((entry) => {
       const parent = entry.directory ? entry.path : entry.path.split('/').slice(0, -1).join('/');
       const items: MenuItem[] = [
+        ...(!entry.directory && onWindow ? [{ label: 'Open in New Window', action: () => onWindow(entry.path) }] : []),
         { label: 'Download…', action: () => onDownload(entry.path), disabled: entry.symlink },
         ...uploadItems(parent),
         ...(entry.directory ? creationItems(entry.path) : []),

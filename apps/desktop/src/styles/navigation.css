@@ -68,7 +68,9 @@
   margin-bottom: 1px;
   gap: 1px;
 }
-.tree-row:hover {
+.tree-row:hover,
+[data-context-menu-open='true'] > .tree-row,
+.tree-row:has(> :where(.menu-trigger[data-state='open'])) {
   background: var(--hover);
 }
 .tree-row.selected {
@@ -104,6 +106,10 @@
 }
 .tree-label strong {
   font-weight: 550;
+}
+.session-row .tree-label > span:not(.pulse) {
+  flex: 1;
+  text-align: left;
 }
 .tree-row .menu-trigger {
   opacity: 0;

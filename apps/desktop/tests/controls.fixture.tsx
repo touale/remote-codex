@@ -11,6 +11,7 @@ import { Disclosure } from '../src/ui/Disclosure';
 import { SelectField } from '../src/ui/SelectField';
 import { Modal } from '../src/ui/controls';
 import { ToolRecordsFixture } from './tool-records.fixture';
+import { ActivityFixture } from './activity.fixture';
 const Editor = lazy(() => import('../src/files/Editor'));
 const choices = Array.from({ length: 35 }, (_, i) => ({
   value: String(i),
@@ -48,6 +49,7 @@ function Fixture() {
   const [editor, setEditor] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [tools, setTools] = useState(false);
+  const [activity, setActivity] = useState(false);
   return (
     <Tooltip.Provider>
       <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -57,9 +59,12 @@ function Fixture() {
           <button onClick={() => setEditor(!editor)}>Fixture editor</button>
           <button onClick={() => setConflict(true)}>Fixture conflict</button>
           <button onClick={() => setTools(!tools)}>Fixture tools</button>
+          <button onClick={() => setActivity(!activity)}>Fixture activity</button>
         </div>
-        {tools ? (
-          <ToolRecordsFixture />
+        {activity ? (
+          <ActivityFixture />
+        ) : tools ? (
+          <ToolRecordsFixture app={app} />
         ) : editor ? (
           <Suspense fallback={<p>Loading editor…</p>}>
             <Editor

@@ -6,6 +6,7 @@ import { EditorSkeleton } from './FileLoading';
 import { visibleIn } from './context';
 import type { FileTab } from './tabs';
 import type { FileChange } from './useFiles';
+import { ChangeView } from './ChangeView';
 const EditorSurface = lazy(() => import('./EditorSurface'));
 
 export default function EditorPane({
@@ -23,6 +24,8 @@ export default function EditorPane({
   onCloseDiff,
   onDismissConflict,
   onDiscardConflict,
+  onWindow,
+  onDiffWindow,
 }: {
   context: FileContext | null;
   tabs: FileTab[];
@@ -38,6 +41,8 @@ export default function EditorPane({
   onCloseDiff: () => void;
   onDismissConflict: (key: string) => void;
   onDiscardConflict: (key: string) => void;
+  onWindow?: (key: string) => void;
+  onDiffWindow?: () => void;
 }) {
   const visible = tabs.filter((buffer) => visibleIn(context, buffer));
   const active = visible.find((buffer) => buffer.key === selected) ?? visible.at(-1);
@@ -52,17 +57,11 @@ export default function EditorPane({
         onSave={onSave}
         onHide={onHide}
         onCloseDiff={onCloseDiff}
+        onWindow={onWindow}
+        onDiffWindow={onDiffWindow}
       />
       {diff ? (
-        <>
-          <pre className="patch-view">
-            {diff.diff.split('\n').map((line, index) => (
-              <div key={index} className={line.startsWith('+') ? 'addition' : line.startsWith('-') ? 'deletion' : ''}>
-                {line || ' '}
-              </div>
-            ))}
-          </pre>
-        </>
+        <ChangeView diff={diff.diff} />
       ) : active?.status === 'loading' ? (
         <EditorSkeleton />
       ) : active?.status === 'failed' ? (

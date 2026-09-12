@@ -16,7 +16,7 @@ import { useWorkspaceAccess } from './useWorkspaceAccess';
 export function useNavigation(
   app: Pick<
     ReturnType<typeof useApplication>,
-    'catalog' | 'ready' | 'startupTarget' | 'report' | 'finishOperation' | 'setError' | 'changePreferences' | 'refresh'
+    'catalog' | 'ready' | 'startupTarget' | 'report' | 'setError' | 'changePreferences' | 'refresh'
   >,
   chats: Pick<
     ReturnType<typeof useChats>,
@@ -42,7 +42,6 @@ export function useNavigation(
     browsing ? target : serverHome ? { server: serverHome.name, path: '/' } : null,
     files,
     app.report,
-    app.finishOperation,
   );
   const [busy, setBusy] = useState(false);
   // Keep the committed view intact underneath a pending navigation for Back/cancel.
@@ -79,7 +78,7 @@ export function useNavigation(
   const allowTakeover = (id: string | null) => app.startupTarget?.kind !== 'session' || app.startupTarget.id !== id;
   const prepare = (server: string, resume: string | null, path: string) =>
     prepareSession(
-      { connect, chats, dialog, finishOperation: app.finishOperation, refresh: app.refresh, report: app.report },
+      { connect, chats, dialog, refresh: app.refresh, report: app.report },
       server,
       resume,
       path,

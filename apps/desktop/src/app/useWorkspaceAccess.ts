@@ -13,7 +13,7 @@ interface WorkspaceAccess {
 const workspaceKey = (server: string, path: string) => JSON.stringify([server, path]);
 
 // Drafts, session preparation and terminals share one request for each workspace.
-export function useWorkspaceAccess(app: Pick<ReturnType<typeof useApplication>, 'report' | 'finishOperation'>) {
+export function useWorkspaceAccess(app: Pick<ReturnType<typeof useApplication>, 'report'>) {
   const entries = useRef(new Map<string, WorkspaceAccess>());
   const callbacks = useRef(app);
   callbacks.current = app;
@@ -47,7 +47,6 @@ export function useWorkspaceAccess(app: Pick<ReturnType<typeof useApplication>, 
         })
         .finally(() => {
           update((value) => value + 1);
-          callbacks.current.finishOperation(operation);
         }),
     };
     entries.current.set(key, entry);

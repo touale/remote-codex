@@ -82,7 +82,7 @@ export async function fileRelocation(invoke: Invoke, context: string) {
   await $('[role="menuitem"]=Rename…').click();
   await $('[role="dialog"] input').setValue('target.txt');
   await $('button=Rename').click();
-  await expect($('[role="alert"]')).toHaveText(
+  await expect($('[role="alert"]:has(button[aria-label="Dismiss error"])')).toHaveText(
     expect.stringContaining('Resolve unsaved changes in the destination tab'),
   );
   await $('button[aria-label="Dismiss error"]').click();

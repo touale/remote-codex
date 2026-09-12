@@ -27,7 +27,7 @@ export const Conversation = memo(function Conversation({
   editing?: string;
   editor?: ReactNode;
   turns: Record<string, TurnState>;
-  onDiff: (change: FileChange) => void;
+  onDiff: (change: FileChange, newWindow?: boolean) => void;
   onPlan?: (message: Message, choice: PlanChoice) => void;
   activePlan?: string;
   revisingPlan?: boolean;
@@ -35,14 +35,17 @@ export const Conversation = memo(function Conversation({
 }) {
   const groups = useMemo(() => {
     const groups = new Map<string, Message[]>();
+    const ids = new Set(Object.keys(turns));
+    for (const message of messages) if (message.turn) ids.add(message.turn);
+    // Native turn IDs sort chronologically, as in history. Include empty turns
+    // here so their stopped/failed footers cannot appear after newer progress.
+    for (const id of [...ids].sort((a, b) => a.localeCompare(b))) groups.set(id, []);
     for (const message of messages) {
       const key = message.turn ?? message.id;
       const group = groups.get(key) ?? [];
       group.push(message);
       groups.set(key, group);
     }
-    // Native turns without visible output still need an interrupted/failed footer.
-    for (const turn of Object.values(turns)) if (!groups.has(turn.id)) groups.set(turn.id, []);
     return groups;
   }, [messages, turns]);
   const replies = new Map(messages.filter((m) => m.role === 'user').map((m) => [m.clientId, m.text]));

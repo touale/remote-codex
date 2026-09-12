@@ -1,4 +1,5 @@
 import type { CachedSession, Server, Workspace } from '../bridge/types';
+import { compareActivity } from '../chat/activity';
 
 export interface PathNode {
   server: string;
@@ -60,7 +61,9 @@ export function buildWorkspaceTree(
       label: parent === null ? node.path : node.path.slice(parent === '/' ? 1 : parent.length + 1),
       workspace: node.workspace,
       children: [...node.children.values()].sort(compare).map((child) => project(child, node.path)),
-      sessions: node.workspace ? (byPath.get(node.path) ?? []) : [],
+      sessions: node.workspace
+        ? (byPath.get(node.path) ?? []).sort((a, b) => compareActivity(a.session, b.session))
+        : [],
     };
   };
   return root.workspace

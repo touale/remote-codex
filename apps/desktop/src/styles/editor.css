@@ -120,19 +120,6 @@
   color: var(--muted);
   border-top: 1px solid var(--border);
 }
-.patch-view {
-  margin: 0;
-  padding: 10px 0;
-  font-size: 11px;
-  line-height: 1.65;
-  overflow: auto;
-  flex: 1;
-  font-family: SFMono-Regular, Menlo, monospace;
-}
-.patch-view > div {
-  padding: 0 10px;
-  min-width: max-content;
-}
 .addition {
   background: #25855020;
 }

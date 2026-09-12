@@ -1,5 +1,7 @@
 import { directoryNavigation } from './directory-navigation';
 import { windowNavigation } from './window-navigation';
+import { contentWindows } from './content-windows';
+import { chatFollow } from './chat-follow';
 import { $, browser, expect } from '@wdio/globals';
 import { withExecuteOptions } from '@wdio/tauri-service';
 import path from 'node:path';
@@ -139,6 +141,7 @@ describe('A real SSH workspace in the native desktop', () => {
       session = catalog.live[0].session.id;
       await sessionTitle(invoke, session);
       await $('button[aria-label="Permissions"]').click();
+      await $('.permissions-menu').waitForDisplayed();
       await $('.permissions-menu').$('button*=Full Access').click();
       await $('button=Cancel').click();
       expect(
@@ -146,17 +149,24 @@ describe('A real SSH workspace in the native desktop', () => {
           .full_access,
       ).toBe(false);
       await $('button[aria-label="Permissions"]').click();
+      await $('.permissions-menu').waitForDisplayed();
       await $('.permissions-menu').$('button*=Full Access').click();
       await $('button=Enable Full Access').click();
+      await $('[role="dialog"]').waitForExist({ reverse: true });
+      await $('button[aria-label="Permissions"]').waitForEnabled();
       await expect($('button[aria-label="Permissions"]')).toHaveText(expect.stringContaining('Full Access'));
       await $('button[aria-label="Permissions"]').click();
+      await $('.permissions-menu').waitForDisplayed();
       await $('.permissions-menu').$('button*=Ask for approval').click();
       await browser.waitUntil(
         async () =>
           (await invoke<{ settings: { reviewer: string } }>('session_snapshot', { id: session })).settings.reviewer ===
           'user',
       );
+      await $('.permissions-menu').waitForExist({ reverse: true });
+      await $('button[aria-label="Model and reasoning"]').waitForEnabled();
       await $('button[aria-label="Model and reasoning"]').click();
+      await $('.model-menu').waitForDisplayed();
       await $('button=Other model…').click();
       await $('input[aria-label="Custom model ID"]').setValue('gpt-5.4-mini');
       await $('button=Use model').click();
@@ -166,6 +176,7 @@ describe('A real SSH workspace in the native desktop', () => {
           'gpt-5.4-mini',
       );
     });
+    await step('follows growing replies while preserving the reading position', chatFollow);
     await step('controls composer usage details from General', usagePreferences);
     await step('approves remote execution through the chat and opens an owned shell', async () => {
       await $('textarea[aria-label="Message Codex"]').setValue('Create the acceptance marker.');
@@ -279,6 +290,7 @@ describe('A real SSH workspace in the native desktop', () => {
         }, 50);
         return true;
       }, withExecuteOptions({ windowLabel }));
+      await browser.waitUntil(async () => !(await browser.getWindowHandles()).includes(windowLabel));
       windowLabel = 'main';
       await browser.switchToWindow(main);
       await invoke('directory_close', { browser: directory });
@@ -299,5 +311,6 @@ describe('A real SSH workspace in the native desktop', () => {
       await startupWithoutConnection(remote, session, savedUsage);
     });
     await step('opens new-window targets', () => windowNavigation(remote, session));
+    await step('transfers dirty files into independent editor windows', () => contentWindows(remote));
   }).timeout(600000);
 });

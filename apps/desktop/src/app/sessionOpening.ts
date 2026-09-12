@@ -12,12 +12,11 @@ interface Services {
   connect: (server: string, path: string) => Promise<CurrentWorkspace>;
   chats: Pick<ReturnType<typeof useChats>, 'store' | 'register' | 'loadHistory'>;
   dialog: Pick<ReturnType<typeof useDialog>, 'ask'>;
-  finishOperation: (id: string) => void;
   refresh: () => Promise<void>;
   report: (error: unknown) => void;
 }
 export async function prepareSession(
-  { connect, chats, dialog, finishOperation, refresh, report }: Services,
+  { connect, chats, dialog, refresh, report }: Services,
   server: string,
   resume: string | null,
   path: string,
@@ -41,30 +40,26 @@ export async function prepareSession(
     });
   let result: SessionOpened;
   try {
-    try {
-      result = await open();
-    } catch (error) {
-      const issue = failure(error);
-      if (issue.code === 'SESSION_IN_USE' && allowTakeover) {
-        const answer = await dialog.ask({
-          title: 'Take over this session?',
-          message: 'Another Remote Codex process controls this session. Taking over closes that frontend connection.',
-          choices: ['Take over'],
-        });
-        if (!answer) return null;
-        result = await open(true);
-      } else if (issue.code === 'MCP_NAME_CONFLICT') {
-        const answer = await dialog.ask({
-          title: 'Choose MCP configuration',
-          message: 'Local and remote MCP servers have conflicting names.',
-          choices: ['Use remote', 'Use local'],
-        });
-        if (!answer) return null;
-        result = await open(false, answer === 'Use remote' ? 'remote' : 'local');
-      } else throw error;
-    }
-  } finally {
-    finishOperation(operation);
+    result = await open();
+  } catch (error) {
+    const issue = failure(error);
+    if (issue.code === 'SESSION_IN_USE' && allowTakeover) {
+      const answer = await dialog.ask({
+        title: 'Take over this session?',
+        message: 'Another Remote Codex process controls this session. Taking over closes that frontend connection.',
+        choices: ['Take over'],
+      });
+      if (!answer) return null;
+      result = await open(true);
+    } else if (issue.code === 'MCP_NAME_CONFLICT') {
+      const answer = await dialog.ask({
+        title: 'Choose MCP configuration',
+        message: 'Local and remote MCP servers have conflicting names.',
+        choices: ['Use remote', 'Use local'],
+      });
+      if (!answer) return null;
+      result = await open(false, answer === 'Use remote' ? 'remote' : 'local');
+    } else throw error;
   }
   if (result.status === 'trust') {
     const answer = await dialog.ask({
@@ -73,17 +68,13 @@ export async function prepareSession(
       choices: ['Trust and continue'],
     });
     const operation = operationId();
-    try {
-      const opened = await call('session_trust', {
-        operationId: operation,
-        preparation: result.preparation,
-        accept: Boolean(answer),
-      });
-      if (!opened) return null;
-      result = opened;
-    } finally {
-      finishOperation(operation);
-    }
+    const opened = await call('session_trust', {
+      operationId: operation,
+      preparation: result.preparation,
+      accept: Boolean(answer),
+    });
+    if (!opened) return null;
+    result = opened;
   }
   if (result.status !== 'open') return null;
   chats.register(result, server, Boolean(resume));

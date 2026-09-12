@@ -1,4 +1,5 @@
-import { ArrowLeft, Save, X } from 'lucide-react';
+import { ArrowLeft, Save, X, ExternalLink } from 'lucide-react';
+import { RowMenu } from '../ui/RowMenu';
 import { useEffect, useRef } from 'react';
 import { IconButton } from '../ui/controls';
 import type { FileTab } from './tabs';
@@ -13,6 +14,8 @@ export function EditorHeader({
   onSave,
   onHide,
   onCloseDiff,
+  onWindow,
+  onDiffWindow,
 }: {
   tabs: FileTab[];
   active?: FileTab;
@@ -22,6 +25,8 @@ export function EditorHeader({
   onSave: (key: string) => void;
   onHide: () => void;
   onCloseDiff: () => void;
+  onWindow?: (key: string) => void;
+  onDiffWindow?: () => void;
 }) {
   const tabs = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -45,25 +50,61 @@ export function EditorHeader({
       ) : active ? (
         <div className="editor-tabs" ref={tabs} role="tablist" aria-label="Open files">
           {files.map((buffer) => (
-            <div className={`editor-tab ${buffer.key === active.key ? 'selected' : ''}`} key={buffer.key}>
-              <button
-                role="tab"
-                aria-selected={buffer.key === active.key}
-                aria-busy={buffer.status === 'loading'}
-                title={`${buffer.server} · ${buffer.root.replace(/\/$/, '')}/${buffer.path}`}
-                onClick={() => onSelect(buffer.key)}
-              >
-                <span className="tab-name">{buffer.path.split('/').at(-1)}</span>
-                {buffer.status === 'ready' && buffer.original !== buffer.text && <span className="dirty-dot" />}
-              </button>
-              <IconButton label={`Close ${buffer.path}`} onClick={() => onClose(buffer.key)}>
-                <X size={12} />
-              </IconButton>
-            </div>
+            <RowMenu
+              key={buffer.key}
+              items={
+                onWindow
+                  ? [
+                      {
+                        label: 'Move to New Window',
+                        disabled:
+                          buffer.status !== 'ready' || !!buffer.transferring || buffer.saving || !!buffer.pendingMove,
+                        action: () => onWindow(buffer.key),
+                      },
+                    ]
+                  : []
+              }
+            >
+              <div className={`editor-tab ${buffer.key === active.key ? 'selected' : ''}`}>
+                <button
+                  role="tab"
+                  aria-selected={buffer.key === active.key}
+                  aria-busy={buffer.status === 'loading'}
+                  title={`${buffer.server} · ${buffer.root.replace(/\/$/, '')}/${buffer.path}`}
+                  onClick={() => onSelect(buffer.key)}
+                >
+                  <span className="tab-name">{buffer.path.split('/').at(-1)}</span>
+                  {buffer.status === 'ready' && buffer.original !== buffer.text && <span className="dirty-dot" />}
+                </button>
+                <IconButton
+                  label={`Close ${buffer.path}`}
+                  disabled={buffer.status === 'ready' && !!buffer.transferring}
+                  onClick={() => onClose(buffer.key)}
+                >
+                  <X size={12} />
+                </IconButton>
+              </div>
+            </RowMenu>
           ))}
         </div>
       ) : null}
       <div className="editor-actions">
+        {diff && onDiffWindow ? (
+          <IconButton label="Open changes in New Window" onClick={onDiffWindow}>
+            <ExternalLink size={14} />
+          </IconButton>
+        ) : (
+          active &&
+          onWindow && (
+            <IconButton
+              label="Move to New Window"
+              disabled={active.status !== 'ready' || !!active.transferring || active.saving || !!active.pendingMove}
+              onClick={() => onWindow(active.key)}
+            >
+              <ExternalLink size={14} />
+            </IconButton>
+          )
+        )}
         {active && !diff && (
           <IconButton
             label="Save file (⌘S)"
@@ -72,6 +113,7 @@ export function EditorHeader({
               !active.context ||
               !!active.pendingMove ||
               active.saving ||
+              !!active.transferring ||
               active.text === active.original
             }
             onClick={() => onSave(active.key)}

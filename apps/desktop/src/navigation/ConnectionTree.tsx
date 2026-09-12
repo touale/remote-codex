@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Plus, RefreshCw, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { Catalog } from '../bridge/types';
+import { mergeSessions } from '../chat/catalog';
 import { IconButton } from '../ui/controls';
 import { RowMenu } from '../ui/RowMenu';
 import { ServerNode } from './ConnectionNodes';
@@ -27,16 +28,10 @@ export function ConnectionTree(
     if (query) setSearchCollapsed(next);
     else props.onCollapsed(next);
   };
-  const sessions = useMemo(() => {
-    const sessions = catalog.sessions.filter((item) => !item.session.archived);
-    for (const chat of Object.values(props.chats)) {
-      if (chat.session.archived) continue;
-      const index = sessions.findIndex((c) => c.session.id === chat.session.id);
-      if (index < 0) sessions.push({ server_id: '', server: chat.server, session: chat.session });
-      else if (!chat.closed) sessions[index] = { ...sessions[index], session: chat.session };
-    }
-    return sessions;
-  }, [catalog.sessions, props.chats]);
+  const sessions = useMemo(
+    () => mergeSessions(catalog.sessions, props.chats).filter((item) => !item.session.archived),
+    [catalog.sessions, props.chats],
+  );
   const trees = useMemo(() => {
     const matches = (value: string) => value.toLowerCase().includes(query.toLowerCase());
     return catalog.servers.flatMap((server) => {

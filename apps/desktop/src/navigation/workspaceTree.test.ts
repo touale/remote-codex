@@ -16,6 +16,21 @@ const session = (cwd: string, title: string): CachedSession => ({
 });
 
 describe('saved workspace path tree', () => {
+  it('orders sessions by activity with stable ties and unknown times last', () => {
+    const entries = [
+      ['old', 100],
+      ['b', 200],
+      ['unknown', 0],
+      ['a', 200],
+    ].map(([id, timestamp]) => {
+      const entry = session('/workspace/test', String(id));
+      entry.session.updated_at = Number(timestamp);
+      return entry;
+    });
+    const tree = buildWorkspaceTree(server, [workspace('/workspace/test')], entries);
+    expect(tree[0].children[0].sessions.map((entry) => entry.session.id)).toEqual(['a', 'b', 'old', 'unknown']);
+    expect(entries.map((entry) => entry.session.id)).toEqual(['old', 'b', 'unknown', 'a']);
+  });
   it('shares directory segments without grouping similar names or different servers', () => {
     const other = { id: 'test-id', name: 'test' };
     const paths = ['/workspace/test1', '/workspace/test', '/workspace-old/test', '/workspace/Test'].map((p) =>
