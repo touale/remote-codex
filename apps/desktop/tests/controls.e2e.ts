@@ -54,7 +54,7 @@ describe('Shared controls in native WebKit', () => {
     await holdScrollbar('#fixture-native');
     await pointerAt('#fixture-short', 'y');
     await expect($('#fixture-short')).not.toHaveAttribute('data-scroll-y');
-    await edgeScrollbar('#fixture-terminal .xterm-viewport', 'y', '#fixture-terminal .xterm');
+    await edgeScrollbar('#fixture-terminal .xterm-scrollable-element', 'y', '#fixture-terminal .xterm');
     await edgeScrollbar('#fixture-multiple', 'y');
     const changed = await browser.execute(() => {
       const input = document.querySelector<HTMLTextAreaElement>('#fixture-input')!;
