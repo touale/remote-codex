@@ -3610,7 +3610,7 @@ dependencies = [
 name = "remote-codex-client"
 version = "0.2.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "futures-util",
  "nix 0.30.1",
  "portable-pty",
