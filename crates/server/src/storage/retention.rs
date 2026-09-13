@@ -18,8 +18,12 @@ impl Store {
                 .execute(&mut *tx)
                 .await
                 .checked("STORAGE_ERROR", "cannot retire closed operation evidence")?;
-            for table in ["exec_events", "execution_approvals", "session_permissions"] {
-                sqlx::query(&format!("DELETE FROM {table} WHERE channel=?"))
+            for statement in [
+                "DELETE FROM exec_events WHERE channel=?",
+                "DELETE FROM execution_approvals WHERE channel=?",
+                "DELETE FROM session_permissions WHERE channel=?",
+            ] {
+                sqlx::query(statement)
                     .bind(&channel)
                     .execute(&mut *tx)
                     .await

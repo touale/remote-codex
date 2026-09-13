@@ -74,10 +74,14 @@ pub(super) async fn initialize(pool: &SqlitePool) -> Result<()> {
         .bind(uuid::Uuid::new_v4().to_string())
         .execute(&mut *tx)
         .await?;
-    sqlx::query(&format!("PRAGMA application_id = {APPLICATION_ID}"))
+    sqlx::QueryBuilder::<sqlx::Sqlite>::new("PRAGMA application_id = ")
+        .push(APPLICATION_ID)
+        .build()
         .execute(&mut *tx)
         .await?;
-    sqlx::query(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))
+    sqlx::QueryBuilder::<sqlx::Sqlite>::new("PRAGMA user_version = ")
+        .push(SCHEMA_VERSION)
+        .build()
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
