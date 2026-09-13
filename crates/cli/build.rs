@@ -3,7 +3,7 @@ use std::{env, fs, path::PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let default = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
-        .join("../../.artifacts/dist/remote-codex-server-linux-x86_64");
+        .join("../../target/x86_64-unknown-linux-musl/release/remote-codex-server");
     println!("cargo:rerun-if-env-changed=REMOTE_CODEX_SERVER_ARTIFACT");
     let path = env::var_os("REMOTE_CODEX_SERVER_ARTIFACT")
         .map(PathBuf::from)

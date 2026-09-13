@@ -6,7 +6,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let path = env::var_os("REMOTE_CODEX_SERVER_ARTIFACT")
         .map(PathBuf::from)
-        .unwrap_or_else(|| root.join("../../../.artifacts/dist/remote-codex-server-linux-x86_64"));
+        .unwrap_or_else(|| {
+            root.join("../../../target/x86_64-unknown-linux-musl/release/remote-codex-server")
+        });
     println!("cargo:rerun-if-env-changed=REMOTE_CODEX_SERVER_ARTIFACT");
     println!("cargo:rerun-if-changed={}", path.display());
     let bytes = fs::read(&path)?;

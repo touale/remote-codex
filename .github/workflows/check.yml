@@ -30,7 +30,7 @@ jobs:
       - name: Fetch locked dependencies
         run: cargo fetch --locked
       - name: Architecture boundaries and source size
-        run: python3 tools/check_architecture.py
+        run: python3 tests/architecture.py
       - name: Formatting
         run: cargo fmt --all --check
       - name: Clippy
@@ -38,7 +38,25 @@ jobs:
       - name: Tests without model credentials
         run: cargo test --workspace --exclude remote-codex-desktop --all-targets --locked --offline
 
+      - name: Build Linux execution service
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --release --locked -p remote-codex-server --target x86_64-unknown-linux-musl
+      - name: Share Linux execution service
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: execution-service
+          path: target/x86_64-unknown-linux-musl/release/remote-codex-server
+          if-no-files-found: error
+
   desktop:
+    needs: rust
+    env:
+      REMOTE_CODEX_SERVER_ARTIFACT: ${{ github.workspace }}/target/execution-service/remote-codex-server
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -54,16 +72,28 @@ jobs:
           echo '/tmp/node-v24.20.0-darwin-arm64/bin' >> "$GITHUB_PATH"
       - run: cargo fetch --locked
       - run: npm ci --prefix apps/desktop
-      - run: python3 tools/desktop.py check
-      - run: python3 tools/desktop.py e2e
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: execution-service
+          path: target/execution-service
+      - run: npm run check:frontend --prefix apps/desktop
+      - run: cargo clippy -p remote-codex-desktop --all-targets --locked --offline -- -D warnings
+      - name: Build isolated desktop E2E application
+        run: |
+          npm --prefix apps/desktop run build -- --mode e2e
+          export TAURI_CONFIG="$(cat apps/desktop/src-tauri/tauri.e2e.conf.json)"
+          cargo build -p remote-codex-desktop --locked --offline --features e2e,custom-protocol
+      - run: npm --prefix apps/desktop run test:e2e
 
 
   release:
+    needs: [rust, desktop]
     if: github.event_name == 'workflow_dispatch' && inputs.release
     runs-on: [self-hosted, macOS, ARM64, remote-codex-release]
     environment: release-acceptance
     timeout-minutes: 30
     env:
+      REMOTE_CODEX_SERVER_ARTIFACT: ${{ github.workspace }}/target/execution-service/remote-codex-server
       REMOTE_CODEX_NATIVE: ${{ vars.REMOTE_CODEX_NATIVE }}
       REMOTE_CODEX_SSH_TARGET: ${{ vars.REMOTE_CODEX_SSH_TARGET }}
       REMOTE_CODEX_SSH_PORT: ${{ vars.REMOTE_CODEX_SSH_PORT }}
@@ -74,7 +104,93 @@ jobs:
         with:
           persist-credentials: false
       - run: cargo fetch --locked
-      - run: python3 tools/release.py
-      - name: Desktop SSH acceptance
-        run: python3 tools/desktop.py e2e --target "$REMOTE_CODEX_SSH_TARGET" --port "$REMOTE_CODEX_SSH_PORT" --identity "$REMOTE_CODEX_SSH_IDENTITY"
-      - run: python3 tools/desktop.py build
+      - name: Install Node
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/node.tar.gz" https://nodejs.org/dist/v24.20.0/node-v24.20.0-darwin-arm64.tar.gz
+          echo "40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8  $RUNNER_TEMP/node.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/node.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/node-v24.20.0-darwin-arm64/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: execution-service
+          path: target/execution-service
+      - run: npm ci --prefix apps/desktop
+      - name: Build CLI and acceptance programs
+        run: |
+          cargo build --release --locked -p remote-codex
+          cargo build --locked -p remote-codex-test-support --bins
+      - name: Native and SSH acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${REMOTE_CODEX_NATIVE:?Native Codex path is required}"
+          : "${REMOTE_CODEX_SSH_TARGET:?Disposable SSH host is required}"
+          : "${REMOTE_CODEX_SSH_PORT:?SSH port is required}"
+          : "${REMOTE_CODEX_SSH_IDENTITY:?SSH identity is required}"
+          rc_test_root=$(mktemp -d /tmp/rc-release-XXXXXX)
+          rc_workspace="/tmp/remote-codex-desktop-$(uuidgen)"
+          rc_fixture_pid=''
+          rc_remote_created=false
+          rc_master_open=false
+          ssh_args=(-S "$rc_test_root/master" -p "$REMOTE_CODEX_SSH_PORT" -i "$REMOTE_CODEX_SSH_IDENTITY" -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          if [[ -n "$REMOTE_CODEX_SSH_CONFIG" ]]; then ssh_args+=(-F "$REMOTE_CODEX_SSH_CONFIG"); fi
+          cleanup() {
+            if [[ -n "$rc_fixture_pid" ]]; then kill "$rc_fixture_pid" 2>/dev/null || true; wait "$rc_fixture_pid" || true; fi
+            if $rc_remote_created; then /usr/bin/ssh "${ssh_args[@]}" -- "$REMOTE_CODEX_SSH_TARGET" "rm -rf -- '$rc_workspace'" || true; fi
+            if $rc_master_open; then /usr/bin/ssh "${ssh_args[@]}" -O exit -- "$REMOTE_CODEX_SSH_TARGET" || true; fi
+            rm -rf -- "$rc_test_root"
+          }
+          trap cleanup EXIT
+          /usr/bin/ssh "${ssh_args[@]}" -M -fN -o ControlPersist=no -- "$REMOTE_CODEX_SSH_TARGET"
+          rc_master_open=true
+          mkdir -p "$rc_test_root/bin" "$rc_test_root/native-home" .artifacts/release .artifacts/desktop-e2e
+          ln -s "$REMOTE_CODEX_NATIVE" "$rc_test_root/bin/codex"
+          ln -s "$PWD/target/debug/acceptance" "$rc_test_root/bin/ssh"
+          export PATH="$rc_test_root/bin:$PATH"
+          export REMOTE_CODEX_TEST_BINARY="$REMOTE_CODEX_NATIVE"
+          export REMOTE_CODEX_TEST_NATIVE_HOME="$rc_test_root/native-home"
+          export CODEX_HOME="$REMOTE_CODEX_TEST_NATIVE_HOME"
+          export REMOTE_CODEX_SERVICE="$REMOTE_CODEX_SERVER_ARTIFACT"
+          export REMOTE_CODEX_ACCEPTANCE_TARGET="$REMOTE_CODEX_SSH_TARGET"
+          export REMOTE_CODEX_ACCEPTANCE_PORT="$REMOTE_CODEX_SSH_PORT"
+          export REMOTE_CODEX_ACCEPTANCE_CONTROL="$rc_test_root/master"
+          export REMOTE_CODEX_ACCEPTANCE_RELAYS="$rc_test_root/relays.jsonl"
+          export REMOTE_CODEX_ACCEPTANCE_OUTAGE="$rc_test_root/offline"
+          cargo test -p remote-codex-server -p remote-codex-adapter -p remote-codex-test-support --tests --locked --offline -- --ignored
+          target/debug/acceptance --cli "$PWD/target/release/remote-codex" --control "$rc_test_root/master" --output "$PWD/.artifacts/release"
+          /usr/bin/ssh "${ssh_args[@]}" -- "$REMOTE_CODEX_SSH_TARGET" "umask 077; mkdir -- '$rc_workspace'"
+          rc_remote_created=true
+          export REMOTE_CODEX_E2E_ROOT="$rc_test_root/desktop"
+          export CODEX_HOME="$rc_test_root/desktop/codex"
+          export REMOTE_CODEX_E2E_TARGET="$REMOTE_CODEX_SSH_TARGET"
+          export REMOTE_CODEX_E2E_PORT="$REMOTE_CODEX_SSH_PORT"
+          export REMOTE_CODEX_E2E_IDENTITY="$REMOTE_CODEX_SSH_IDENTITY"
+          export REMOTE_CODEX_E2E_WORKSPACE="$rc_workspace"
+          export REMOTE_CODEX_E2E_AUTH_CHALLENGE="$rc_test_root/authentication-challenge"
+          export REMOTE_CODEX_E2E_REQUESTS="$PWD/.artifacts/desktop-e2e/model-requests.json"
+          target/debug/desktop-fixture > "$rc_test_root/fixture.log" &
+          rc_fixture_pid=$!
+          for attempt in {1..150}; do
+            if grep -q '^ready$' "$rc_test_root/fixture.log"; then break; fi
+            kill -0 "$rc_fixture_pid"
+            sleep 0.1
+          done
+          grep -q '^ready$' "$rc_test_root/fixture.log"
+          npm --prefix apps/desktop run build -- --mode e2e
+          export TAURI_CONFIG="$(cat apps/desktop/src-tauri/tauri.e2e.conf.json)"
+          cargo build -p remote-codex-desktop --locked --offline --features e2e,custom-protocol
+          npm --prefix apps/desktop run test:e2e
+          python3 - <<'CHECK'
+          import json, os
+          from pathlib import Path
+          requests = json.loads(Path(os.environ['REMOTE_CODEX_E2E_REQUESTS']).read_text())
+          assert len(requests) >= 3 and requests[0]['model'] == 'fixture-model'
+          assert all(r['model'] == 'gpt-5.4-mini' for r in requests[1:])
+          CHECK
+      - name: Package and verify desktop release
+        run: |
+          export APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:--}"
+          npm --prefix apps/desktop run tauri -- build --bundles app,dmg
+          codesign --verify --deep --strict 'target/release/bundle/macos/Remote Codex.app'
+          for image in target/release/bundle/dmg/*.dmg; do hdiutil verify "$image"; done
+          shasum -a 256 target/release/remote-codex "$REMOTE_CODEX_SERVER_ARTIFACT" target/release/bundle/dmg/*.dmg > .artifacts/release/SHA256SUMS

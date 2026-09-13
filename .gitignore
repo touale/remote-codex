@@ -8,5 +8,9 @@
 /apps/desktop/dist/
 /apps/desktop/src-tauri/gen/
 *.tsbuildinfo
-/docs/
+/.dev-notes/
 [Rr][Ee][Aa][Dd][Mm][Ee]*
+!/README.md
+
+/tools/
+/docs/

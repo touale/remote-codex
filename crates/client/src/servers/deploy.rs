@@ -17,7 +17,7 @@ pub(super) async fn install(
 ) -> Result<(String, String)> {
     if bundle.bytes.is_empty() {
         return Err(ClientError::Argument(
-            "this build has no bundled Linux service; build the distribution with tools/package.py",
+            "this build has no bundled Linux service; follow Build from source in CONTRIBUTING.md",
         ));
     }
     if format!("{:x}", Sha256::digest(bundle.bytes)) != bundle.sha256 {

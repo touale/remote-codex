@@ -101,7 +101,7 @@ impl ServerService {
         }
         if state.options.service.bytes.is_empty() {
             return Err(ClientError::Argument(
-                "service bundle missing; build this checkout with python3 tools/package.py",
+                "service bundle missing; follow Build from source in CONTRIBUTING.md",
             ));
         }
         let program = state.program().await?;
