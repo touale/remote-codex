@@ -2716,9 +2716,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.30.1"
+version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
 dependencies = [
  "bitflags 2.13.1",
  "cfg-if",
@@ -3574,7 +3574,7 @@ dependencies = [
  "crossterm",
  "dialoguer",
  "fuzzy-matcher",
- "nix 0.30.1",
+ "nix 0.31.3",
  "portable-pty",
  "remote-codex-client",
  "remote-codex-test-support",
@@ -3593,7 +3593,7 @@ name = "remote-codex-adapter"
 version = "0.2.0"
 dependencies = [
  "futures-util",
- "nix 0.30.1",
+ "nix 0.31.3",
  "remote-codex-core",
  "remote-codex-protocol",
  "semver",
@@ -3612,7 +3612,7 @@ version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "futures-util",
- "nix 0.30.1",
+ "nix 0.31.3",
  "portable-pty",
  "remote-codex-adapter",
  "remote-codex-core",
@@ -3681,7 +3681,7 @@ version = "0.2.0"
 dependencies = [
  "cap-std",
  "clap",
- "nix 0.30.1",
+ "nix 0.31.3",
  "remote-codex-adapter",
  "remote-codex-core",
  "remote-codex-protocol",
@@ -3703,7 +3703,7 @@ name = "remote-codex-test-support"
 version = "0.2.0"
 dependencies = [
  "clap",
- "nix 0.30.1",
+ "nix 0.31.3",
  "portable-pty",
  "remote-codex-adapter",
  "remote-codex-client",
@@ -3724,7 +3724,7 @@ name = "remote-codex-transfer"
 version = "0.2.0"
 dependencies = [
  "cap-std",
- "nix 0.30.1",
+ "nix 0.31.3",
  "remote-codex-protocol",
  "rustix",
  "serde",
