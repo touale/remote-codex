@@ -51,8 +51,13 @@ async fn existing_client_refuses_writes_after_a_newer_schema_is_installed() -> T
             .await?
             .is_none()
     );
-    newer.close().await?;
     store.close().await;
+    // Compare durable database bytes, not a snapshot racing the WAL checkpoint.
+    let checkpoint: (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
+        .fetch_one(&mut newer)
+        .await?;
+    assert_eq!(checkpoint, (0, 0, 0));
+    newer.close().await?;
     let before = fs::read(state.join("state.sqlite3"))?;
     assert!(matches!(
         LocalStore::open(&state).await,
