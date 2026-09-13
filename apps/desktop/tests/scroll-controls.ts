@@ -29,6 +29,13 @@ export async function edgeScrollbar(selector: string, axis: 'x' | 'y', target = 
       browser.execute(
         (selector, axis) => {
           const element = document.querySelector(selector)!;
+          if (element.matches('.monaco-scrollable-element, .xterm-scrollable-element')) {
+            const direction = axis === 'x' ? 'horizontal' : 'vertical';
+            const bar = element.querySelector(`:scope > .scrollbar.${direction}`);
+            const slider = bar?.querySelector('.slider');
+            const dimension = axis === 'x' ? 'clientWidth' : 'clientHeight';
+            return Boolean(bar && slider && slider[dimension] > 0 && slider[dimension] < bar[dimension]);
+          }
           return axis === 'x'
             ? element.scrollWidth > element.clientWidth + 1
             : element.scrollHeight > element.clientHeight + 1;

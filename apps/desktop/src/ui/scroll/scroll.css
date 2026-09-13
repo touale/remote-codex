@@ -43,22 +43,22 @@
   }
 }
 
-/* Monaco 0.52 paints its own thumbs, including suggestion lists and diff views. */
-.monaco-scrollable-element > .scrollbar {
+/* Monaco and xterm paint their own scrollbar thumbs. */
+:is(.monaco-scrollable-element, .xterm-scrollable-element) > .scrollbar {
   opacity: 0 !important;
   transition: opacity 160ms ease !important;
 }
-.monaco-scrollable-element[data-scroll-x] > .scrollbar.horizontal,
-.monaco-scrollable-element[data-scroll-y] > .scrollbar.vertical {
+:is(.monaco-scrollable-element, .xterm-scrollable-element)[data-scroll-x] > .scrollbar.horizontal,
+:is(.monaco-scrollable-element, .xterm-scrollable-element)[data-scroll-y] > .scrollbar.vertical {
   opacity: 1 !important;
   pointer-events: auto;
 }
-.monaco-scrollable-element > .scrollbar > .slider {
+:is(.monaco-scrollable-element, .xterm-scrollable-element) > .scrollbar > .slider {
   border-radius: 8px;
 }
 @media (prefers-reduced-motion: reduce) {
   ::-webkit-scrollbar-thumb,
-  .monaco-scrollable-element > .scrollbar {
+  :is(.monaco-scrollable-element, .xterm-scrollable-element) > .scrollbar {
     transition: none !important;
   }
 }
