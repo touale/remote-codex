@@ -724,9 +724,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.16.4"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fe5f465a4f6fee88fad41b85d990f84c835335e85b5d9e6e63e0d06d28cba7c"
+checksum = "e96a4956774c13c126a8b5af4daa79384f4d826534c95a02d76afb39e2ab64e3"
 dependencies = [
  "encode_unicode",
  "libc",
@@ -1221,7 +1221,7 @@ dependencies = [
  "cc",
  "memchr",
  "rustc_version",
- "toml 1.1.2+spec-1.1.0",
+ "toml 1.1.3+spec-1.1.0",
  "vswhom",
  "winreg 0.55.0",
 ]
@@ -2710,9 +2710,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.30.1"
+version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
 dependencies = [
  "bitflags 2.13.1",
  "cfg-if",
@@ -3568,7 +3568,7 @@ dependencies = [
  "crossterm",
  "dialoguer",
  "fuzzy-matcher",
- "nix 0.30.1",
+ "nix 0.31.3",
  "portable-pty",
  "remote-codex-client",
  "remote-codex-test-support",
@@ -3587,7 +3587,7 @@ name = "remote-codex-adapter"
 version = "0.2.0"
 dependencies = [
  "futures-util",
- "nix 0.30.1",
+ "nix 0.31.3",
  "remote-codex-core",
  "remote-codex-protocol",
  "semver",
@@ -3604,9 +3604,9 @@ dependencies = [
 name = "remote-codex-client"
 version = "0.2.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "futures-util",
- "nix 0.30.1",
+ "nix 0.31.3",
  "portable-pty",
  "remote-codex-adapter",
  "remote-codex-core",
@@ -3622,8 +3622,8 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-tungstenite",
- "toml 1.1.2+spec-1.1.0",
- "toml_edit 0.23.10+spec-1.0.0",
+ "toml 1.1.3+spec-1.1.0",
+ "toml_edit 0.25.13+spec-1.1.0",
  "url",
  "uuid",
  "zeroize",
@@ -3675,7 +3675,7 @@ version = "0.2.0"
 dependencies = [
  "cap-std",
  "clap",
- "nix 0.30.1",
+ "nix 0.31.3",
  "remote-codex-adapter",
  "remote-codex-core",
  "remote-codex-protocol",
@@ -3697,7 +3697,7 @@ name = "remote-codex-test-support"
 version = "0.2.0"
 dependencies = [
  "clap",
- "nix 0.30.1",
+ "nix 0.31.3",
  "portable-pty",
  "remote-codex-adapter",
  "remote-codex-client",
@@ -3708,7 +3708,7 @@ dependencies = [
  "sqlx",
  "tempfile",
  "tokio",
- "toml 1.1.2+spec-1.1.0",
+ "toml 1.1.3+spec-1.1.0",
  "uuid",
  "zeroize",
 ]
@@ -3718,7 +3718,7 @@ name = "remote-codex-transfer"
 version = "0.2.0"
 dependencies = [
  "cap-std",
- "nix 0.30.1",
+ "nix 0.31.3",
  "remote-codex-protocol",
  "rustix",
  "serde",
@@ -4634,7 +4634,7 @@ dependencies = [
  "cfg-expr 0.20.9",
  "heck 0.5.0",
  "pkg-config",
- "toml 1.1.2+spec-1.1.0",
+ "toml 1.1.3+spec-1.1.0",
  "version-compare",
 ]
 
@@ -4868,7 +4868,7 @@ dependencies = [
  "tauri-plugin",
  "tauri-utils",
  "thiserror 2.0.20",
- "toml 1.1.2+spec-1.1.0",
+ "toml 1.1.3+spec-1.1.0",
  "url",
 ]
 
@@ -5020,7 +5020,7 @@ dependencies = [
  "serde_with",
  "swift-rs",
  "thiserror 2.0.20",
- "toml 1.1.2+spec-1.1.0",
+ "toml 1.1.3+spec-1.1.0",
  "url",
  "urlpattern",
  "uuid",
@@ -5035,7 +5035,7 @@ checksum = "cc65d45c68858bfe420dd29e834b5d15dbecf8a07a8a16cf4d532c7b1f69d4b6"
 dependencies = [
  "dunce",
  "embed-resource",
- "toml 1.1.2+spec-1.1.0",
+ "toml 1.1.3+spec-1.1.0",
 ]
 
 [[package]]
@@ -5266,9 +5266,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.2+spec-1.1.0"
+version = "1.1.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81f3d15e84cbcd896376e6730314d59fb5a87f31e4b038454184435cd57defee"
+checksum = "53c96ecdfa941c8fc4fcaed14f99ada8ebed502eef533015095a07e3301d4c3c"
 dependencies = [
  "indexmap 2.14.2",
  "serde_core",
@@ -5332,19 +5332,6 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.23.10+spec-1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84c8b9f757e028cee9fa244aea147aab2a9ec09d5325a9b01e0a49730c2b5269"
-dependencies = [
- "indexmap 2.14.2",
- "toml_datetime 0.7.5+spec-1.1.0",
- "toml_parser",
- "toml_writer",
- "winnow 0.7.15",
-]
-
-[[package]]
-name = "toml_edit"
 version = "0.25.13+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6975367e4d2ef766d86af01ffad14b622fecc8d4357a998fbc4deb6e9bacaf9b"
@@ -5352,6 +5339,7 @@ dependencies = [
  "indexmap 2.14.2",
  "toml_datetime 1.1.1+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 1.0.2",
 ]
 
@@ -5626,9 +5614,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.26.0"
+version = "1.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -6358,9 +6346,6 @@ name = "winnow"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "winnow"
