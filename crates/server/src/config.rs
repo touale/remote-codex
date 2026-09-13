@@ -20,13 +20,6 @@ pub(crate) struct Runtime {
 
 impl Runtime {
     pub(crate) async fn load(config: RemoteConfig) -> Result<Self> {
-        let program = Path::new(&config.codex);
-        if !program.is_absolute() || !program.is_file() {
-            return Err(Fault::new(
-                "INVALID_RUNTIME",
-                "managed Codex executable is missing",
-            ));
-        }
         let mut layer = ConfigLayer::new();
         let mut secrets = BTreeMap::new();
         for (key, value) in &config.values {

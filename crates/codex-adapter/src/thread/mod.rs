@@ -167,6 +167,10 @@ impl Codex {
 }
 
 impl Thread {
+    pub fn binding(&self) -> &SessionBinding {
+        &self.binding
+    }
+
     /// Subscribe before opening the thread so startup/resume notifications are not lost.
     /// One owner drains this bounded native broadcast stream; other subscribers see live events.
     pub fn take_events(&self) -> Result<tokio::sync::broadcast::Receiver<Value>, Fault> {

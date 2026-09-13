@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Result,
+    Result,
     config::{ConfigKey, ConfigValue},
     credentials::{CredentialVault, NativeVault},
     store::{ConnectionRecord, LocalStore},
@@ -8,7 +8,7 @@ use remote_codex_protocol::RemoteConfig;
 use std::collections::BTreeMap;
 
 pub(super) async fn resolve(store: &LocalStore, record: &ConnectionRecord) -> Result<RemoteConfig> {
-    let (snapshot, runtime) = store.sync_snapshot(&record.id).await?;
+    let snapshot = store.config_snapshot(&record.id).await?;
     let vault = NativeVault::new(&store.installation_id().await?);
     let mut values = BTreeMap::new();
     for (key, value) in snapshot.effective.entries() {
@@ -25,10 +25,6 @@ pub(super) async fn resolve(store: &LocalStore, record: &ConnectionRecord) -> Re
         values.insert(key.name(), raw);
     }
     Ok(RemoteConfig {
-        codex: runtime
-            .ok_or(ClientError::Argument("server runtime is not prepared"))?
-            .executable
-            .clone(),
         values,
         revision: snapshot.revision.saved,
     })

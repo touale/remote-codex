@@ -27,6 +27,7 @@ impl Bridge {
     pub(crate) async fn start(
         remote: Arc<Remote>,
         revision: i64,
+        runtime: remote_codex_protocol::ExecutionRuntime,
         mcp: Vec<remote_codex_protocol::ExecutionCommand>,
         approvals: Arc<crate::local::approvals::Approvals>,
         permissions: Arc<crate::local::permissions::Permissions>,
@@ -44,6 +45,7 @@ impl Bridge {
             .call(Request::OpenExecution {
                 channel: channel.clone(),
                 revision,
+                runtime,
                 mcp,
             })
             .await?;

@@ -76,12 +76,13 @@ impl LocalRuntime {
         if let Some(binding) = &options.existing {
             binding::validate(binding, &remote, &home, &mode)?;
         }
-        let lease_id = options
-            .existing
-            .as_ref()
-            .map(|b| b.session.id.clone())
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let lease = lease::Lease::acquire(options.directory, &lease_id, options.takeover).await?;
+        let lease = match &options.existing {
+            Some(binding) => Some(
+                lease::Lease::acquire(options.directory, &binding.session.id, options.takeover)
+                    .await?,
+            ),
+            None => None,
+        };
         let workspace = remote
             .call(remote_codex_protocol::Request::Workspace {
                 path: options.path.into(),
@@ -102,6 +103,7 @@ impl LocalRuntime {
         )?;
         let recipe = Recipe {
             program: options.program.into(),
+            runtime_cache: options.directory.join("cache/runtime"),
             home,
             cwd,
             mode,
@@ -112,7 +114,7 @@ impl LocalRuntime {
         };
         let recovery = Arc::new(Recovery::new(store.clone(), remote.server.id.clone()));
         let progress = options.progress.unwrap_or_else(|| Arc::new(|_| {}));
-        let (generation, binding) = recipe
+        let generation = recipe
             .open(
                 remote.clone(),
                 options.existing.as_ref(),
@@ -121,11 +123,13 @@ impl LocalRuntime {
                 None,
             )
             .await?;
+        let binding = generation.native.binding().clone();
         let prepared = async {
-            let lease = if options.existing.is_none() {
-                lease::Lease::acquire(options.directory, &binding.session.id, false).await?
-            } else {
-                lease
+            let lease = match lease {
+                Some(lease) => lease,
+                None => {
+                    lease::Lease::acquire(options.directory, &binding.session.id, false).await?
+                }
             };
             if options.existing.is_some() {
                 store.save_session(&binding).await?;
@@ -202,13 +206,7 @@ impl LocalRuntime {
         self.recovery.publish(EnvironmentState::Closed);
         if let Ok(generation) = self.current() {
             generation.detach().await;
-            if self.has_history.load(Ordering::Acquire)
-                && let Ok(session) = generation.native.summary().await
-            {
-                let mut binding = self.binding.clone();
-                binding.session = session;
-                let _ = self.store.save_session(&binding).await;
-            }
+            let _ = self.refresh_summary(&generation).await;
             generation.close().await;
         }
         self.lease.release();

@@ -63,6 +63,7 @@ async fn configuration_lists_the_supported_public_settings() -> TestResult {
         [
             "background",
             "disconnect_grace_seconds",
+            "reconnect.max_attempts",
             "proxy.mode",
             "execution.mode",
             "ssh.host",

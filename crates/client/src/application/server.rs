@@ -104,6 +104,8 @@ impl ServerService {
                 "service bundle missing; build this checkout with python3 tools/package.py",
             ));
         }
+        let program = state.program().await?;
+        let native = remote_codex_adapter::program::inspect(&program).await?;
         let prepared = crate::ssh::interaction::scope(
             state.options.authentication.clone(),
             servers::add(
@@ -111,6 +113,7 @@ impl ServerService {
                 &state.directory,
                 servers::AddServer {
                     name: &request.name,
+                    codex_version: &native.version,
                     address: &request.address,
                     port: request.port,
                     settings: &request.settings,

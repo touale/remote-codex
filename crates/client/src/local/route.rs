@@ -150,7 +150,7 @@ async fn dispatch(
             if !runtime.has_history.load(Ordering::Acquire) {
                 runtime
                     .store
-                    .save_session(&runtime.binding)
+                    .save_session(generation.native.binding())
                     .await
                     .map_err(|_| {
                         Fault::new(

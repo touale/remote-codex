@@ -32,49 +32,50 @@ export async function prepareSession(
     }
     return { workspace: current, id: resume };
   }
-  const operation = operationId();
-  const open = (takeover = false, source: string | null = null) =>
-    call('session_open', {
-      operationId: operation,
-      input: { server, path: current.path, resume, takeover, mcp_source: source },
-    });
+  let takeover = false;
+  let source: string | null = null;
   let result: SessionOpened;
-  try {
-    result = await open();
-  } catch (error) {
-    const issue = failure(error);
-    if (issue.code === 'SESSION_IN_USE' && allowTakeover) {
-      const answer = await dialog.ask({
-        title: 'Take over this session?',
-        message: 'Another Remote Codex process controls this session. Taking over closes that frontend connection.',
-        choices: ['Take over'],
+  for (;;) {
+    try {
+      result = await call('session_open', {
+        operationId: operationId(),
+        input: { server, path: current.path, resume, takeover, mcp_source: source },
       });
-      if (!answer) return null;
-      result = await open(true);
-    } else if (issue.code === 'MCP_NAME_CONFLICT') {
-      const answer = await dialog.ask({
-        title: 'Choose MCP configuration',
-        message: 'Local and remote MCP servers have conflicting names.',
-        choices: ['Use remote', 'Use local'],
-      });
-      if (!answer) return null;
-      result = await open(false, answer === 'Use remote' ? 'remote' : 'local');
-    } else throw error;
-  }
-  if (result.status === 'trust') {
-    const answer = await dialog.ask({
-      title: 'Trust project MCP servers?',
-      message: `${server} · ${current.path}\n\n${result.names.join(', ')}\n\nThese commands run on the remote server.`,
-      choices: ['Trust and continue'],
-    });
-    const operation = operationId();
-    const opened = await call('session_trust', {
-      operationId: operation,
-      preparation: result.preparation,
-      accept: Boolean(answer),
-    });
-    if (!opened) return null;
-    result = opened;
+      if (result.status === 'trust') {
+        const answer = await dialog.ask({
+          title: 'Trust project MCP servers?',
+          message: `${server} · ${current.path}\n\n${result.names.join(', ')}\n\nThese commands run on the remote server.`,
+          choices: ['Trust and continue'],
+        });
+        const opened = await call('session_trust', {
+          operationId: operationId(),
+          preparation: result.preparation,
+          accept: Boolean(answer),
+        });
+        if (!opened) return null;
+        result = opened;
+      }
+      break;
+    } catch (error) {
+      const issue = failure(error);
+      if (issue.code === 'SESSION_IN_USE' && allowTakeover && !takeover) {
+        const answer = await dialog.ask({
+          title: 'Take over this session?',
+          message: 'Another Remote Codex process controls this session. Taking over closes that frontend connection.',
+          choices: ['Take over'],
+        });
+        if (!answer) return null;
+        takeover = true;
+      } else if (issue.code === 'MCP_NAME_CONFLICT' && source === null) {
+        const answer = await dialog.ask({
+          title: 'Choose MCP configuration',
+          message: 'Local and remote MCP servers have conflicting names.',
+          choices: ['Use remote', 'Use local'],
+        });
+        if (!answer) return null;
+        source = answer === 'Use remote' ? 'remote' : 'local';
+      } else throw error;
+    }
   }
   if (result.status !== 'open') return null;
   chats.register(result, server, Boolean(resume));

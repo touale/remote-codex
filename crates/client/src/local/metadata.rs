@@ -5,9 +5,15 @@ use std::sync::atomic::Ordering;
 
 impl LocalRuntime {
     pub(super) async fn refresh_summary(&self, generation: &Generation) -> Result<()> {
-        let session = generation.native.summary().await?;
-        if self.has_history.load(Ordering::Acquire) && self.store.save_summary(&session).await? {
-            let _ = self.events.send(SessionEvent::SessionUpdated { session });
+        if !self.has_history.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let mut binding = generation.native.binding().clone();
+        binding.session = generation.native.summary().await?;
+        if self.store.update_session(&binding).await? {
+            let _ = self.events.send(SessionEvent::SessionUpdated {
+                session: binding.session,
+            });
         }
         Ok(())
     }

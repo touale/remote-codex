@@ -161,10 +161,10 @@ impl LocalRuntime {
         self.remote.synchronize(&self.store).await?;
         let mut recipe = self.recipe.clone();
         recipe.revision = snapshot.revision.saved;
-        let (mut generation, _) = recipe
+        let mut generation = recipe
             .open(
                 self.remote.clone(),
-                Some(&self.binding),
+                Some(old.native.binding()),
                 self.recovery.clone(),
                 &|_| {},
                 Some(&old.skills),
@@ -186,10 +186,9 @@ impl LocalRuntime {
                 &self.binding.session.id,
                 full,
             )?;
-            if self.has_history.load(Ordering::Acquire) {
-                self.refresh_summary(&generation).await?;
-            }
-            Ok::<_, ClientError>(generation.native.goal().await?)
+            let goal = generation.native.goal().await?;
+            self.refresh_summary(&generation).await?;
+            Ok::<_, ClientError>(goal)
         }
         .await;
         match verified {

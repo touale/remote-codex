@@ -35,7 +35,6 @@ async fn sandbox_is_required_and_foreground_detach_terminates_commands() -> Test
         for (revision, mode) in [(1, "sandboxed"), (2, "unrestricted")] {
             service
                 .dispatch(&call(Request::Configure(RemoteConfig {
-                    codex: codex.to_string_lossy().into_owned(),
                     revision,
                     values: BTreeMap::from([
                         ("execution.mode".into(), mode.into()),
@@ -47,6 +46,7 @@ async fn sandbox_is_required_and_foreground_detach_terminates_commands() -> Test
             let channel = uuid::Uuid::new_v4().to_string();
             service
                 .dispatch(&call(Request::OpenExecution {
+                    runtime: support::runtime(root.path(), &codex)?,
                     channel: channel.clone(),
                     revision,
                     mcp: vec![],

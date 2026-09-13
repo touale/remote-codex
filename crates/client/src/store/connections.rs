@@ -1,4 +1,3 @@
-use serde::Serialize;
 use sqlx::{Row, sqlite::SqliteRow};
 
 use super::LocalStore;
@@ -7,16 +6,15 @@ use crate::{
     connection::{SshEndpoint, validate_name},
 };
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub(crate) struct ConnectionRecord {
     pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) endpoint: SshEndpoint,
-    pub(crate) saved_revision: i64,
     pub(crate) runtime: Option<crate::runtime::RuntimeInfo>,
 }
 
-const SELECT: &str = "SELECT connections.*,server_revisions.revision FROM connections JOIN server_revisions ON connections.id=server_revisions.id";
+const SELECT: &str = "SELECT * FROM connections";
 
 impl LocalStore {
     pub(crate) async fn find_connection(&self, name: &str) -> Result<ConnectionRecord> {
@@ -98,36 +96,22 @@ impl LocalStore {
         self.connection_by_id(&id).await
     }
 
-    pub(crate) async fn activate_runtime(
+    /// Remember a verified package for offline lookup; execution is selected per channel.
+    pub(crate) async fn remember_runtime(
         &self,
         id: &str,
-        expected: i64,
         runtime: &crate::runtime::RuntimeInfo,
     ) -> Result<()> {
         let mut tx = self.begin_write().await?;
-        let current: Option<String> =
-            sqlx::query_scalar("SELECT runtime FROM connections WHERE id=?")
-                .bind(id)
-                .fetch_optional(&mut *tx)
-                .await?
-                .flatten();
-        let previous: Option<crate::runtime::RuntimeInfo> =
-            current.map(|s| serde_json::from_str(&s)).transpose()?;
-        let changed = previous.as_ref().is_none_or(|old| {
-            old.version != runtime.version
-                || old.executable != runtime.executable
-                || old.archive_sha256 != runtime.archive_sha256
-        });
-        let rows=sqlx::query("UPDATE server_revisions SET revision=revision+? WHERE id=? AND revision=? AND revision<9223372036854775807")
-            .bind(i64::from(changed)).bind(id).bind(expected).execute(&mut *tx).await?.rows_affected();
-        if rows != 1 {
-            return Err(ClientError::RevisionConflict);
-        }
-        sqlx::query("UPDATE connections SET runtime=? WHERE id=?")
+        let rows = sqlx::query("UPDATE connections SET runtime=? WHERE id=?")
             .bind(serde_json::to_string(runtime)?)
             .bind(id)
             .execute(&mut *tx)
-            .await?;
+            .await?
+            .rows_affected();
+        if rows != 1 {
+            return Err(ClientError::NotFound);
+        }
         tx.commit().await?;
         Ok(())
     }
@@ -141,7 +125,6 @@ fn decode(row: SqliteRow) -> Result<ConnectionRecord> {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
         endpoint,
-        saved_revision: row.try_get("revision")?,
         runtime: runtime
             .map(|text| serde_json::from_str(&text))
             .transpose()?,

@@ -9,6 +9,7 @@ pub struct NativeService {
 pub struct NativeHandle {
     account: NativeAccount,
     program: PathBuf,
+    version: String,
 }
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeStatus {
@@ -36,15 +37,24 @@ impl NativeService {
     }
     pub async fn open(&self) -> Result<NativeHandle> {
         let program = self.client.0.program().await?;
-        let account = NativeAccount::open(&program, &crate::local::codex_home()?).await?;
-        Ok(NativeHandle { account, program })
+        let inspected = remote_codex_adapter::program::inspect(&program).await?;
+        let account = NativeAccount::open(&inspected.path, &crate::local::codex_home()?).await?;
+        if let Err(error) = inspected.verify() {
+            account.close().await;
+            return Err(error.into());
+        }
+        Ok(NativeHandle {
+            account,
+            program,
+            version: inspected.version,
+        })
     }
 }
 impl NativeHandle {
     pub async fn status(&self) -> Result<NativeStatus> {
         Ok(NativeStatus {
             program: self.program.clone(),
-            version: remote_codex_adapter::catalog::VERSION.into(),
+            version: self.version.clone(),
             account: self.account.status().await?,
         })
     }

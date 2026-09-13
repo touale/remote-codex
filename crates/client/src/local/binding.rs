@@ -22,10 +22,5 @@ pub(super) fn validate(
             "environment execution mode changed; create a new session to use the new permissions",
         ));
     }
-    if binding.codex_version != remote_codex_adapter::catalog::VERSION {
-        return Err(ClientError::Unsupported(
-            "session Codex version has no validated migration",
-        ));
-    }
     Ok(())
 }

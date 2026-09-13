@@ -7,22 +7,6 @@ use crate::{
 };
 
 impl LocalStore {
-    pub(crate) async fn sync_snapshot(
-        &self,
-        server: &str,
-    ) -> Result<(ConfigSnapshot, Option<crate::runtime::RuntimeInfo>)> {
-        let mut tx = self.pool.begin().await?;
-        let config = snapshot(&mut tx, server).await?;
-        let runtime: Option<String> =
-            sqlx::query_scalar("SELECT runtime FROM connections WHERE id=?")
-                .bind(server)
-                .fetch_one(&mut *tx)
-                .await?;
-        let runtime = runtime.map(|raw| serde_json::from_str(&raw)).transpose()?;
-        tx.commit().await?;
-        Ok((config, runtime))
-    }
-
     pub(crate) async fn set_many_config(
         &self,
         server: &str,

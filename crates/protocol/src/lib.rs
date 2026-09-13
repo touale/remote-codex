@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 pub use service::*;
 
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 pub const MAX_FRAME: usize = 2 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -54,6 +54,7 @@ pub enum Request {
     },
     OpenExecution {
         channel: String,
+        runtime: ExecutionRuntime,
         revision: i64,
         mcp: Vec<ExecutionCommand>,
     },

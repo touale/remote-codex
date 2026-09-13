@@ -44,8 +44,8 @@ export class FileTabs {
       this.listeners.delete(listener);
     };
   };
-  private publish(tabs = this.tabs) {
-    this.tabs = [...tabs];
+  private publish(tabs = [...this.tabs]) {
+    this.tabs = tabs;
     this.listeners.forEach((listener) => listener());
   }
   get = (key: string) => this.tabs.find((tab) => tab.key === key);
@@ -56,7 +56,7 @@ export class FileTabs {
   buffers = () => this.tabs.filter(isReady);
   update = (key: string, values: Partial<Buffer>) => {
     const current = this.get(key);
-    if (current?.status === 'ready' && current.transferring && values.text !== undefined) return;
+    if (!current || !isReady(current) || (current.transferring && values.text !== undefined)) return;
     this.publish(this.tabs.map((tab) => (tab.key === key && isReady(tab) ? { ...tab, ...values } : tab)));
   };
   close = (key: string) => {
@@ -166,26 +166,28 @@ export class FileTabs {
     const token = Symbol(key);
     const file = { key, context, server, root, path };
     this.generations.set(key, token);
-    const replace = (tab: FileTab) => this.publish([...this.tabs.filter((t) => t.key !== key), tab]);
-    // Preserve tab order when retrying an existing file.
     const settle = (tab: FileTab) => {
-      if (this.generations.get(key) === token)
+      this.requests.delete(token);
+      if (this.generations.get(key) === token) {
+        this.generations.delete(key);
         this.publish(this.tabs.map((current) => (current.key === key ? tab : current)));
+      } else {
+        // A closed or moved tab may still retain its context until this read settles.
+        this.publish();
+      }
     };
     const task = Promise.resolve()
       .then(() => this.read(context, path))
       .then(
         (content) => settle({ ...content, ...file, status: 'ready', original: content.text, saving: false }),
         (error) => settle({ ...file, status: 'failed', error: failure(error).message }),
-      )
-      .finally(() => {
-        this.requests.delete(token);
-        if (this.generations.get(key) === token) this.generations.delete(key);
-        this.publish();
-      });
+      );
     this.requests.set(token, { context, task });
-    if (this.get(key)) settle({ ...file, status: 'loading' });
-    else replace({ ...file, status: 'loading' });
+    const loading: FileTab = { ...file, status: 'loading' };
+    // Preserve tab order when retrying an existing file.
+    this.publish(
+      this.get(key) ? this.tabs.map((current) => (current.key === key ? loading : current)) : [...this.tabs, loading],
+    );
     return task;
   }
 }

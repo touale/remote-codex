@@ -86,8 +86,12 @@ impl Recovery {
         let (used, limit) = self.attempts().await?;
         // A native timeout is recoverable here only after the failed generation
         // has been closed. It is not a general license to replay native requests.
-        let recoverable =
-            transient(error) || (self.rebuilding() && error.code() == "CODEX_RESPONSE_TIMEOUT");
+        let recoverable = transient(error)
+            || (self.rebuilding()
+                && matches!(
+                    error.code(),
+                    "CODEX_RESPONSE_TIMEOUT" | "CODEX_CHANGED" | "RUNTIME_UNAVAILABLE"
+                ));
         let manual = if !recoverable || used >= u32::from(limit) {
             let (code, message) = if recoverable {
                 (

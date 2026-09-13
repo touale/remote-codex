@@ -9,7 +9,6 @@ async fn invalid_configuration_never_replaces_acknowledged_values() -> TestResul
     let root = tempfile::tempdir()?;
     let service = Service::open(&root.path().join("state")).await?;
     let config = RemoteConfig {
-        codex: "/bin/sh".into(),
         revision: 1,
         values: BTreeMap::from([("background".into(), "true".into())]),
     };
@@ -43,7 +42,6 @@ async fn stale_or_conflicting_config_never_replaces_acknowledged_values() -> Tes
     let root = tempfile::tempdir()?;
     let store = Store::open(&root.path().join("state")).await?;
     let config = RemoteConfig {
-        codex: "/managed/codex".into(),
         values: BTreeMap::from([("background".into(), "true".into())]),
         revision: 2,
     };
@@ -84,5 +82,37 @@ async fn unsupported_formats_are_rejected_without_changing_their_bytes() -> Test
         );
         assert_eq!(before, std::fs::read(&path)?);
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn package_selection_migration_preserves_identity_and_settings() -> TestResult {
+    let root = tempfile::tempdir()?;
+    let state = root.path().join("state");
+    paths::private(&state)?;
+    let path = state.join("execution.sqlite3");
+    paths::file(&path)?;
+    let mut db =
+        SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&path)).await?;
+    sqlx::raw_sql(include_str!("../src/storage/schema.sql"))
+        .execute(&mut db)
+        .await?;
+    sqlx::raw_sql("INSERT INTO identity(singleton,id) VALUES(1,'preserved-identity'); PRAGMA application_id=1380143958; PRAGMA user_version=2;").execute(&mut db).await?;
+    let old = serde_json::json!({"codex":"/old/managed/codex","values":{"background":"true"},"revision":7});
+    sqlx::query("INSERT INTO profiles(id,config,revision) VALUES('profile',?,7)")
+        .bind(old.to_string())
+        .execute(&mut db)
+        .await?;
+    db.close().await?;
+    let store = Store::open(&state).await?;
+    assert_eq!(store.identity, "preserved-identity");
+    let current = store.config("profile").await?;
+    assert_eq!(current.revision, 7);
+    assert_eq!(
+        current.values.get("background").map(String::as_str),
+        Some("true")
+    );
+    // Re-synchronizing the same revision must still be accepted after migration.
+    store.save_config("profile", &current).await?;
     Ok(())
 }

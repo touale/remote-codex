@@ -5,9 +5,16 @@ use std::collections::BTreeMap;
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RemoteConfig {
-    pub codex: String,
     pub values: BTreeMap<String, String>,
     pub revision: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionRuntime {
+    pub version: String,
+    pub platform: String,
+    pub archive_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

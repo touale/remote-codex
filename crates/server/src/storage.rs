@@ -65,14 +65,41 @@ impl Store {
                 .execute(&mut *tx)
                 .await
                 .checked("STORAGE_ERROR", "cannot save remote identity")?;
-            sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=2;")
+            sqlx::raw_sql("PRAGMA application_id=1380143958; PRAGMA user_version=3;")
                 .execute(&mut *tx)
                 .await
                 .checked("STORAGE_ERROR", "cannot save schema version")?;
-        } else if application != 0x52435356 || version != 2 {
+        } else if application == 0x52435356 && version == 2 {
+            let profiles: Vec<(String, String)> = sqlx::query_as("SELECT id,config FROM profiles")
+                .fetch_all(&mut *tx)
+                .await
+                .checked("STORAGE_ERROR", "cannot read legacy configurations")?;
+            for (id, encoded) in profiles {
+                let mut value: serde_json::Value = serde_json::from_str(&encoded)
+                    .checked("INVALID_CONFIG", "invalid legacy configuration")?;
+                if let Some(object) = value.as_object_mut() {
+                    object.remove("codex");
+                }
+                let config: RemoteConfig = serde_json::from_value(value)
+                    .checked("INVALID_CONFIG", "invalid migrated configuration")?;
+                // Preserve canonical serialization so an equal revision can be acknowledged.
+                let encoded = serde_json::to_string(&config)
+                    .checked("INVALID_CONFIG", "cannot encode configuration")?;
+                sqlx::query("UPDATE profiles SET config=? WHERE id=?")
+                    .bind(encoded)
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .checked("STORAGE_ERROR", "cannot migrate configuration")?;
+            }
+            sqlx::raw_sql("PRAGMA user_version=3;")
+                .execute(&mut *tx)
+                .await
+                .checked("STORAGE_ERROR", "cannot save migrated schema version")?;
+        } else if application != 0x52435356 || version != 3 {
             return Err(Fault::new(
                 "UNSUPPORTED_SCHEMA",
-                "this release requires remote schema 2",
+                "this release requires remote schema 3",
             ));
         }
         let identity = sqlx::query_scalar("SELECT id FROM identity WHERE singleton=1")

@@ -33,11 +33,11 @@ async fn session_permissions_do_not_change_the_server_default_or_another_channel
         request,
     };
     let result=async{
-        service.dispatch(&call(Request::Configure(RemoteConfig{codex:codex.to_string_lossy().into_owned(),revision:1,values:BTreeMap::from([("execution.mode".into(),"sandboxed".into())])}))).await?;
+        service.dispatch(&call(Request::Configure(RemoteConfig{revision:1,values:BTreeMap::from([("execution.mode".into(),"sandboxed".into())])}))).await?;
         let mut grant=None;
         for index in 0..2 {
             let channel=uuid::Uuid::new_v4().to_string();
-            service.dispatch(&call(Request::OpenExecution{channel:channel.clone(),revision:1,mcp:vec![]})).await?;
+            service.dispatch(&call(Request::OpenExecution{ runtime: support::runtime(root.path(), &codex)?,channel:channel.clone(),revision:1,mcp:vec![]})).await?;
             let mut peer=Peer::attach(&socket,&service.store.identity,&channel,0).await?;
             peer.call("initialize",json!({"clientName":"session-permission-test"})).await?;
             peer.send(&uuid::Uuid::new_v4().to_string(),json!({"method":"initialized","params":{}})).await?;

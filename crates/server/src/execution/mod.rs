@@ -1,6 +1,7 @@
 mod actor;
 mod operations;
 mod policy;
+mod runtime;
 
 use crate::{Result, config::Runtime, paths, storage::Store};
 use remote_codex_adapter::executor::Executor;
@@ -30,6 +31,7 @@ pub(crate) enum Input {
 }
 
 pub(crate) struct Execution {
+    pub(crate) runtime: remote_codex_protocol::ExecutionRuntime,
     sender: mpsc::Sender<Input>,
     pub(crate) changed: Notify,
     pub(crate) alive: AtomicBool,
@@ -42,18 +44,20 @@ impl Execution {
         id: &str,
         profile: &str,
         runtime: Runtime,
+        selected: &remote_codex_protocol::ExecutionRuntime,
         updates: tokio::sync::watch::Receiver<crate::profiles::LiveSettings>,
         store: Store,
     ) -> Result<Arc<Self>> {
         let home = root.join("executors").join(id);
         paths::private(&home)?;
-        let backend =
-            Executor::start(Path::new(&runtime.config.codex), &home, &runtime.env).await?;
+        let program = runtime::resolve(root, selected).await?;
+        let backend = Executor::start(&program, &home, &runtime.env).await?;
         store
             .create_channel(id, profile, runtime.config.revision)
             .await?;
         let (sender, receiver) = mpsc::channel(64);
         let execution = Arc::new(Self {
+            runtime: selected.clone(),
             sender,
             changed: Notify::new(),
             alive: AtomicBool::new(true),

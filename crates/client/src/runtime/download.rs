@@ -11,12 +11,6 @@ use crate::{
     progress::{PrepareEvent, PrepareStage, TransferKind, TransferProgress},
     store::private_directory,
 };
-use remote_codex_adapter::catalog;
-
-pub(super) async fn package(cache: &Path, progress: impl Fn(PrepareEvent)) -> Result<PathBuf> {
-    verified_package(cache, catalog::REMOTE_URL, catalog::REMOTE_SHA256, progress).await
-}
-
 pub(super) async fn verified_package(
     cache: &Path,
     url: &str,
@@ -27,7 +21,7 @@ pub(super) async fn verified_package(
         .https_only(true)
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(300))
-        .user_agent("remote-codex/0.1.0")
+        .user_agent(concat!("remote-codex/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
     package_with(cache, &client, url, digest, progress).await

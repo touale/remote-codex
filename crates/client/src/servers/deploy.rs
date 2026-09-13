@@ -4,7 +4,6 @@ use crate::{
     connection::SshEndpoint,
     progress::{PrepareEvent, TransferKind, TransferProgress},
     ssh::{SshTransport, quote},
-    store::ConnectionRecord,
 };
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -12,7 +11,7 @@ use std::io::Write;
 pub(super) async fn install(
     ssh: &SshTransport,
     endpoint: &SshEndpoint,
-    record: &ConnectionRecord,
+    root: &str,
     bundle: ServerBundle<'_>,
     progress: impl Fn(PrepareEvent),
 ) -> Result<(String, String)> {
@@ -24,11 +23,6 @@ pub(super) async fn install(
     if format!("{:x}", Sha256::digest(bundle.bytes)) != bundle.sha256 {
         return Err(ClientError::Integrity);
     }
-    let runtime = record.runtime.as_ref().ok_or(ClientError::RemoteResponse)?;
-    let (root, _) = runtime
-        .executable
-        .split_once("/runtimes/codex/")
-        .ok_or(ClientError::RemoteResponse)?;
     let program = format!(
         "{root}/runtimes/service/{}/remote-codex-server",
         bundle.sha256
@@ -37,7 +31,10 @@ pub(super) async fn install(
         .script(
             endpoint,
             &format!(
-                "if test -f {}; then sha256sum {}; fi\n",
+                "set -eu\numask 077; test ! -L {}; mkdir -p {}; test \"$(stat -c %a {})\" = 700; if test -f {}; then sha256sum {}; fi\n",
+                quote(root)?,
+                quote(root)?,
+                quote(root)?,
                 quote(&program)?,
                 quote(&program)?
             ),

@@ -111,6 +111,8 @@ describe('editor read lifetimes', () => {
     const read = vi.fn(() => request.task);
     const tabs = new FileTabs(read);
     const file = identity();
+    const changed = vi.fn();
+    tabs.subscribe(changed);
     const first = tabs.open(file);
     expect(tabs.get(file.key)?.status).toBe('loading');
     expect(tabs.buffers()).toHaveLength(0);
@@ -118,6 +120,7 @@ describe('editor read lifetimes', () => {
     expect(second).toBe(first);
     request.resolve(content('original'));
     await first;
+    expect(changed).toHaveBeenCalledTimes(2); // Loading, then one settled snapshot.
     tabs.update(file.key, { text: 'unsaved' });
     await tabs.open(identity('workspace', '/workspace', 'a.txt'));
     expect(read).toHaveBeenCalledTimes(1);
@@ -143,6 +146,10 @@ describe('editor read lifetimes', () => {
     expect([...tabs.retainedContexts()]).toEqual(['workspace']);
     tabs.close(file.key);
     expect(tabs.retainedContexts().size).toBe(0);
+    const changed = vi.fn();
+    tabs.subscribe(changed);
+    tabs.update(file.key, { saving: false });
+    expect(changed).not.toHaveBeenCalled();
   });
 
   it('retains failed tabs without editable buffers and retries in place', async () => {

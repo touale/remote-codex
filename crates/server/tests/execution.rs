@@ -18,7 +18,7 @@ async fn call(service: &Arc<Service>, request: Request) -> TestResult<Value> {
 }
 
 #[tokio::test]
-#[ignore = "requires the pinned real Codex exec-server; uses only isolated temporary files"]
+#[ignore = "requires real Codex exec-server; uses only isolated temporary files"]
 async fn native_execution_survives_detach_deduplicates_and_cancels() -> TestResult {
     let root = tempfile::Builder::new()
         .prefix("rc-native-exec-")
@@ -36,9 +36,9 @@ async fn native_execution_survives_detach_deduplicates_and_cancels() -> TestResu
     let supervisor = service.clone();
     let task = tokio::spawn(async move { supervisor.serve(listener).await });
     let test=async {
-        call(&service,Request::Configure(RemoteConfig{codex:codex.to_string_lossy().into_owned(),revision:1,values:BTreeMap::from([("execution.mode".into(),"unrestricted".into()),("background".into(),"true".into())])})).await?;
+        call(&service,Request::Configure(RemoteConfig{revision:1,values:BTreeMap::from([("execution.mode".into(),"unrestricted".into()),("background".into(),"true".into())])})).await?;
         let channel=uuid::Uuid::new_v4().to_string();
-        call(&service,Request::OpenExecution{channel:channel.clone(),revision:1,mcp:vec![]}).await?;
+        call(&service,Request::OpenExecution{ runtime: support::runtime(root.path(), &codex)?,channel:channel.clone(),revision:1,mcp:vec![]}).await?;
         let mut peer=Peer::attach(&socket,&service.store.identity,&channel,0).await?;
         peer.call("initialize",json!({"clientName":"remote-codex-test"})).await?;
         peer.send(&uuid::Uuid::new_v4().to_string(),json!({"method":"initialized","params":{}})).await?;

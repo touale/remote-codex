@@ -32,7 +32,6 @@ async fn maintenance_preserves_open_sessions_and_retires_detached_idle_executors
     let result = async {
         service
             .dispatch(&call(Request::Configure(RemoteConfig {
-                codex: codex.to_string_lossy().into_owned(),
                 revision: 1,
                 values: BTreeMap::from([
                     ("execution.mode".into(), "sandboxed".into()),
@@ -43,6 +42,7 @@ async fn maintenance_preserves_open_sessions_and_retires_detached_idle_executors
         let channel = uuid::Uuid::new_v4().to_string();
         service
             .dispatch(&call(Request::OpenExecution {
+                runtime: support::runtime(root.path(), &codex)?,
                 channel: channel.clone(),
                 revision: 1,
                 mcp: vec![],

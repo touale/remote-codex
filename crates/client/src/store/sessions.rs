@@ -5,6 +5,7 @@ use remote_codex_core::session::SessionBinding;
 pub(crate) use remote_codex_core::session::CachedSession;
 
 impl LocalStore {
+    /// A history reader refreshes display data without changing the live execution binding.
     pub(crate) async fn save_summary(
         &self,
         session: &remote_codex_core::session::Session,
@@ -13,6 +14,16 @@ impl LocalStore {
         let value = serde_json::to_string(session)?;
         let changed = sqlx::query("UPDATE local_sessions SET record=json_set(record,'$.session',json(?)),updated_at=unixepoch() WHERE id=? AND json_extract(record,'$.session')<>json(?)")
             .bind(&value).bind(&session.id).bind(&value).execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(changed.rows_affected() > 0)
+    }
+
+    /// Refresh one existing owner's snapshot without recreating a removed session.
+    pub(crate) async fn update_session(&self, binding: &SessionBinding) -> Result<bool> {
+        let mut tx = self.begin_write().await?;
+        let value = serde_json::to_string(binding)?;
+        let changed = sqlx::query("UPDATE local_sessions SET record=?,updated_at=unixepoch() WHERE id=? AND server=? AND record<>?")
+            .bind(&value).bind(&binding.session.id).bind(&binding.server_id).bind(&value).execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(changed.rows_affected() > 0)
     }

@@ -1,4 +1,4 @@
-//! Read the last native 0.153.4 usage report without maintaining a second history.
+//! Read the last native usage report without maintaining a second history.
 use remote_codex_core::status::TokenUsage;
 use serde_json::Value;
 use std::{io, path::Path};

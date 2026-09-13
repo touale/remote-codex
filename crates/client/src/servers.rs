@@ -23,6 +23,7 @@ pub(crate) struct ServerBundle<'a> {
 
 pub(crate) struct AddServer<'a> {
     pub(crate) name: &'a str,
+    pub(crate) codex_version: &'a str,
     pub(crate) address: &'a str,
     pub(crate) port: Option<u16>,
     pub(crate) settings: &'a [(String, String)],
@@ -58,7 +59,7 @@ pub(crate) async fn ensure(
         &record.endpoint,
     )
     .await?;
-    prepare::environment(store, directory, record, ssh, bundle, false, progress).await
+    prepare::environment(store, directory, record, ssh, bundle, None, progress).await
 }
 
 pub(crate) async fn add(
@@ -118,5 +119,14 @@ pub(crate) async fn add(
         keys::install(&ssh, &endpoint, directory, &record.id, store).await?;
     }
     let record = store.connection_by_id(&record.id).await?;
-    prepare::environment(store, directory, record, ssh, bundle, true, progress).await
+    prepare::environment(
+        store,
+        directory,
+        record,
+        ssh,
+        bundle,
+        Some(request.codex_version),
+        progress,
+    )
+    .await
 }

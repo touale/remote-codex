@@ -146,6 +146,7 @@ impl Service {
             }
             Request::OpenExecution {
                 channel,
+                runtime: selected,
                 revision,
                 mcp,
             } => {
@@ -160,7 +161,13 @@ impl Service {
                             "execution belongs to another owner",
                         ));
                     }
-                    if executions.contains_key(channel) {
+                    if let Some(execution) = executions.get(channel) {
+                        if execution.runtime != *selected {
+                            return Err(Fault::new(
+                                "EXECUTION_CONFLICT",
+                                "execution channel already uses another runtime",
+                            ));
+                        }
                         return Ok(json!({"channel":channel}));
                     }
                     return Err(Fault::unknown(
@@ -193,6 +200,7 @@ impl Service {
                     channel,
                     &call.profile,
                     runtime,
+                    selected,
                     updates,
                     self.store.clone(),
                 )

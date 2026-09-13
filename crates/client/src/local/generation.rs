@@ -10,6 +10,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub(super) struct Recipe {
     pub program: PathBuf,
+    pub runtime_cache: PathBuf,
     pub home: PathBuf,
     pub cwd: String,
     pub mode: String,
@@ -43,14 +44,26 @@ impl Recipe {
         recovery: Arc<Recovery>,
         progress: &(dyn Fn(PrepareEvent) + Send + Sync),
         expected_skills: Option<&SkillMap>,
-    ) -> Result<(Generation, SessionBinding)> {
+    ) -> Result<Generation> {
+        let program = remote_codex_adapter::program::inspect(&self.program).await?;
         self.mcp.verify_local(&self.home)?;
+        let runtime = crate::runtime::prepare(
+            &remote.ssh,
+            &remote.server.endpoint,
+            &self.runtime_cache,
+            &program.version,
+            remote.server.runtime.as_ref(),
+            progress,
+        )
+        .await?;
+        program.verify()?;
         progress(PrepareEvent::Stage(PrepareStage::ConnectExecution));
         let approvals = Arc::new(approvals::Approvals::default());
         let permissions = Arc::new(permissions::Permissions::default());
         let bridge = Bridge::start(
             remote.clone(),
             self.revision,
+            runtime.reference(),
             self.mcp.commands.clone(),
             approvals.clone(),
             permissions.clone(),
@@ -58,7 +71,7 @@ impl Recipe {
         )
         .await?;
         progress(PrepareEvent::Stage(PrepareStage::StartLocalCodex));
-        let codex = match Codex::start(&self.program, &self.home).await {
+        let codex = match Codex::start(&program.path, &self.home).await {
             Ok(codex) => codex,
             Err(error) => {
                 bridge.detach().await;
@@ -67,6 +80,7 @@ impl Recipe {
         };
         let environment = format!("rc_{}", remote.server.id.replace('-', ""));
         let prepared = async {
+            program.verify()?;
             codex
                 .register_environment(&environment, &bridge.url)
                 .await?;
@@ -91,7 +105,7 @@ impl Recipe {
                 remote_identity: remote.identity.identity.clone(),
                 environment_id: environment,
                 codex_home: self.home.to_string_lossy().into_owned(),
-                codex_version: remote_codex_adapter::catalog::VERSION.into(),
+                codex_version: program.version.clone(),
                 execution_mode: self.mode.clone(),
                 revision: self.revision,
                 session: opened.session.clone(),
@@ -99,28 +113,25 @@ impl Recipe {
             if existing.is_some_and(|old| old.session.id != binding.session.id) {
                 return Err(ClientError::RemoteResponse);
             }
-            let native = codex.bind(opened, binding.clone(), existing.is_some())?;
+            let native = codex.bind(opened, binding, existing.is_some())?;
             if expected_skills.is_some() {
                 native.pause_goal_for_recovery().await?;
             }
-            permissions.restore(&bridge.channel, &binding.session.id, full)?;
-            Ok::<_, ClientError>((native, binding, skills))
+            permissions.restore(&bridge.channel, &native.binding().session.id, full)?;
+            Ok::<_, ClientError>((native, skills))
         }
         .await;
         match prepared {
-            Ok((native, binding, skills)) => Ok((
-                Generation {
-                    native,
-                    bridge,
-                    skills,
-                    approvals,
-                    permissions,
-                    pending_requests: Mutex::new(HashMap::new()),
-                    detached: tokio::sync::OnceCell::new(),
-                    closed: tokio::sync::OnceCell::new(),
-                },
-                binding,
-            )),
+            Ok((native, skills)) => Ok(Generation {
+                native,
+                bridge,
+                skills,
+                approvals,
+                permissions,
+                pending_requests: Mutex::new(HashMap::new()),
+                detached: tokio::sync::OnceCell::new(),
+                closed: tokio::sync::OnceCell::new(),
+            }),
             Err(error) => {
                 bridge.detach().await;
                 codex.shutdown().await;

@@ -1,5 +1,6 @@
 mod download;
 mod install;
+mod release;
 
 use crate::{ClientError, Result, connection::SshEndpoint, ssh::SshTransport};
 use serde::{Deserialize, Serialize};
@@ -7,13 +8,22 @@ use serde::{Deserialize, Serialize};
 pub(crate) use install::prepare;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+// Persisted installation hint. Older records also contain executable/reused,
+// which no longer select a runtime and are intentionally ignored when reading.
 pub(crate) struct RuntimeInfo {
     pub(crate) version: String,
     pub(crate) platform: String,
-    pub(crate) executable: String,
     pub(crate) archive_sha256: String,
-    pub(crate) reused: bool,
+}
+
+impl RuntimeInfo {
+    pub(crate) fn reference(&self) -> remote_codex_protocol::ExecutionRuntime {
+        remote_codex_protocol::ExecutionRuntime {
+            version: self.version.clone(),
+            platform: self.platform.clone(),
+            archive_sha256: self.archive_sha256.clone(),
+        }
+    }
 }
 
 pub(crate) struct RemoteHost {
@@ -36,7 +46,7 @@ pub(crate) async fn inspect_host(ssh: &SshTransport, endpoint: &SshEndpoint) -> 
         return Err(ClientError::RemoteResponse);
     }
     Ok(RemoteHost {
-        platform: remote_codex_adapter::catalog::REMOTE_TARGET.to_owned(),
+        platform: "linux-x86_64".to_owned(),
         data_dir: format!("{}/.local/share/remote-codex", fields[2]),
     })
 }

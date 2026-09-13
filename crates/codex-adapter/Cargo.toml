@@ -10,6 +10,7 @@ remote-codex-core = { path = "../core" }
 remote-codex-protocol = { path = "../protocol" }
 nix.workspace = true
 shlex.workspace = true
+semver = "1"
 url.workspace = true
 uuid.workspace = true
 serde_json.workspace = true

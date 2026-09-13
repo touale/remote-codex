@@ -56,9 +56,20 @@ async fn activity_order_ignores_cache_writes_and_preserves_filters() -> TestResu
         ids(store.cached_sessions(Some(&dev.id), true).await?),
         ["archived"]
     );
-    let mut summary = store.session_binding("old").await?.session;
-    summary.title = "Refreshed title".into();
-    store.save_summary(&summary).await?;
+    let mut binding = store.session_binding("old").await?;
+    binding.session.title = "Refreshed title".into();
+    binding.codex_version = "1.2.3".into();
+    assert!(store.update_session(&binding).await?);
+    assert!(!store.update_session(&binding).await?);
+    let saved = store.session_binding("old").await?;
+    assert_eq!(saved.codex_version, binding.codex_version);
+    assert_eq!(saved.session.title, binding.session.title);
+    binding.session.title = "History refreshed".into();
+    assert!(store.save_summary(&binding.session).await?);
+    assert_eq!(
+        store.session_binding("old").await?.codex_version,
+        binding.codex_version
+    );
     assert_eq!(
         ids(store.cached_sessions(Some(&dev.id), false).await?),
         ["a", "b", "old", "unknown"]
@@ -120,11 +131,14 @@ async fn session_bindings_and_message_times_survive_reopening_without_rebinding(
     assert_eq!(page.turns[0].items[1].sent_at, None);
     binding.server_id = second.id;
     assert!(store.save_session(&binding).await.is_err());
+    assert!(!store.update_session(&binding).await?);
     assert_eq!(
         store.session_binding("local-thread").await?.server_id,
         first.id
     );
     store.remove_server(&first.id).await?;
+    binding.server_id = first.id;
+    assert!(!store.update_session(&binding).await?);
     assert!(store.cached_sessions(None, false).await?.is_empty());
     store.close().await;
     Ok(())

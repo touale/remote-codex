@@ -2,7 +2,7 @@ mod access;
 mod credential_cleanup;
 mod credentials;
 mod desktop;
-mod runtime_selection;
+mod runtime_cache;
 mod session_catalog;
 mod ssh_credentials;
 mod storage;
