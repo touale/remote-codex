@@ -69,6 +69,7 @@ pub(crate) const PROXY_NAMES: [&str; 4] = ["http_proxy", "https_proxy", "all_pro
 pub enum ConfigKey {
     Background,
     DisconnectGraceSeconds,
+    ReconnectMaxAttempts,
     Environment(EnvironmentName),
     ProxyMode,
     ExecutionMode,
@@ -82,6 +83,7 @@ impl ConfigKey {
         match key {
             "background" => Ok(Self::Background),
             "disconnect_grace_seconds" => Ok(Self::DisconnectGraceSeconds),
+            "reconnect.max_attempts" => Ok(Self::ReconnectMaxAttempts),
             "proxy.mode" => Ok(Self::ProxyMode),
             "execution.mode" => Ok(Self::ExecutionMode),
             "ssh.host" => Ok(Self::SshHost),
@@ -99,6 +101,7 @@ impl ConfigKey {
         match self {
             Self::Background => "background",
             Self::DisconnectGraceSeconds => "disconnect_grace_seconds",
+            Self::ReconnectMaxAttempts => "reconnect.max_attempts",
             Self::Environment(name) => return format!("env.{}", name.as_str()),
             Self::ProxyMode => "proxy.mode",
             Self::ExecutionMode => "execution.mode",

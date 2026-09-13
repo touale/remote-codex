@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { call, failure, operationId } from '../bridge/client';
-import type { Server } from '../bridge/types';
+import type { ConfigReport, Server } from '../bridge/types';
 import { ErrorText, Modal } from '../ui/controls';
 import { ServerAuthentication } from './ServerAuthentication';
+import { serverSettingsChanges } from './serverSettings';
 export function ServerDialog({
   server,
   onClose,
@@ -22,33 +23,31 @@ export function ServerDialog({
   const [proxy, setProxy] = useState('');
   const [useProxy, setUseProxy] = useState(false);
   const [background, setBackground] = useState(true);
+  const [retryAttempts, setRetryAttempts] = useState('10');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [revision, setRevision] = useState<number | null>(null);
+  const [config, setConfig] = useState<ConfigReport | null>(null);
   useEffect(() => {
     if (server)
       void call('server_config', { name: server.name, updates: null, revision: null })
         .then((config) => {
-          setRevision(config.saved_revision);
+          setConfig(config);
           const value = (key: string) => config.items.find((item) => item.key === key)?.value;
           setUseProxy(value('proxy.mode') === 'custom');
           setProxy(String(value('env.https_proxy') ?? ''));
           setBackground(value('background') !== false);
+          setRetryAttempts(String(value('reconnect.max_attempts') ?? 10));
         })
         .catch((error) => setError(failure(error).message));
   }, [server]);
   const submit = async () => {
+    if (busy || (server && !config)) return;
     setBusy(true);
     setError('');
-    const settings: [string, string][] = [
-      ['proxy.mode', useProxy ? 'custom' : 'direct'],
-      ['background', String(background)],
-    ];
-    if (useProxy) {
-      settings.push(['env.https_proxy', proxy], ['env.http_proxy', proxy]);
-    }
+    const settings = serverSettingsChanges({ useProxy, proxy, background, retryAttempts }, config);
     try {
-      if (server) await call('server_config', { name: server.name, updates: settings, revision });
+      if (server)
+        await call('server_config', { name: server.name, updates: settings, revision: config?.saved_revision ?? null });
       else
         await call('server_save', {
           operationId: operationId(),
@@ -163,14 +162,28 @@ export function ServerDialog({
             Keep submitted commands running after disconnect
           </label>
         )}
+        <label className="field">
+          <span>
+            Retry attempts <small>Retry every 5 seconds. Changes apply to the next recovery.</small>
+          </span>
+          <input
+            type="number"
+            min={1}
+            max={65535}
+            step={1}
+            required
+            value={retryAttempts}
+            onChange={(event) => setRetryAttempts(event.target.value)}
+          />
+        </label>
         {server && <ServerAuthentication name={server.name} />}
         <ErrorText message={error} />
         <div className="actions">
           <button type="button" disabled={busy} onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" disabled={busy || Boolean(server && revision === null)}>
-            {busy ? 'Connecting…' : server ? 'Save settings' : 'Add server'}
+          <button className="primary" disabled={busy || Boolean(server && !config)}>
+            {busy ? (server ? 'Saving…' : 'Connecting…') : server ? 'Save settings' : 'Add server'}
           </button>
         </div>
       </form>

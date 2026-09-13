@@ -1,7 +1,7 @@
 use super::Client;
 use crate::{
     ClientError, Result,
-    config::{ConfigInput, ConfigKey, ConfigReport},
+    config::{ConfigInput, ConfigKey, ConfigReport, EffectiveConfig},
     credentials::{NativeVault, set_secret},
 };
 
@@ -36,7 +36,8 @@ impl ConfigService {
     ) -> Result<ConfigReport> {
         let state = &self.client.0;
         let server = state.store.find_connection(name).await?;
-        let revision = state.store.config_snapshot(&server.id).await?.revision;
+        let before = state.store.config_snapshot(&server.id).await?;
+        let revision = before.revision;
         if expected.is_some_and(|expected| expected != revision.saved) {
             return Err(ClientError::RevisionConflict);
         }
@@ -51,7 +52,7 @@ impl ConfigService {
         };
         state.cleanup_credentials().await;
         result?;
-        self.synchronize(server).await;
+        self.synchronize(server, &before.effective).await;
         self.list(name, false).await
     }
 
@@ -64,7 +65,8 @@ impl ConfigService {
     ) -> Result<ConfigReport> {
         let state = &self.client.0;
         let server = state.store.find_connection(name).await?;
-        let revision = state.store.config_snapshot(&server.id).await?.revision;
+        let before = state.store.config_snapshot(&server.id).await?;
+        let revision = before.revision;
         if revision.saved != expected {
             return Err(ClientError::RevisionConflict);
         }
@@ -72,7 +74,7 @@ impl ConfigService {
             .store
             .set_many_config(&server.id, updates, revision)
             .await?;
-        self.synchronize(server).await;
+        self.synchronize(server, &before.effective).await;
         self.list(name, false).await
     }
 
@@ -84,19 +86,33 @@ impl ConfigService {
     ) -> Result<ConfigReport> {
         let state = &self.client.0;
         let server = state.store.find_connection(name).await?;
-        let revision = state.store.config_snapshot(&server.id).await?.revision;
+        let before = state.store.config_snapshot(&server.id).await?;
+        let revision = before.revision;
         if expected.is_some_and(|expected| expected != revision.saved) {
             return Err(ClientError::RevisionConflict);
         }
         let result = state.store.unset_config(&server.id, key, revision).await;
         state.cleanup_credentials().await;
         result?;
-        self.synchronize(server).await;
+        self.synchronize(server, &before.effective).await;
         self.list(name, false).await
     }
 
-    async fn synchronize(&self, server: crate::store::ConnectionRecord) {
+    async fn synchronize(&self, server: crate::store::ConnectionRecord, before: &EffectiveConfig) {
         let state = &self.client.0;
+        let Ok(after) = state.store.config_snapshot(&server.id).await else {
+            return;
+        };
+        let changed = before
+            .entries()
+            .chain(after.effective.entries())
+            .any(|(key, _)| {
+                *key != ConfigKey::ReconnectMaxAttempts
+                    && before.get(key) != after.effective.get(key)
+            });
+        if !changed {
+            return;
+        }
         if let Ok(remote) = crate::remote::Remote::connect_running(
             &state.store,
             server,

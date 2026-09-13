@@ -78,6 +78,11 @@ impl EffectiveConfig {
         self.settings.get(key).map(|entry| &entry.value)
     }
 
+    /// Typed values for execution and configuration comparison; UI uses `list`.
+    pub fn entries(&self) -> impl Iterator<Item = (&ConfigKey, &ConfigValue)> {
+        self.settings.iter().map(|(key, entry)| (key, &entry.value))
+    }
+
     pub fn proxy_mode(&self) -> ProxyMode {
         match self.get(&ConfigKey::ProxyMode) {
             Some(ConfigValue::ProxyMode(mode)) => *mode,

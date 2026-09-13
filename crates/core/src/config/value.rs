@@ -100,6 +100,14 @@ pub(crate) fn parse_value(key: &ConfigKey, raw: &str) -> Result<ConfigValue, Con
             .filter(|value| *value <= 3600 && raw.bytes().all(|b| b.is_ascii_digit()))
             .map(ConfigValue::Integer)
             .ok_or(ConfigError::InvalidValue("expected integer from 0 to 3600")),
+        ValueKind::RetryAttempts => raw
+            .parse::<u16>()
+            .ok()
+            .filter(|value| *value > 0 && raw.bytes().all(|b| b.is_ascii_digit()))
+            .map(ConfigValue::Integer)
+            .ok_or(ConfigError::InvalidValue(
+                "expected integer from 1 to 65535",
+            )),
         ValueKind::ExecutionMode => match raw {
             "sandboxed" | "unrestricted" => Ok(ConfigValue::Text(raw.into())),
             _ => Err(ConfigError::InvalidValue(

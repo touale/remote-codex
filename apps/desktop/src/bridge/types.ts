@@ -106,7 +106,7 @@ export type Interaction =
   | { kind: 'unsupported'; message: string };
 export type Environment =
   | { status: 'ready' | 'closed' }
-  | { status: 'reconnecting'; attempt: number; retry_in_ms: number }
+  | { status: 'reconnecting'; attempt: number; max_attempts: number; retry_in_ms: number }
   | { status: 'recovering'; reason: string }
   | { status: 'action_required'; code: string; message: string };
 export interface Goal {

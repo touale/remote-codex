@@ -46,15 +46,29 @@ async fn status(
             state: state.clone(),
         });
         match &state {
-            EnvironmentState::Reconnecting { .. } => {
-                if let Err(error) = runtime.suspend_goal().await {
-                    runtime.announce(&format!("Could not suspend goal: {error}"));
+            EnvironmentState::Reconnecting {
+                attempt,
+                max_attempts,
+                retry_in_ms,
+            } => {
+                if matches!(previous, EnvironmentState::Ready) {
+                    if let Err(error) = runtime.suspend_goal().await {
+                        runtime.announce(&format!("Could not suspend goal: {error}"));
+                    }
+                    if let Ok(mut intent) = runtime.intent.lock() {
+                        intent.disconnect();
+                    }
                 }
-                if let Ok(mut intent) = runtime.intent.lock() {
-                    intent.disconnect();
-                }
-                if !matches!(previous, EnvironmentState::Reconnecting { .. }) {
-                    runtime.announce("Connection lost. Reconnecting…");
+                if !matches!(previous, EnvironmentState::Reconnecting { attempt: old, .. } if old == *attempt)
+                {
+                    let delay = if *retry_in_ms > 0 {
+                        " · retry in 5s"
+                    } else {
+                        ""
+                    };
+                    runtime.announce(&format!(
+                        "Connection lost. Reconnecting · attempt {attempt}/{max_attempts}{delay}"
+                    ));
                 }
             }
             EnvironmentState::Ready => {

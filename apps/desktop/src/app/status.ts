@@ -54,7 +54,10 @@ export function contextStatus(input: {
     case 'ready':
       return { label: 'Ready', tone: 'online' };
     case 'reconnecting':
-      return { label: 'Reconnecting…', tone: 'busy' };
+      return {
+        label: `Reconnecting · attempt ${input.environment.attempt}/${input.environment.max_attempts}${input.environment.retry_in_ms > 0 ? ' · retry in 5s' : ''}`,
+        tone: 'busy',
+      };
     case 'recovering':
       return { label: 'Restoring execution environment…', tone: 'busy' };
     case 'action_required':

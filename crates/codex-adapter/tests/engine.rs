@@ -91,3 +91,55 @@ async fn configured_native_catalog_keeps_serving_requests() -> TestResult {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn timed_out_resume_is_reaped_before_a_replacement_resumes() -> TestResult {
+    let home = tempfile::tempdir()?;
+    let program = executable(
+        home.path(),
+        r#"
+printf '%s' "$$" > pid
+while IFS= read -r request; do
+case "$request" in
+  *'"method":"initialize"'*) printf '{"id":1,"result":{}}\n' ;;
+  *'"method":"thread/resume"'*)
+    if test -f first-resume; then printf '{"id":2,"result":{"thread":{"id":"same-session"}}}\n';
+    else touch first-resume; fi ;;
+  *'"method":"config/read"'*)
+    printf '{"id":2,"result":{"late":true}}\n{"id":3,"result":{}}\n' ;;
+esac
+done
+"#,
+    )?;
+    let (engine, _) = Engine::local(&program, home.path()).await?;
+    let pid = std::fs::read_to_string(home.path().join("pid"))?.parse::<i32>()?;
+    let pending = engine.begin("thread/resume", json!({"threadId":"same-session"}))?;
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !home.path().join("first-resume").exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await?;
+    tokio::time::pause();
+    let fault = Engine::finish(pending)
+        .await
+        .err()
+        .ok_or("expected timeout")?;
+    tokio::time::resume();
+    assert_eq!(fault.code, "CODEX_RESPONSE_TIMEOUT");
+    assert!(fault.outcome_unknown);
+    // A late response cannot resolve another request.
+    assert_eq!(engine.call("config/read", json!({})).await?, json!({}));
+    engine.shutdown().await;
+    assert_eq!(
+        nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None),
+        Err(nix::errno::Errno::ESRCH)
+    );
+    let (next, _) = Engine::local(&program, home.path()).await?;
+    let result = next
+        .call("thread/resume", json!({"threadId":"same-session"}))
+        .await;
+    next.shutdown().await;
+    assert_eq!(result?["thread"]["id"], "same-session");
+    Ok(())
+}

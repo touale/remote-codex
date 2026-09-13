@@ -58,7 +58,11 @@ impl LocalStore {
             .into_iter()
             .filter(|item| !overrides || item.source == Source::Server)
             .map(|setting| ConfigItem {
-                application_state: if applied_revision == Some(state.revision.saved) {
+                application_state: if setting.apply_policy
+                    == crate::config::ApplyPolicy::NextReconnect
+                {
+                    "next_reconnect"
+                } else if applied_revision == Some(state.revision.saved) {
                     match setting.apply_policy {
                         crate::config::ApplyPolicy::NewProcess => "new_sessions",
                         _ => "applied",

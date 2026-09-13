@@ -73,7 +73,13 @@ impl Engine {
             next: AtomicU64::new(1),
             task,
         }));
-        let initialized = engine.call("initialize", json!({"clientInfo":{"name":"remote_codex","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}})).await?;
+        let initialized = match engine.call("initialize", json!({"clientInfo":{"name":"remote_codex","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}})).await {
+            Ok(value) => value,
+            Err(error) => {
+                engine.shutdown().await;
+                return Err(error);
+            }
+        };
         engine.send(json!({"method":"initialized","params":{}}))?;
         Ok((engine, initialized))
     }
@@ -106,7 +112,11 @@ impl Engine {
     pub async fn finish(pending: Pending) -> Answer {
         tokio::time::timeout(Duration::from_secs(30), pending)
             .await
-            .map_err(|_| Fault::unknown("Codex response timed out; inspect state before retrying"))?
+            .map_err(|_| Fault {
+                code: "CODEX_RESPONSE_TIMEOUT".into(),
+                message: "Codex response timed out; inspect state before retrying".into(),
+                outcome_unknown: true,
+            })?
             .map_err(|_| Fault::unknown("Codex exited before acknowledging the operation"))?
     }
 

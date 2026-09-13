@@ -11,17 +11,10 @@ pub(super) async fn resolve(store: &LocalStore, record: &ConnectionRecord) -> Re
     let (snapshot, runtime) = store.sync_snapshot(&record.id).await?;
     let vault = NativeVault::new(&store.installation_id().await?);
     let mut values = BTreeMap::new();
-    for item in snapshot.effective.list() {
-        let key = ConfigKey::parse(&item.key)?;
-        if matches!(
-            key,
-            ConfigKey::SshHost | ConfigKey::SshPort | ConfigKey::SshUser
-        ) {
+    for (key, value) in snapshot.effective.entries() {
+        if *key == ConfigKey::ReconnectMaxAttempts {
             continue;
         }
-        let Some(value) = snapshot.effective.get(&key) else {
-            continue;
-        };
         let raw = match value {
             ConfigValue::Secret(reference) => vault.read(reference).await?.to_string(),
             ConfigValue::Text(value) => value.clone(),
@@ -29,7 +22,7 @@ pub(super) async fn resolve(store: &LocalStore, record: &ConnectionRecord) -> Re
                 .trim_matches('"')
                 .to_owned(),
         };
-        values.insert(item.key, raw);
+        values.insert(key.name(), raw);
     }
     Ok(RemoteConfig {
         codex: runtime

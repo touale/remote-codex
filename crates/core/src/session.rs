@@ -151,9 +151,18 @@ pub enum SessionEvent {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum EnvironmentState {
     Ready,
-    Reconnecting { attempt: u32, retry_in_ms: u64 },
-    Recovering { reason: String },
-    ActionRequired { code: String, message: String },
+    Reconnecting {
+        attempt: u32,
+        max_attempts: u16,
+        retry_in_ms: u64,
+    },
+    Recovering {
+        reason: String,
+    },
+    ActionRequired {
+        code: String,
+        message: String,
+    },
     Closed,
 }
 

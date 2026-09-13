@@ -1,4 +1,5 @@
 use super::*;
+use remote_codex_core::goals::Goal;
 use remote_codex_protocol::{Fault, Request};
 
 impl LocalRuntime {
@@ -11,7 +12,7 @@ impl LocalRuntime {
     }
 
     pub(crate) fn retry(&self) {
-        self.recovery.retry.notify_one();
+        self.recovery.retry();
     }
 
     pub(crate) async fn authenticate(&self) -> Result<()> {
@@ -36,6 +37,7 @@ impl LocalRuntime {
                 Fault::new("SESSION_CLOSED", "session control is no longer available").into(),
             );
         }
+        self.recovery.begin_rebuild();
         self.intent
             .lock()
             .map_err(|_| ClientError::RemoteResponse)?
@@ -80,11 +82,11 @@ impl LocalRuntime {
             }
             let _ = self.native_events.send(event);
         }
-        let mut attempt = 0u32;
+        let mut error = ClientError::Ssh(255);
         loop {
-            let result = self.replace(old, full_access).await;
-            match result {
-                Ok(generation) => {
+            self.recovery.wait(&error).await?;
+            match self.replace(old, full_access).await {
+                Ok((generation, goal)) => {
                     if self.closed.borrow().is_some() || *self.lease.revoked.borrow() {
                         generation.close().await;
                         return Err(Fault::new(
@@ -93,7 +95,7 @@ impl LocalRuntime {
                         )
                         .into());
                     }
-                    let goal = generation.native.goal().await?;
+                    let generation = Arc::new(generation);
                     {
                         let mut intent = self
                             .intent
@@ -114,15 +116,16 @@ impl LocalRuntime {
                     self.announce("Execution environment restored. Checking interrupted work…");
                     return Ok(generation);
                 }
-                Err(error) => {
-                    attempt = attempt.saturating_add(1);
-                    self.recovery.wait(attempt, &error).await;
-                }
+                Err(fault) => error = fault,
             }
         }
     }
 
-    async fn replace(&self, old: &Generation, full_access: bool) -> Result<Arc<Generation>> {
+    async fn replace(
+        &self,
+        old: &Generation,
+        full_access: bool,
+    ) -> Result<(Generation, Option<Goal>)> {
         self.remote.recover(false).await?;
         let project = self
             .remote
@@ -134,21 +137,20 @@ impl LocalRuntime {
             return Err(Fault::new("PROJECT_CHANGED", "project configuration changed; review it and resume this session before continuing").into());
         }
         let snapshot = self.store.config_snapshot(&self.remote.server.id).await?;
-        for item in snapshot
+        for (key, _) in snapshot
             .effective
-            .list()
-            .into_iter()
-            .chain(self.recipe.config.list())
+            .entries()
+            .chain(self.recipe.config.entries())
         {
-            let key = crate::config::ConfigKey::parse(&item.key)?;
             if matches!(
                 key,
                 crate::config::ConfigKey::Background
                     | crate::config::ConfigKey::DisconnectGraceSeconds
+                    | crate::config::ConfigKey::ReconnectMaxAttempts
             ) {
                 continue;
             }
-            if snapshot.effective.get(&key) != self.recipe.config.get(&key) {
+            if snapshot.effective.get(key) != self.recipe.config.get(key) {
                 return Err(Fault::new(
                     "CONFIGURATION_CHANGED",
                     "execution configuration changed; reopen this session to apply it",
@@ -184,17 +186,19 @@ impl LocalRuntime {
                 &self.binding.session.id,
                 full,
             )?;
-            Ok::<_, ClientError>(())
+            if self.has_history.load(Ordering::Acquire) {
+                self.refresh_summary(&generation).await?;
+            }
+            Ok::<_, ClientError>(generation.native.goal().await?)
         }
         .await;
-        if let Err(error) = verified {
-            generation.close().await;
-            return Err(error);
+        match verified {
+            Ok(goal) => Ok((generation, goal)),
+            Err(error) => {
+                generation.close().await;
+                Err(error)
+            }
         }
-        if self.has_history.load(Ordering::Acquire) {
-            self.refresh_summary(&generation).await?;
-        }
-        Ok(Arc::new(generation))
     }
 
     pub(super) async fn continue_interrupted(&self, rebuilt: bool) -> Result<()> {

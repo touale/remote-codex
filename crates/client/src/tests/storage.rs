@@ -242,3 +242,67 @@ async fn names_are_stable_and_aliases_have_independent_identities() -> TestResul
     store.close().await;
     Ok(())
 }
+
+#[tokio::test]
+async fn cli_and_app_retry_settings_are_persistent_and_server_scoped() -> TestResult {
+    use crate::application::{Client, ClientOptions};
+    use crate::config::VisibleValue;
+    let root = tempfile::tempdir()?;
+    let path = root.path().join("state");
+    let store = LocalStore::open(&path).await?;
+    for name in ["dev", "test"] {
+        store
+            .save_connection(&SshEndpoint::parse("example.invalid", None)?, Some(name))
+            .await?;
+    }
+    let options = ClientOptions {
+        data_dir: Some(path),
+        ..Default::default()
+    };
+    let client = Client::open(options.clone()).await?;
+    let key = "reconnect.max_attempts";
+    // The same service backs CLI set and the App's batched server settings.
+    let report = client.config().set("dev", key, "20", false, None).await?;
+    let report = client
+        .config()
+        .set_many(
+            "dev",
+            &[
+                (key.into(), "3".into()),
+                ("proxy.mode".into(), "direct".into()),
+            ],
+            report.saved_revision,
+        )
+        .await?;
+    let item = report
+        .items
+        .iter()
+        .find(|item| item.setting.key == key)
+        .ok_or("missing setting")?;
+    assert_eq!(item.application_state, "next_reconnect");
+    assert_eq!(item.setting.value, Some(VisibleValue::Integer(3)));
+    assert_eq!(
+        client.config().get("test", key).await?.items[0]
+            .setting
+            .value,
+        Some(VisibleValue::Integer(10))
+    );
+    client.close().await;
+    let reopened = Client::open(options).await?;
+    assert_eq!(
+        reopened.config().get("dev", key).await?.items[0]
+            .setting
+            .value,
+        Some(VisibleValue::Integer(3))
+    );
+    reopened.config().unset("dev", key, None).await?;
+    assert_eq!(
+        reopened.config().get("dev", key).await?.items[0]
+            .setting
+            .value,
+        Some(VisibleValue::Integer(10))
+    );
+    reopened.close().await;
+    store.close().await;
+    Ok(())
+}

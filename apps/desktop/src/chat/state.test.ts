@@ -103,7 +103,7 @@ describe('native session projection', () => {
     state = reduceEvent(state, { type: 'settings_changed', settings: { ...settings, model: 'model-b' } });
     state = reduceEvent(state, {
       type: 'environment_changed',
-      state: { status: 'reconnecting', attempt: 1, retry_in_ms: 1000 },
+      state: { status: 'reconnecting', attempt: 1, max_attempts: 10, retry_in_ms: 5000 },
     });
     expect(state.turn).toBe('turn');
     expect(state.settings.model).toBe('model-b');

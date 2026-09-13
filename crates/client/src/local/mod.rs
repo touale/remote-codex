@@ -110,7 +110,7 @@ impl LocalRuntime {
             config: snapshot.effective,
             project,
         };
-        let recovery = Arc::new(Recovery::default());
+        let recovery = Arc::new(Recovery::new(store.clone(), remote.server.id.clone()));
         let progress = options.progress.unwrap_or_else(|| Arc::new(|_| {}));
         let (generation, binding) = recipe
             .open(

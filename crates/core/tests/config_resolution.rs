@@ -99,7 +99,7 @@ fn readonly_and_unknown_keys_cannot_mutate_configuration() -> TestResult {
         );
         assert_eq!(server.unset(key), Err(ConfigError::ReadOnlySetting));
     }
-    assert_eq!(resolve(&server)?.list().len(), 4);
+    assert_eq!(server, ConfigLayer::new());
     server.set("execution.mode", ConfigInput::Plain("unrestricted"))?;
     Ok(())
 }
@@ -124,6 +124,26 @@ fn invalid_values_leave_previous_configuration_intact() -> TestResult {
         server
             .set("background", ConfigInput::Plain("FALSE"))
             .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn retry_attempts_require_a_positive_bounded_integer() -> TestResult {
+    let mut server = ConfigLayer::new();
+    for value in ["1", "10", "65535"] {
+        server.set("reconnect.max_attempts", ConfigInput::Plain(value))?;
+    }
+    for value in ["0", "-1", "+1", "1.5", "65536", "", " 10"] {
+        assert!(
+            server
+                .set("reconnect.max_attempts", ConfigInput::Plain(value))
+                .is_err()
+        );
+    }
+    assert_eq!(
+        server.get(&ConfigKey::ReconnectMaxAttempts),
+        Some(&ConfigValue::Integer(65535))
     );
     Ok(())
 }

@@ -72,10 +72,9 @@ pub(super) async fn run(
             _ = heartbeat.tick() => !remote.ssh.healthy() || heard.elapsed() > Duration::from_secs(20) || codec::write(&mut backend.writer, &Frame::Heartbeat).await.is_err(),
         };
         if reconnect {
-            let mut attempt = 1;
             loop {
                 let restored = tokio::select! {
-                    result = reconnect_channel(remote, id, cursor, recovery, attempt) => result,
+                    result = reconnect_channel(remote, id, cursor, recovery) => result,
                     _ = stopped.changed() => return Ok(()),
                 };
                 backend = restored?;
@@ -88,10 +87,11 @@ pub(super) async fn run(
                 }
                 if delivered {
                     heard = tokio::time::Instant::now();
-                    recovery.publish(remote_codex_core::session::EnvironmentState::Ready);
+                    if !recovery.rebuilding() {
+                        recovery.publish(remote_codex_core::session::EnvironmentState::Ready);
+                    }
                     break;
                 }
-                attempt = attempt.saturating_add(1);
             }
         }
     }
@@ -135,11 +135,13 @@ async fn reconnect_channel(
     id: &str,
     after: i64,
     recovery: &super::super::recovery::Recovery,
-    mut attempt: u32,
 ) -> Result<Channel> {
     let mut error = ClientError::Ssh(255);
     loop {
-        recovery.wait(attempt, &error).await;
+        if recovery.rebuilding() {
+            return Err(error);
+        }
+        recovery.wait(&error).await?;
         let result = async {
             remote.recover(false).await?;
             let status: remote_codex_protocol::ExecutionStatus = serde_json::from_value(
@@ -172,7 +174,6 @@ async fn reconnect_channel(
             }
             Err(fault) => error = fault,
         }
-        attempt = attempt.saturating_add(1);
     }
 }
 

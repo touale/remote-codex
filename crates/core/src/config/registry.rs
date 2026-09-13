@@ -7,6 +7,7 @@ use super::{ConfigKey, ConfigValue, ProxyMode};
 pub enum ApplyPolicy {
     Supervisor,
     NextDisconnect,
+    NextReconnect,
     NewProcess,
     ReadOnly,
 }
@@ -16,6 +17,7 @@ pub enum ApplyPolicy {
 pub enum ValueKind {
     Boolean,
     GraceSeconds,
+    RetryAttempts,
     ExecutionMode,
     Environment,
     ProxyMode,
@@ -44,6 +46,11 @@ impl ConfigKey {
                 ApplyPolicy::NextDisconnect,
                 Some(ConfigValue::Integer(30)),
             ),
+            Self::ReconnectMaxAttempts => (
+                ValueKind::RetryAttempts,
+                ApplyPolicy::NextReconnect,
+                Some(ConfigValue::Integer(10)),
+            ),
             Self::Environment(_) => (ValueKind::Environment, ApplyPolicy::NewProcess, None),
             Self::ProxyMode => (
                 ValueKind::ProxyMode,
@@ -68,9 +75,10 @@ impl ConfigKey {
     }
 }
 
-pub(crate) const DEFAULT_KEYS: [ConfigKey; 4] = [
+pub(crate) const DEFAULT_KEYS: [ConfigKey; 5] = [
     ConfigKey::Background,
     ConfigKey::DisconnectGraceSeconds,
+    ConfigKey::ReconnectMaxAttempts,
     ConfigKey::ProxyMode,
     ConfigKey::ExecutionMode,
 ];
