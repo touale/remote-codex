@@ -34,8 +34,11 @@ impl Endpoint {
         if !root.is_absolute() {
             return Err(fault("TRANSFER_PATH", "Transfer root must be absolute."));
         }
+        let root = Dir::open_ambient_dir(root, cap_std::ambient_authority()).map_err(io)?;
+        // Linux capability handles may use O_PATH, which cannot be synced.
+        let root = paths::directory(&root, ".")?;
         Ok(Self {
-            root: Dir::open_ambient_dir(root, cap_std::ambient_authority()).map_err(io)?,
+            root,
             owner: owner.into(),
             cancelled: std::sync::atomic::AtomicBool::new(false),
         })

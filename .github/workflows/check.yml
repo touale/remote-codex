@@ -15,11 +15,7 @@ permissions:
 
 jobs:
   rust:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-14]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -39,14 +35,12 @@ jobs:
         run: cargo test --workspace --exclude remote-codex-desktop --all-targets --locked --offline
 
       - name: Build Linux execution service
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install --yes musl-tools
           rustup target add x86_64-unknown-linux-musl
           cargo build --release --locked -p remote-codex-server --target x86_64-unknown-linux-musl
       - name: Share Linux execution service
-        if: runner.os == 'Linux'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: execution-service
