@@ -70,8 +70,19 @@ async fn unsupported_formats_are_rejected_without_changing_their_bytes() -> Test
         paths::file(&path)?;
         let mut db =
             SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&path)).await?;
-        sqlx::raw_sql(&format!("CREATE TABLE preserved(value TEXT); INSERT INTO preserved VALUES('keep'); PRAGMA application_id={application}; PRAGMA user_version={version};"))
-            .execute(&mut db).await?;
+        sqlx::raw_sql("CREATE TABLE preserved(value TEXT); INSERT INTO preserved VALUES('keep');")
+            .execute(&mut db)
+            .await?;
+        for (pragma, value) in [
+            ("PRAGMA application_id = ", application),
+            ("PRAGMA user_version = ", version),
+        ] {
+            sqlx::QueryBuilder::<sqlx::Sqlite>::new(pragma)
+                .push(value)
+                .build()
+                .execute(&mut db)
+                .await?;
+        }
         db.close().await?;
         let before = std::fs::read(&path)?;
         assert!(

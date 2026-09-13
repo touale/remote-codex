@@ -14,11 +14,9 @@ pub(crate) struct ConnectionRecord {
     pub(crate) runtime: Option<crate::runtime::RuntimeInfo>,
 }
 
-const SELECT: &str = "SELECT * FROM connections";
-
 impl LocalStore {
     pub(crate) async fn find_connection(&self, name: &str) -> Result<ConnectionRecord> {
-        let row = sqlx::query(&format!("{SELECT} WHERE connections.name=?"))
+        let row = sqlx::query("SELECT * FROM connections WHERE connections.name=?")
             .bind(name)
             .fetch_optional(&self.pool)
             .await?
@@ -27,7 +25,7 @@ impl LocalStore {
     }
 
     pub(crate) async fn connection_by_id(&self, id: &str) -> Result<ConnectionRecord> {
-        let row = sqlx::query(&format!("{SELECT} WHERE connections.id=?"))
+        let row = sqlx::query("SELECT * FROM connections WHERE connections.id=?")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?
@@ -36,7 +34,7 @@ impl LocalStore {
     }
 
     pub(crate) async fn list_connections(&self) -> Result<Vec<ConnectionRecord>> {
-        sqlx::query(&format!("{SELECT} ORDER BY connections.name"))
+        sqlx::query("SELECT * FROM connections ORDER BY connections.name")
             .fetch_all(&self.pool)
             .await?
             .into_iter()
@@ -57,7 +55,7 @@ impl LocalStore {
         validate_name(&name)?;
         let encoded = serde_json::to_string(endpoint)?;
         let mut tx = self.begin_write().await?;
-        if let Some(row) = sqlx::query(&format!("{SELECT} WHERE connections.name=?"))
+        if let Some(row) = sqlx::query("SELECT * FROM connections WHERE connections.name=?")
             .bind(&name)
             .fetch_optional(&mut *tx)
             .await?
@@ -70,9 +68,9 @@ impl LocalStore {
             return Ok(record);
         }
         if !explicit
-            && let Some(row) = sqlx::query(&format!(
-                "{SELECT} WHERE endpoint=? ORDER BY connections.name LIMIT 1"
-            ))
+            && let Some(row) = sqlx::query(
+                "SELECT * FROM connections WHERE endpoint=? ORDER BY connections.name LIMIT 1",
+            )
             .bind(&encoded)
             .fetch_optional(&mut *tx)
             .await?

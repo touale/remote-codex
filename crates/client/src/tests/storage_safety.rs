@@ -120,11 +120,16 @@ async fn unsupported_formats_are_rejected_without_modifying_the_database() -> Te
         let path = state.join("state.sqlite3");
         let mut db =
             SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&path)).await?;
-        sqlx::raw_sql(&format!(
-            "PRAGMA application_id={application}; PRAGMA user_version={version};"
-        ))
-        .execute(&mut db)
-        .await?;
+        for (pragma, value) in [
+            ("PRAGMA application_id = ", application),
+            ("PRAGMA user_version = ", version),
+        ] {
+            sqlx::QueryBuilder::<sqlx::Sqlite>::new(pragma)
+                .push(value)
+                .build()
+                .execute(&mut db)
+                .await?;
+        }
         db.close().await?;
         let before = fs::read(&path)?;
         assert!(matches!(
