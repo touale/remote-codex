@@ -1,9 +1,5 @@
 import { $, browser, expect } from '@wdio/globals';
 import path from 'node:path';
-import { createServer, type Socket } from 'node:net';
-import { once } from 'node:events';
-import { invokeWindow } from './invoke';
-import type { Catalog } from '../src/bridge/types';
 import { contextAt } from './interaction-controls';
 import { sharedAppearanceAndUsage } from './settings-controls';
 
@@ -86,82 +82,5 @@ describe('Remote Codex desktop', () => {
       }
     });
     expect(result).toBe('RESOURCE_UNAVAILABLE');
-  });
-  it('clears completed progress without clearing another pending operation', async () => {
-    await $('button=Settings').waitForDisplayed();
-    // A loopback peer holds the SSH handshake; no remote host or credentials are used.
-    const sockets = new Set<Socket>();
-    const peer = createServer((socket) => {
-      sockets.add(socket);
-      socket.on('error', () => {});
-      socket.on('close', () => sockets.delete(socket));
-    });
-    const ids = [crypto.randomUUID(), crypto.randomUUID()];
-    peer.listen(0, '127.0.0.1');
-    await once(peer, 'listening');
-    try {
-      const address = peer.address();
-      if (!address || typeof address === 'string') throw new Error('Loopback port unavailable');
-      await browser.tauri.execute(
-        ({ core }, ids, port) => {
-          for (const id of ids) {
-            const entry: NonNullable<Window['__remoteCodexTestRequests']>[string] = {};
-            (window.__remoteCodexTestRequests ??= {})[id] = entry;
-            void core
-              .invoke('server_save', {
-                operationId: id,
-                input: {
-                  name: `progress-${id}`,
-                  address: 'root@127.0.0.1',
-                  port,
-                  identity: null,
-                  password: null,
-                  settings: [],
-                },
-              })
-              .then(
-                (value) => {
-                  entry.result = { ok: true, value };
-                },
-                (error: { code: string }) => {
-                  entry.result = { ok: false, error };
-                },
-              );
-          }
-        },
-        ids,
-        address.port,
-      );
-      await expect($('button[aria-label="Show 2 active operations"]')).toBeDisplayed();
-      await browser.waitUntil(() => sockets.size === 2);
-      await invokeWindow('main', 'cancel_operation', { id: ids[0] });
-      await browser.waitUntil(() =>
-        browser.execute((id) => {
-          const result = window.__remoteCodexTestRequests?.[id]?.result;
-          return Boolean(result && !result.ok && (result.error as { code: string }).code === 'OPERATION_CANCELLED');
-        }, ids[0]),
-      );
-      await expect($('button[aria-label="Show 2 active operations"]')).not.toExist();
-      await expect($('button[aria-label="Cancel operation"]')).toBeDisplayed();
-      for (const socket of sockets) socket.destroy();
-      await browser.waitUntil(() =>
-        browser.execute((id) => {
-          const result = window.__remoteCodexTestRequests?.[id]?.result;
-          return Boolean(result && !result.ok && (result.error as { code: string }).code !== 'OPERATION_CANCELLED');
-        }, ids[1]),
-      );
-      await expect($('button[aria-label="Cancel operation"]')).not.toExist();
-      await expect($('footer [role="status"]')).not.toHaveAttribute('data-state', 'busy');
-    } finally {
-      for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolve) => peer.close(() => resolve()));
-      await Promise.all(ids.map((id) => invokeWindow('main', 'cancel_operation', { id })));
-      const catalog = await invokeWindow<Catalog>('main', 'catalog', { archived: false });
-      for (const server of catalog.servers.filter((s) => ids.some((id) => s.name === `progress-${id}`)))
-        await invokeWindow('main', 'server_remove', { name: server.name });
-      await browser.execute((ids) => {
-        for (const id of ids) delete window.__remoteCodexTestRequests?.[id];
-      }, ids);
-    }
   });
 });

@@ -23,6 +23,10 @@ jobs:
           persist-credentials: false
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-bin: false
       - name: Fetch locked dependencies
         run: cargo fetch --locked
       - name: Architecture boundaries and source size
@@ -57,13 +61,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Install pinned toolchains
-        run: |
-          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
-          curl --fail --location --output /tmp/node.tar.gz https://nodejs.org/dist/v24.20.0/node-v24.20.0-darwin-arm64.tar.gz
-          echo '40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8  /tmp/node.tar.gz' | shasum -a 256 -c -
-          tar -xzf /tmp/node.tar.gz -C /tmp
-          echo '/tmp/node-v24.20.0-darwin-arm64/bin' >> "$GITHUB_PATH"
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-bin: false
+      - name: Install Node and cache npm dependencies
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24.20.0'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
       - run: cargo fetch --locked
       - run: npm ci --prefix apps/desktop
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -97,13 +106,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-bin: false
       - run: cargo fetch --locked
-      - name: Install Node
-        run: |
-          curl --fail --location --output "$RUNNER_TEMP/node.tar.gz" https://nodejs.org/dist/v24.20.0/node-v24.20.0-darwin-arm64.tar.gz
-          echo "40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8  $RUNNER_TEMP/node.tar.gz" | shasum -a 256 -c -
-          tar -xzf "$RUNNER_TEMP/node.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/node-v24.20.0-darwin-arm64/bin" >> "$GITHUB_PATH"
+      - name: Install Node and cache npm dependencies
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24.20.0'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: execution-service
