@@ -6,20 +6,48 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   execution-service:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    outputs:
+      version: ${{ steps.changelog.outputs.version }}
+      notes: ${{ steps.changelog.outputs.content }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Calculate release version and notes
+        id: changelog
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4
+        with:
+          version: v2.14.1
+          args: --bump --unreleased
+        env:
+          OUTPUT: ${{ runner.temp }}/release-notes.md
+      - name: Check release tag
+        env:
+          RELEASE_VERSION: ${{ steps.changelog.outputs.version }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_VERSION"; then
+            echo "::error::No unreleased changes since $RELEASE_VERSION."
+            exit 1
+          fi
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.1 --profile minimal
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-bin: false
+      - name: Set release version
+        env:
+          RELEASE_VERSION: ${{ steps.changelog.outputs.version }}
+        run: python3 .github/scripts/release-version.py "$RELEASE_VERSION"
       - name: Build Linux execution service
         run: |
           sudo apt-get update
@@ -40,6 +68,7 @@ jobs:
     timeout-minutes: 30
     env:
       REMOTE_CODEX_SERVER_ARTIFACT: ${{ github.workspace }}/target/execution-service/remote-codex-server
+      RELEASE_VERSION: ${{ needs.execution-service.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -57,6 +86,8 @@ jobs:
           node-version: '24.20.0'
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      - name: Set release version
+        run: python3 .github/scripts/release-version.py "$RELEASE_VERSION"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: execution-service
@@ -83,7 +114,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: release
+    needs: [execution-service, release]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -100,8 +131,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.execution-service.outputs.version }}
+          RELEASE_NOTES: ${{ needs.execution-service.outputs.notes }}
         run: |
-          tag="v$(jq -er .version apps/desktop/src-tauri/tauri.conf.json)"
           cd target/release-artifacts
           sha256sum --check SHA256SUMS
-          gh release create "$tag" ./* --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$RELEASE_VERSION" ./* \
+            --target "$GITHUB_SHA" --title "$RELEASE_VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
