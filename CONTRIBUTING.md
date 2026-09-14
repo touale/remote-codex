@@ -118,8 +118,7 @@ cargo run --locked -p remote-codex-test-support --bin acceptance -- --help
 
 Provide the native Codex, packaged CLI, Linux service, SSH target, credentials and
 report directory through the documented flags. Never use private conversations or
-production workspaces as fixtures. The manual release acceptance job in
-`.github/workflows/release.yml` runs these gates before packaging the desktop release.
+production workspaces as fixtures.
 
 ## Submitting changes
 
