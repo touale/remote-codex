@@ -3,13 +3,24 @@
 </p>
 <h1 align="center">Remote Codex</h1>
 <p align="center"><strong>Local Codex. Remote execution.</strong></p>
+<p align="center">
+  <a href="https://github.com/touale/remote-codex/actions/workflows/check.yml"><img src="https://img.shields.io/github/actions/workflow/status/touale/remote-codex/check.yml?branch=main&amp;event=push&amp;label=CI&amp;style=flat" height="20" alt="CI status"></a>
+  <a href="https://github.com/touale/remote-codex/releases/latest"><img src="https://img.shields.io/github/v/release/touale/remote-codex?label=Release&amp;style=flat" height="20" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/touale/remote-codex?label=License&amp;style=flat" height="20" alt="License"></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/Platform-macOS%20ARM64-555555?style=flat" height="20" alt="Platform: macOS ARM64"></a>
+</p>
 
 Remote Codex provides a desktop application and CLI for using local Codex sessions
 with remote development environments over SSH. Authentication and session history
 remain local, while project files and command execution reside on the remote server.
 Saved servers and sessions are shared between the desktop application and CLI.
 
-[Download](https://github.com/touale/remote-codex/releases) · [Installation](#installation) · [Usage](#usage) · [Contributing](CONTRIBUTING.md)
+<p align="center">
+  <a href="https://github.com/touale/remote-codex/releases">Download</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
 ## Features
 
@@ -72,7 +83,15 @@ Download the DMG, open it, and drag **Remote Codex** into **Applications**.
 
 #### CLI
 
-Download `remote-codex-macos-arm64.tar.gz`. In the download directory, run:
+Download `remote-codex-macos-arm64.tar.gz` from [GitHub Releases](https://github.com/touale/remote-codex/releases).
+Alternatively, use `wget`:
+
+```sh
+wget -O remote-codex-macos-arm64.tar.gz \
+  https://github.com/touale/remote-codex/releases/latest/download/remote-codex-macos-arm64.tar.gz
+```
+
+In the download directory, extract and install:
 
 ```sh
 tar -xzf remote-codex-macos-arm64.tar.gz
