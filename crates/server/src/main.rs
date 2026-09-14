@@ -83,22 +83,24 @@ async fn run(args: Args) -> Result<()> {
         Action::Ensure { json } => {
             use remote_codex_protocol::ServiceStart;
             use remote_codex_server::installation::Preparation;
-            match remote_codex_server::installation::prepare(&root, &socket).await? {
-                Preparation::Ready => {
-                    if json {
-                        print_status(&ServiceStart::Ready);
-                    }
-                    return Ok(());
-                }
-                Preparation::Waiting(activity) => {
-                    if json {
-                        print_status(&ServiceStart::Waiting(activity));
+            let build = remote_codex_server::installation::build_id()?;
+            let identity =
+                match remote_codex_server::installation::prepare(&root, &socket, &build).await? {
+                    Preparation::Ready => {
+                        if json {
+                            print_status(&ServiceStart::Ready);
+                        }
                         return Ok(());
                     }
-                    return Err(activity.fault());
-                }
-                Preparation::Start => {}
-            }
+                    Preparation::Waiting(activity) => {
+                        if json {
+                            print_status(&ServiceStart::Waiting(activity));
+                            return Ok(());
+                        }
+                        return Err(activity.fault());
+                    }
+                    Preparation::Start(identity) => identity,
+                };
             let log = paths::file(&root.join("service.log"))?;
             let executable =
                 std::env::current_exe().map_err(|_| fault("cannot locate service executable"))?;
@@ -114,7 +116,9 @@ async fn run(args: Args) -> Result<()> {
                 .map_err(|_| fault("cannot launch remote service"))?;
             let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
             loop {
-                if UnixStream::connect(&socket).await.is_ok() {
+                if remote_codex_server::installation::ready(&socket, identity.as_deref(), &build)
+                    .await?
+                {
                     if json {
                         print_status(&ServiceStart::Ready);
                     }
