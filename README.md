@@ -72,9 +72,10 @@ Download the DMG, open it, and drag **Remote Codex** into **Applications**.
 
 #### CLI
 
-Download the CLI executable. In the download directory, run:
+Download `remote-codex-macos-arm64.tar.gz`. In the download directory, run:
 
 ```sh
+tar -xzf remote-codex-macos-arm64.tar.gz
 mkdir -p "$HOME/.local/bin"
 install -m 755 remote-codex "$HOME/.local/bin/remote-codex"
 ```
