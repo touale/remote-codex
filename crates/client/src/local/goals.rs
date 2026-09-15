@@ -148,7 +148,11 @@ impl LocalRuntime {
                 .intent
                 .lock()
                 .map_err(|_| ClientError::RemoteResponse)?;
-            if intent.active.is_some() || intent.interrupted.is_some() || intent.episode.is_some() {
+            if intent.active.is_some()
+                || intent.interrupted.is_some()
+                || intent.episode.is_some()
+                || intent.pending_message.is_some()
+            {
                 return Ok(());
             }
             let objective = intent.resume_goal.take();

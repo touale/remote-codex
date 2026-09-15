@@ -5,8 +5,8 @@ use crate::{
 };
 use remote_codex_protocol::ServiceStart;
 
-/// A busy supervisor remains usable if the subsequent identity handshake
-/// satisfies the compatibility catalog. The immutable update waits for idle.
+/// A busy supervisor remains usable if the subsequent handshake validates its
+/// identity and protocol. Its update waits until the service is idle.
 pub(crate) async fn ensure(
     ssh: &SshTransport,
     endpoint: &SshEndpoint,

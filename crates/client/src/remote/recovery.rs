@@ -84,25 +84,39 @@ impl Recovery {
         // Register before publishing the state that enables the Retry button.
         let retried = self.retry.notified();
         let (used, limit) = self.attempts().await?;
-        // A native timeout is recoverable here only after the failed generation
-        // has been closed. It is not a general license to replay native requests.
+        // Bridge transport errors arrive as Fault codes. Recover them and native
+        // timeouts only after closing the failed generation, without replaying requests.
         let recoverable = transient(error)
             || (self.rebuilding()
                 && matches!(
                     error.code(),
-                    "CODEX_RESPONSE_TIMEOUT" | "CODEX_CHANGED" | "RUNTIME_UNAVAILABLE"
+                    "INVALID_REMOTE_RESPONSE"
+                        | "CODEX_RESPONSE_TIMEOUT"
+                        | "CODEX_CHANGED"
+                        | "RUNTIME_UNAVAILABLE"
+                        | "RECOVERY_RETRIES_EXHAUSTED"
                 ));
         let manual = if !recoverable || used >= u32::from(limit) {
-            let (code, message) = if recoverable {
+            let (code, message) = if let ClientError::RemoteFault(code, message, _) = error
+                && code == "RECOVERY_RETRIES_EXHAUSTED"
+            {
+                (code.as_str(), message.clone())
+            } else if recoverable {
+                let noun = if limit == 1 { "attempt" } else { "attempts" };
                 (
                     "RECOVERY_RETRIES_EXHAUSTED",
                     format!(
-                        "Automatic recovery failed after {limit} attempts. Last error: {error}. Retry or exit and resume this session to try again."
+                        "Connection failed after {limit} {noun}. Send a message to try again. Last error: {error}"
                     ),
                 )
             } else {
                 (error.code(), error.to_string())
             };
+            // The transport cannot park with a native tool call still waiting.
+            // Let the session owner stop that backend before exposing Retry.
+            if !self.rebuilding() {
+                return Err(remote_codex_protocol::Fault::new(code, &message).into());
+            }
             self.publish(EnvironmentState::ActionRequired {
                 code: code.into(),
                 message,

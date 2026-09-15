@@ -269,6 +269,11 @@ pub fn interrupted(thread: &str, turn: &str) -> Value {
     json!({"method":"turn/completed","params":{"threadId":thread,"turn":{"id":turn,"items":[],"status":"interrupted","error":null}}})
 }
 
+/// A stopped backend cannot finish its own turn after recovery is exhausted.
+pub fn failed(thread: &str, turn: &str, message: &str) -> Value {
+    json!({"method":"turn/completed","params":{"threadId":thread,"turn":{"id":turn,"items":[],"status":"failed","error":{"message":message,"codexErrorInfo":"other","additionalDetails":null}}}})
+}
+
 pub fn warning(thread: &str, message: &str) -> Value {
     json!({"method":"warning","params":{"threadId":thread,"message":message}})
 }

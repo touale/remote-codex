@@ -8,7 +8,7 @@ use remote_codex_test_support::{
     model::{function, message},
 };
 use serde_json::{Value, json};
-use std::{io::Write, time::Duration};
+use std::io::Write;
 
 pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     for via_command in [false, true] {
@@ -70,10 +70,7 @@ async fn resume(context: &Context, via_command: bool) -> ProbeResult<()> {
     paused.wait_for("RESUME_HISTORY_MARKER").await?;
     paused.type_command("/status").await?;
     paused.send(b"\x1b")?;
-    paused.send(b"\x03")?;
-    tokio::time::sleep(Duration::from_millis(350)).await;
-    paused.send(b"\x03")?;
-    if paused.wait_exit().await? != Some(0) {
+    if paused.interrupt().await? != Some(0) {
         return Err(format!("paused resume did not exit: {}", paused.diagnostics()).into());
     }
     let output = paused.diagnostics();

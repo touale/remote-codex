@@ -10,7 +10,9 @@ mod restart;
 mod saved_password;
 mod ssh;
 mod tui;
+mod tui_edit;
 mod tui_goal;
+mod tui_outage;
 mod tui_recovery;
 mod tui_resume;
 
@@ -51,6 +53,12 @@ pub(super) struct Arguments {
     /// Run the saved-password contract alone for credential-backend diagnostics.
     #[arg(long)]
     credentials_only: bool,
+    /// Run CLI and App recovery checks without repeating the full acceptance suite.
+    #[arg(long)]
+    recovery_only: bool,
+    /// Verify native prompt editing and the resulting remote session bindings.
+    #[arg(long)]
+    editing_only: bool,
 }
 
 pub(super) struct Context {
@@ -178,6 +186,13 @@ pub(super) async fn run() -> ProbeResult<()> {
             );
         }
         retried.close().await;
+        if context.environment.args.editing_only {
+            return tui_edit::exercise(&context).await;
+        }
+        if context.environment.args.recovery_only {
+            outage::messages(&context).await?;
+            return tui_recovery::exercise(&context).await;
+        }
         headless::exercise(&context).await?;
         tui_resume::exercise(&context).await?;
         extensions::exercise(&context).await?;
@@ -188,6 +203,7 @@ pub(super) async fn run() -> ProbeResult<()> {
         goals::exercise(&context).await?;
         tui_goal::exercise(&context).await?;
         tui::exercise(&context).await?;
+        tui_edit::exercise(&context).await?;
         tui_recovery::exercise(&context).await?;
         if context.environment.args.password_recovery {
             password_recovery::exercise(&context).await?;
@@ -205,7 +221,9 @@ pub(super) async fn run() -> ProbeResult<()> {
         context.environment.args.output.join("report.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "passed":result.is_ok() && cleanup.is_ok(),"transport":if context.environment.args.control.is_some() {"OpenSSH with reused authentication; local readiness socket fixture"} else {"OpenSSH with identity file"},"native_version":remote_codex_adapter::program::inspect(&remote_codex_adapter::program::discover().await?).await?.version,
-        "headless_and_tui":!context.environment.args.credentials_only,
+        "headless_and_tui":!context.environment.args.credentials_only && !context.environment.args.recovery_only && !context.environment.args.editing_only,
+        "recovery_only":context.environment.args.recovery_only,
+        "editing_only":context.environment.args.editing_only,
         "password_recovery":context.environment.args.password_recovery && !context.environment.args.credentials_only,
         "saved_password":context.environment.args.password_recovery || context.environment.args.credentials_only,
         "host_reboot":"not_run",

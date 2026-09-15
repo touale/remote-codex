@@ -56,6 +56,33 @@ impl Environment {
     }
 
     pub(super) async fn register(&self, client: &Client) -> ProbeResult<()> {
+        // Seed the private service root before server add can start a daemon.
+        // Fault injection must never attach to the user's default supervisor.
+        let pool = sqlx::SqlitePool::connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new().filename(self.state.join("state.sqlite3")),
+        )
+        .await?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let endpoint = remote_codex_client::connection::SshEndpoint::parse(
+            &self.args.target,
+            Some(self.args.port),
+        )?;
+        let mut tx = pool.begin().await?;
+        sqlx::query("INSERT INTO server_revisions(id) VALUES (?)")
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO connections(id,name,endpoint) VALUES (?,'test',?)")
+            .bind(&id)
+            .bind(serde_json::to_string(&endpoint)?)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO server_access(server,service_root) VALUES (?,?)")
+            .bind(&id)
+            .bind(format!("{}/service", self.workspace))
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
         let mut settings = vec![
             ("execution.mode".into(), "sandboxed".into()),
             ("background".into(), "true".into()),
@@ -79,13 +106,33 @@ impl Environment {
                 install_key: false,
             })
             .await?;
-        // Fault injection owns a private supervisor, never the user's active service.
-        let pool = sqlx::SqlitePool::connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new().filename(self.state.join("state.sqlite3")),
-        )
+        let program: String =
+            sqlx::query_scalar("SELECT service_executable FROM server_access WHERE server=?")
+                .bind(&server.id)
+                .fetch_one(&pool)
+                .await?;
+        let runtimes = std::path::Path::new(&program)
+            .ancestors()
+            .nth(3)
+            .ok_or("invalid managed runtime path")?;
+        let runtime: String = sqlx::query_scalar("SELECT runtime FROM connections WHERE id=?")
+            .bind(&server.id)
+            .fetch_one(&pool)
+            .await?;
+        let runtime: remote_codex_protocol::ExecutionRuntime = serde_json::from_str(&runtime)?;
+        let package = runtimes
+            .join("codex")
+            .join(format!("{}-{}", runtime.version, runtime.platform));
+        // The isolated supervisor resolves packages relative to its own root.
+        // Copy the verified package; a symlink is intentionally rejected by it.
+        self.command(&format!(
+            "umask 077; mkdir -p {0}/runtimes/codex; cp -a -- {1} {0}/runtimes/codex/",
+            quote(&self.workspace)?,
+            quote(package.to_str().ok_or("invalid package path")?)?
+        ))
         .await?;
-        sqlx::query("UPDATE server_access SET service_root=?,service_executable=NULL,remote_identity=NULL,applied_revision=NULL WHERE server=?")
-            .bind(format!("{}/service", self.workspace)).bind(&server.id).execute(&pool).await?;
+        sqlx::query("UPDATE server_access SET service_executable=NULL,remote_identity=NULL,applied_revision=NULL WHERE server=?")
+            .bind(&server.id).execute(&pool).await?;
         // Model interrupted preparation; the next ordinary session must finish it.
         sqlx::query("UPDATE connections SET runtime=NULL WHERE id=?")
             .bind(&server.id)

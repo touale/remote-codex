@@ -1,6 +1,7 @@
 pub mod action;
 mod attachments;
 pub(crate) mod binding;
+mod creation;
 mod execution_policy;
 mod goal_attachments;
 pub mod history;
@@ -8,6 +9,7 @@ mod request;
 mod settings;
 
 use crate::engine::Engine;
+pub use creation::Creation;
 use remote_codex_core::session::{Session, SessionBinding};
 use remote_codex_protocol::Fault;
 pub use request::{Operation, OperationKind, Prepared, response};
@@ -24,11 +26,18 @@ pub struct Codex {
     home: PathBuf,
 }
 
+#[derive(Clone, Copy)]
+pub enum OpenSource<'a> {
+    New,
+    Resume(&'a str),
+    Frontend(&'a Creation),
+}
+
 pub struct OpenThread<'a> {
     pub environment: &'a str,
     pub directory: &'a str,
     pub execution_mode: &'a str,
-    pub existing: Option<&'a str>,
+    pub source: OpenSource<'a>,
     pub mcp: BTreeMap<String, Value>,
     pub instructions: String,
 }
@@ -109,7 +118,7 @@ impl Codex {
         }
         params["dynamicTools"] = json!([crate::recovery::tool(), goal_attachments::tool()]);
         let events = self.engine.subscribe();
-        let response = if let Some(id) = options.existing {
+        let response = if let OpenSource::Resume(id) = options.source {
             if let Some(object) = params.as_object_mut() {
                 for key in ["environments", "sandbox", "approvalPolicy"] {
                     object.remove(key);
@@ -118,11 +127,16 @@ impl Codex {
             params["threadId"] = json!(id);
             params["excludeTurns"] = json!(true);
             self.engine.call("thread/resume", params).await?
+        } else if let OpenSource::Frontend(creation) = options.source {
+            let method = creation.apply(&mut params);
+            self.engine.call(method, params).await?
         } else {
             self.engine.call("thread/start", params).await?
         };
         let session = binding::session(&response["thread"], options.directory)?;
-        let usage = if options.existing == Some(session.id.as_str()) {
+        let usage = if matches!(options.source, OpenSource::Resume(_))
+            || matches!(options.source, OpenSource::Frontend(creation) if creation.is_fork())
+        {
             crate::usage_history::read(&self.home, &session.id, response["thread"]["path"].as_str())
                 .await
         } else {
@@ -167,6 +181,9 @@ impl Codex {
 }
 
 impl Thread {
+    pub fn bootstrap(&self) -> Value {
+        self.bootstrap.clone()
+    }
     pub fn binding(&self) -> &SessionBinding {
         &self.binding
     }

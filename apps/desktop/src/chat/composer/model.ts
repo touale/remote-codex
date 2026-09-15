@@ -9,6 +9,7 @@ export interface ComposerState {
   goal: Goal | null;
   turn: string | null;
   ready: boolean;
+  canReconnect?: boolean;
   models: Model[];
   settingsState?: 'loading' | 'error' | 'ready';
   settings: {

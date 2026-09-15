@@ -139,7 +139,7 @@ impl PreparedSession {
             runtime.shutdown().await;
             return Err(error);
         }
-        Ok(SessionHandle::new(runtime, self.program))
+        Ok(SessionHandle::new(runtime, self.program, self.client))
     }
 }
 

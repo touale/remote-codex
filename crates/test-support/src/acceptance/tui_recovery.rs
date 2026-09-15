@@ -7,8 +7,14 @@ use serde_json::json;
 use std::time::Duration;
 
 pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
+    let skill = context.environment.home.join("skills/recovery-probe");
+    std::fs::create_dir_all(&skill)?;
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: recovery-probe\ndescription: Verify Skill resources across recovery.\n---\nInspect existing results before continuing.\n",
+    )?;
     let mut terminal = tui::start(context, &[])?;
-    terminal.wait_for("gpt-6-astra").await?;
+    terminal.wait_for("OpenAI Codex").await?;
     tui::full_access(&terminal).await?;
     context.model.script([function("exec_command", json!({"cmd":"printf once >> tui-restart-count; sleep 20", "workdir":context.environment.workspace,"yield_time_ms":10000}), None)])?;
     terminal
@@ -20,7 +26,8 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
         }
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     })
-    .await??;
+    .await
+    .map_err(|_| format!("TUI restart task did not start: {}", terminal.diagnostics()))??;
     let id = context
         .client
         .sessions()
@@ -31,6 +38,14 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
         .session
         .id
         .clone();
+    // Native plugin catalogs can grow after initial discovery. New entries
+    // must not invalidate the resources already bound to a running session.
+    let late_skill = context.environment.home.join("skills/late-discovery");
+    std::fs::create_dir_all(&late_skill)?;
+    std::fs::write(
+        late_skill.join("SKILL.md"),
+        "---\nname: late-discovery\ndescription: Skill discovered after startup.\n---\nInspect the existing workspace.\n",
+    )?;
     context.environment.stop_service().await?;
     terminal.wait_for("Execution environment restored").await?;
     terminal.wait_for(MARKER).await?;
@@ -46,10 +61,16 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
         return Err("TUI recovery replayed or lost execution".into());
     }
 
-    // A changed enabled set blocks recovery before stale executor permissions
-    // are consulted, even when the TUI still sends its Full Access selection.
-    let skill = context.environment.home.join("skills/recovery-probe");
-    std::fs::create_dir_all(&skill)?;
+    if let Err(error) = super::tui_outage::exercise(context, &terminal).await {
+        return Err(format!("TUI outage: {error}: {}", terminal.diagnostics()).into());
+    }
+
+    // A real change to a previously bound resource still blocks recovery.
+    let skill_directories = format!(
+        "cd {} && find skills skill-staging -type d | sort",
+        super::environment::quote(&format!("{}/service", context.environment.workspace))?
+    );
+    let before_upload = context.environment.command(&skill_directories).await?;
     std::fs::write(
         skill.join("SKILL.md"),
         "---\nname: recovery-probe\ndescription: Verify explicit Skill reload after interruption.\n---\nInspect existing results before continuing.\n",
@@ -57,20 +78,38 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     context.environment.stop_service().await?;
     terminal.wait_for("SKILLS_CHANGED").await?;
     let blocked = context.model.requests()?.len();
+    let previous_errors = terminal
+        .diagnostics()
+        .matches("Failed to start turn")
+        .count();
     terminal
         .type_command("Continue after the interruption.")
         .await?;
-    terminal.wait_for("Failed to start turn").await?;
-    let diagnostics = terminal.diagnostics();
-    if !diagnostics
-        .split_once("Failed to start turn")
-        .is_some_and(|(_, error)| error.contains("SKILLS_CHANGED"))
-        || context.model.requests()?.len() != blocked
-    {
-        return Err(format!(
-            "blocked TUI recovery lost its cause or submitted a turn: {diagnostics}"
+    tokio::time::timeout(Duration::from_secs(45), async {
+        loop {
+            let output = terminal.diagnostics();
+            if output.matches("Failed to start turn").count() > previous_errors
+                && output
+                    .rsplit_once("Failed to start turn")
+                    .is_some_and(|(_, error)| error.contains("SKILLS_CHANGED"))
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .map_err(|_| {
+        format!(
+            "blocked TUI recovery lost its cause: {}",
+            terminal.diagnostics()
         )
-        .into());
+    })?;
+    if context.model.requests()?.len() != blocked {
+        return Err("blocked TUI recovery submitted a turn".into());
+    }
+    if context.environment.command(&skill_directories).await? != before_upload {
+        return Err("changed Skill resources were uploaded before recovery rejected them".into());
     }
     terminal.type_command("/quit").await?;
     let status = terminal.wait_exit().await?;
@@ -84,7 +123,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     }
 
     let mut resumed = tui::start(context, &["resume", &id])?;
-    resumed.wait_for("gpt-6-astra").await?;
+    resumed.wait_for("OpenAI Codex").await?;
     context.model.script([function(
         "exec_command",
         json!({"cmd":"printf resumed > tui-skill-resume", "workdir":context.environment.workspace}),
@@ -114,7 +153,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
         resumed.diagnostics(),
     )?;
     eprintln!(
-        "TUI recovery: restart preserved execution; changed Skills blocked new turns with the correct cause; explicit resume applied them"
+        "TUI recovery: catalog additions preserved execution; changed resources blocked uploads and new turns; explicit resume applied them"
     );
     Ok(())
 }

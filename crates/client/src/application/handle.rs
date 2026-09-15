@@ -6,13 +6,15 @@ use tokio::sync::{broadcast, watch};
 /// A shared session owner. Independent processes coordinate through a lease.
 #[derive(Clone)]
 pub struct SessionHandle {
-    runtime: Arc<LocalRuntime>,
-    program: PathBuf,
+    pub(super) runtime: Arc<LocalRuntime>,
+    pub(super) program: PathBuf,
+    pub(super) client: super::Client,
 }
 
 pub struct TerminalAttachment {
     pub command: tokio::process::Command,
     pub closed: watch::Receiver<bool>,
+    pub current: watch::Receiver<SessionHandle>,
     gateway: remote_codex_adapter::gateway::Gateway,
 }
 
@@ -32,8 +34,12 @@ impl SessionHandle {
     pub async fn mcp_status(&self) -> Result<Vec<super::McpStatus>> {
         self.runtime.mcp_status().await
     }
-    pub(super) fn new(runtime: Arc<LocalRuntime>, program: PathBuf) -> Self {
-        Self { runtime, program }
+    pub(super) fn new(runtime: Arc<LocalRuntime>, program: PathBuf, client: super::Client) -> Self {
+        Self {
+            runtime,
+            program,
+            client,
+        }
     }
     pub fn session(&self) -> &Session {
         &self.runtime.binding.session
@@ -90,13 +96,16 @@ impl SessionHandle {
     }
 
     pub async fn terminal(&self, arguments: &[OsString]) -> Result<TerminalAttachment> {
-        let gateway = remote_codex_adapter::gateway::Gateway::start(self.runtime.clone()).await?;
+        let backend = super::terminal::TerminalSessions::new(self.clone());
+        let current = backend.current.subscribe();
+        let gateway = remote_codex_adapter::gateway::Gateway::start(backend).await?;
         let command = self
             .runtime
             .frontend(&self.program, &gateway.socket, arguments)?;
         Ok(TerminalAttachment {
             command: command.into(),
             closed: gateway.closed.clone(),
+            current,
             gateway,
         })
     }

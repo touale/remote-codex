@@ -7,11 +7,24 @@ use crate::{
 use remote_codex_adapter::thread::Codex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
-/// Maps enabled local Skill paths to verified assets in the selected environment.
+/// Maps session Skill paths to verified assets in the selected environment.
 #[derive(Clone, Default)]
-pub(crate) struct SkillMap(BTreeMap<String, String>);
+pub(crate) struct SkillMap {
+    mappings: BTreeMap<String, String>,
+    digests: BTreeMap<String, String>,
+}
+
+struct Bundle {
+    root: PathBuf,
+    files: Vec<SkillFile>,
+    digest: String,
+}
 
 impl SkillMap {
     pub(crate) async fn prepare(
@@ -19,20 +32,17 @@ impl SkillMap {
         remote: &Remote,
         home: &Path,
         progress: &(dyn Fn(PrepareEvent) + Send + Sync),
+        expected: Option<&Self>,
     ) -> Result<Self> {
         progress(PrepareEvent::Stage(PrepareStage::PrepareSkills));
-        let mut map = BTreeMap::new();
-        for path in engine.enabled_skills(home).await? {
-            let path = path.as_path();
-            if !path.is_absolute() || !path.is_file() {
-                continue;
-            }
-            let Some(root) = path.parent() else {
-                continue;
-            };
-            let canonical = root.canonicalize()?;
-            let files = manifest(&canonical)?;
-            let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(&files)?));
+        let bundles = scan(engine.enabled_skills(home).await?, expected)?;
+        let mut map = Self::default();
+        for (path, bundle) in bundles {
+            let Bundle {
+                root,
+                files,
+                digest,
+            } = bundle;
             let prepared = remote
                 .call(Request::PrepareSkill {
                     digest: digest.clone(),
@@ -53,7 +63,7 @@ impl SkillMap {
                         .ssh
                         .upload(
                             &remote.server.endpoint,
-                            &canonical.join(&file.path),
+                            &root.join(&file.path),
                             &format!("{destination}/{}", file.path),
                             |bytes, _| {
                                 progress(PrepareEvent::Transfer(TransferProgress {
@@ -72,7 +82,7 @@ impl SkillMap {
                             .as_str()
                             .ok_or(ClientError::RemoteResponse)?
                             .into(),
-                        digest,
+                        digest: digest.clone(),
                     })
                     .await?;
                 result["path"]
@@ -80,51 +90,80 @@ impl SkillMap {
                     .ok_or(ClientError::RemoteResponse)?
                     .into()
             };
-            map.insert(
-                path.to_string_lossy().into_owned(),
-                format!("{installed}/SKILL.md"),
-            );
+            map.mappings
+                .insert(path.clone(), format!("{installed}/SKILL.md"));
+            map.digests.insert(path, digest);
         }
-        Ok(Self(map))
+        Ok(map)
     }
 
     pub(crate) fn mappings(&self) -> &BTreeMap<String, String> {
-        &self.0
-    }
-
-    pub(crate) fn verify_unchanged(&self, current: &Self) -> Result<()> {
-        if let Some(path) = self
-            .0
-            .keys()
-            .chain(current.0.keys())
-            .find(|path| self.0.get(*path) != current.0.get(*path))
-        {
-            return Err(remote_codex_protocol::Fault::new(
-                "SKILLS_CHANGED",
-                &format!(
-                    "enabled Skill resources changed at {}; exit and resume this session to apply the current Skills",
-                    json!(path)
-                ),
-            )
-            .into());
-        }
-        Ok(())
+        &self.mappings
     }
 
     pub(crate) fn instructions(&self) -> String {
-        if self.0.is_empty() {
+        if self.mappings.is_empty() {
             return String::new();
         }
         let mappings = self
-            .0
+            .mappings
             .iter()
             .map(|(local, remote)| format!("{} => {}", json!(local), json!(remote)))
             .collect::<Vec<_>>()
             .join("\n");
         format!(
-            "Enabled local Skill assets are prepared in the remote environment. For instructions and scripts from these skills, resolve relative resources against the corresponding remote directory. Do not install dependencies implicitly.\n{mappings}"
+            "Local Skill resources prepared for this session are available in the remote environment. These mappings do not enable Skills; Codex controls the enabled catalog. For instructions and scripts from these skills, resolve relative resources against the corresponding remote directory. Do not install dependencies implicitly.\n{mappings}"
         )
     }
+}
+
+// Validate every bound resource locally before preparing any remote uploads.
+fn scan(paths: Vec<PathBuf>, expected: Option<&SkillMap>) -> Result<BTreeMap<String, Bundle>> {
+    let mut paths: BTreeSet<PathBuf> = paths.into_iter().collect();
+    // Plugin discovery can finish after skills/list has returned. Retain
+    // resources already referenced by this session even if a fresh catalog
+    // temporarily omits them; Codex still controls which Skills are enabled.
+    if let Some(expected) = expected {
+        paths.extend(expected.digests.keys().map(PathBuf::from));
+    }
+    let mut bundles = BTreeMap::new();
+    for path in paths {
+        if !path.is_absolute() || !path.is_file() {
+            continue;
+        }
+        let Some(root) = path.parent() else {
+            continue;
+        };
+        let root = root.canonicalize()?;
+        let files = manifest(&root)?;
+        let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(&files)?));
+        bundles.insert(
+            path.to_string_lossy().into_owned(),
+            Bundle {
+                root,
+                files,
+                digest,
+            },
+        );
+    }
+    if let Some(expected) = expected {
+        for (path, digest) in &expected.digests {
+            if bundles
+                .get(path)
+                .is_none_or(|bundle| &bundle.digest != digest)
+            {
+                return Err(remote_codex_protocol::Fault::new(
+                    "SKILLS_CHANGED",
+                    &format!(
+                        "previously prepared Skill resources changed or became unavailable at {}; exit and resume this session to apply the current resources",
+                        json!(path)
+                    ),
+                )
+                .into());
+            }
+        }
+    }
+    Ok(bundles)
 }
 
 fn manifest(root: &Path) -> Result<Vec<SkillFile>> {
@@ -201,42 +240,4 @@ fn excluded(name: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn recovery_rejects_added_removed_or_changed_skills() {
-        let original = SkillMap(BTreeMap::from([(
-            "/probe/SKILL.md".into(),
-            "digest-a".into(),
-        )]));
-        assert!(original.verify_unchanged(&original).is_ok());
-        for (previous, current) in [
-            (SkillMap::default(), original.clone()),
-            (original.clone(), SkillMap::default()),
-            (
-                original,
-                SkillMap(BTreeMap::from([(
-                    "/probe/SKILL.md".into(),
-                    "digest-b".into(),
-                )])),
-            ),
-        ] {
-            let error = previous.verify_unchanged(&current).err();
-            assert!(error.is_some_and(
-                |e| e.code() == "SKILLS_CHANGED" && e.to_string().contains("/probe/SKILL.md")
-            ));
-        }
-    }
-
-    #[test]
-    fn bundle_rejects_links_and_omits_credential_files() -> Result<()> {
-        let root = tempfile::tempdir()?;
-        std::fs::write(root.path().join("SKILL.md"), "instructions")?;
-        std::fs::write(root.path().join(".env"), "secret")?;
-        assert_eq!(manifest(root.path())?.len(), 1);
-        std::os::unix::fs::symlink("/etc/passwd", root.path().join("outside"))?;
-        assert!(manifest(root.path()).is_err());
-        Ok(())
-    }
-}
+mod tests;

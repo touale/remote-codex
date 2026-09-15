@@ -1,4 +1,5 @@
 use super::LocalRuntime;
+use crate::ClientError;
 use remote_codex_adapter::thread::{OperationKind, Prepared};
 use remote_codex_protocol::Fault;
 use serde_json::Value;
@@ -21,7 +22,7 @@ pub(super) async fn request(
             "session control moved to another frontend",
         ));
     }
-    let generation = runtime.current().map_err(fault)?;
+    let generation = runtime.current().map_err(ClientError::into_fault)?;
     let interrupted = if method == "turn/interrupt" {
         params["turnId"].as_str().map(str::to_owned)
     } else {
@@ -35,6 +36,11 @@ pub(super) async fn request(
         runtime.has_history.load(Ordering::Acquire),
         generation.skills.mappings(),
     )?;
+    if method == "turn/start" {
+        runtime
+            .retry_for_message()
+            .map_err(ClientError::into_fault)?;
+    }
     if matches!(method, "thread/goal/set" | "thread/goal/clear") {
         runtime
             .intent
@@ -43,15 +49,23 @@ pub(super) async fn request(
             .resume_goal = None;
     }
     if plan_change {
-        runtime.pause_goal().await.map_err(fault)?;
+        runtime
+            .pause_goal()
+            .await
+            .map_err(ClientError::into_fault)?;
     }
     if let Some(turn) = interrupted {
-        runtime.pause_goal().await.map_err(fault)?;
-        runtime.cancel_continuation(&turn).map_err(fault)?;
+        runtime
+            .cancel_continuation(&turn)
+            .map_err(ClientError::into_fault)?;
         if runtime.recovery.ready().is_err() {
             let _ = generation.native.queue_interrupt(&turn);
             return Ok(serde_json::json!({}));
         }
+        runtime
+            .pause_goal()
+            .await
+            .map_err(ClientError::into_fault)?;
     }
     execute(runtime, &generation, prepared).await
 }
@@ -85,7 +99,13 @@ async fn dispatch(
             "session control is no longer available",
         ));
     }
-    if runtime.current().map_err(fault)?.bridge.channel != generation.bridge.channel {
+    if runtime
+        .current()
+        .map_err(ClientError::into_fault)?
+        .bridge
+        .channel
+        != generation.bridge.channel
+    {
         return Err(Fault::new(
             "STALE_GENERATION",
             "request belongs to a previous execution environment",
@@ -108,7 +128,12 @@ async fn dispatch(
     };
     if *runtime.lease.revoked.borrow()
         || runtime.closed.borrow().is_some()
-        || runtime.current().map_err(fault)?.bridge.channel != generation.bridge.channel
+        || runtime
+            .current()
+            .map_err(ClientError::into_fault)?
+            .bridge
+            .channel
+            != generation.bridge.channel
     {
         return Err(Fault::new(
             "SESSION_CLOSED",
@@ -139,10 +164,10 @@ async fn dispatch(
                         remote_codex_core::session::EnvironmentState::Recovering { .. }
                     ))
             {
-                runtime.recovery.ready().map_err(fault)?;
+                runtime.recovery.ready().map_err(ClientError::into_fault)?;
             }
             if operation.kind != OperationKind::GoalDefine {
-                generation.bridge.check().map_err(fault)?;
+                generation.bridge.check().map_err(ClientError::into_fault)?;
             }
             generation
                 .native
@@ -163,7 +188,7 @@ async fn dispatch(
             None
         }
         OperationKind::Settings(full) => {
-            runtime.recovery.ready().map_err(fault)?;
+            runtime.recovery.ready().map_err(ClientError::into_fault)?;
             generation.permissions.begin(
                 full,
                 runtime
@@ -181,7 +206,21 @@ async fn dispatch(
             .store
             .remember_message(&runtime.binding.session.id, id, super::status::now())
             .await
-            .map_err(fault)?;
+            .map_err(ClientError::into_fault)?;
+    }
+    if operation.kind == OperationKind::Turn
+        && runtime
+            .intent
+            .lock()
+            .map_err(|_| Fault::new("SESSION_STATE", "session state unavailable"))?
+            .pending_message
+            .as_ref()
+            .is_some_and(|pending| *pending.borrow())
+    {
+        return Err(Fault::new(
+            "MESSAGE_CANCELLED",
+            "Message cancelled before submission.",
+        ));
     }
     let result = generation.native.execute(operation).await;
     if let Some(ticket) = ticket {
@@ -193,19 +232,4 @@ async fn dispatch(
         }
     }
     result
-}
-
-fn fault(error: crate::ClientError) -> Fault {
-    if let crate::ClientError::RemoteFault(code, message, outcome_unknown) = error {
-        return Fault {
-            code,
-            message,
-            outcome_unknown,
-        };
-    }
-    Fault {
-        code: error.code().into(),
-        message: error.to_string(),
-        outcome_unknown: error.outcome_is_unknown(),
-    }
 }

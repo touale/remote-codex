@@ -1,6 +1,7 @@
 mod actions;
 pub(crate) mod approvals;
 mod binding;
+mod creation;
 mod editing;
 mod events;
 pub(crate) mod gateway;
@@ -9,6 +10,7 @@ mod goals;
 pub(crate) mod history;
 mod intent;
 pub(crate) mod lease;
+mod message_recovery;
 mod metadata;
 pub(crate) mod permissions;
 mod recovery;
@@ -117,21 +119,46 @@ impl LocalRuntime {
         let generation = recipe
             .open(
                 remote.clone(),
-                options.existing.as_ref(),
+                options
+                    .existing
+                    .as_ref()
+                    .map_or(remote_codex_adapter::thread::OpenSource::New, |b| {
+                        remote_codex_adapter::thread::OpenSource::Resume(&b.session.id)
+                    }),
                 recovery.clone(),
                 &*progress,
                 None,
             )
             .await?;
+        Self::from_generation(
+            store,
+            remote,
+            recipe,
+            generation,
+            recovery,
+            (lease, workspace_lock),
+            options.existing.is_some(),
+        )
+        .await
+    }
+
+    async fn from_generation(
+        store: &LocalStore,
+        remote: Arc<Remote>,
+        recipe: Recipe,
+        generation: Generation,
+        recovery: Arc<Recovery>,
+        locks: (Option<lease::Lease>, crate::workspace_lock::WorkspaceLock),
+        persisted: bool,
+    ) -> Result<Arc<Self>> {
+        let (lease, workspace_lock) = locks;
         let binding = generation.native.binding().clone();
         let prepared = async {
             let lease = match lease {
                 Some(lease) => lease,
-                None => {
-                    lease::Lease::acquire(options.directory, &binding.session.id, false).await?
-                }
+                None => lease::Lease::acquire(&store.directory, &binding.session.id, false).await?,
             };
-            if options.existing.is_some() {
+            if persisted {
                 store.save_session(&binding).await?;
             }
             store
@@ -157,7 +184,7 @@ impl LocalRuntime {
             recipe,
             workspace_lock,
             recovery,
-            has_history: AtomicBool::new(options.existing.is_some()),
+            has_history: AtomicBool::new(persisted),
             intent: Mutex::new(intent::Intent::with_status(status)),
             turn_gate: tokio::sync::Mutex::new(()),
             goal_gate: tokio::sync::Mutex::new(()),

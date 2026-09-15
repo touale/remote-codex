@@ -232,7 +232,12 @@ export function Chat({
         <Composer
           preparing={choosingPlan || Boolean(chat.edit)}
           onCancelPlanRevision={revision ? () => setRevisingPlan(null) : undefined}
-          chat={{ ...chat, ready }}
+          chat={{
+            ...chat,
+            ready,
+            canReconnect:
+              chat.environment.status === 'action_required' && chat.environment.code === 'RECOVERY_RETRIES_EXHAUSTED',
+          }}
           setDraft={(draft, expected) =>
             update((current) => ({
               ...current,

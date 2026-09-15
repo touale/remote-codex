@@ -4,7 +4,7 @@ use crate::{
     progress::{PrepareEvent, PrepareStage},
     remote::bridge::Bridge,
 };
-use remote_codex_adapter::thread::{Codex, OpenThread, Thread};
+use remote_codex_adapter::thread::{Codex, OpenSource, OpenThread, Thread};
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -40,7 +40,7 @@ impl Recipe {
     pub(super) async fn open(
         &self,
         remote: Arc<Remote>,
-        existing: Option<&SessionBinding>,
+        source: OpenSource<'_>,
         recovery: Arc<Recovery>,
         progress: &(dyn Fn(PrepareEvent) + Send + Sync),
         expected_skills: Option<&SkillMap>,
@@ -84,17 +84,15 @@ impl Recipe {
             codex
                 .register_environment(&environment, &bridge.url)
                 .await?;
-            let skills = SkillMap::prepare(&codex, &remote, &self.home, progress).await?;
-            if let Some(expected) = expected_skills {
-                expected.verify_unchanged(&skills)?;
-            }
+            let skills =
+                SkillMap::prepare(&codex, &remote, &self.home, progress, expected_skills).await?;
             progress(PrepareEvent::Stage(PrepareStage::OpenLocalSession));
             let opened = codex
                 .open(OpenThread {
                     environment: &environment,
                     directory: &self.cwd,
                     execution_mode: &self.mode,
-                    existing: existing.map(|b| b.session.id.as_str()),
+                    source,
                     mcp: self.mcp.config.clone(),
                     instructions: skills.instructions(),
                 })
@@ -110,11 +108,21 @@ impl Recipe {
                 revision: self.revision,
                 session: opened.session.clone(),
             };
-            if existing.is_some_and(|old| old.session.id != binding.session.id) {
+            if matches!(source, OpenSource::Resume(id) if id != binding.session.id) {
                 return Err(ClientError::RemoteResponse);
             }
-            let native = codex.bind(opened, binding, existing.is_some())?;
-            if expected_skills.is_some() {
+            let restoring = match source {
+                OpenSource::Resume(_) => true,
+                OpenSource::Frontend(creation) => creation.allow_full_access,
+                OpenSource::New => false,
+            };
+            let id = binding.session.id.clone();
+            let native = codex.bind(opened, binding, restoring).map_err(|error| {
+                if matches!(source, OpenSource::Frontend(_)) {
+                    remote_codex_protocol::Fault::unknown(&format!("Codex created thread {id}, but its execution settings could not be validated: {error}. Do not repeat creation automatically."))
+                } else { error }
+            })?;
+            if matches!(source, OpenSource::Resume(_)) && expected_skills.is_some() {
                 native.pause_goal_for_recovery().await?;
             }
             permissions.restore(&bridge.channel, &native.binding().session.id, full)?;

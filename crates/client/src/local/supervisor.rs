@@ -27,11 +27,7 @@ impl LocalRuntime {
         Ok(())
     }
 
-    pub(super) async fn rebuild(
-        &self,
-        old: &Generation,
-        reason: String,
-    ) -> Result<Arc<Generation>> {
+    pub(super) async fn rebuild(&self, old: &Generation, reason: Fault) -> Result<Arc<Generation>> {
         if self.closed.borrow().is_some() || *self.lease.revoked.borrow() {
             return Err(
                 Fault::new("SESSION_CLOSED", "session control is no longer available").into(),
@@ -43,11 +39,13 @@ impl LocalRuntime {
             .map_err(|_| ClientError::RemoteResponse)?
             .disconnect();
         self.recovery.publish(EnvironmentState::Recovering {
-            reason: reason.clone(),
+            reason: reason.message.clone(),
         });
-        self.announce(&format!(
-            "Execution environment interrupted ({reason}). Restoring this session…"
-        ));
+        if reason.code != "RECOVERY_RETRIES_EXHAUSTED" {
+            self.announce(&format!(
+                "Execution environment interrupted ({reason}). Restoring this session…"
+            ));
+        }
         // Resolve stale UI prompts before shutting down their owning native process.
         if let Ok(mut pending) = old.pending_requests.lock() {
             for id in pending.keys() {
@@ -69,20 +67,17 @@ impl LocalRuntime {
         }
         let full_access = old.permissions.full_access();
         old.close().await;
-        let active = self
-            .intent
-            .lock()
-            .map_err(|_| ClientError::RemoteResponse)?
-            .active
-            .clone();
-        if let Some(turn) = active {
-            let event = remote_codex_adapter::events::interrupted(&self.binding.session.id, &turn);
-            if let Some(public) = remote_codex_adapter::events::public_event(&event) {
-                let _ = self.events.send(public);
-            }
-            let _ = self.native_events.send(event);
+        if reason.code != "RECOVERY_RETRIES_EXHAUSTED" {
+            self.finish_disconnected_turn(None)?;
         }
-        let mut error = ClientError::Ssh(255);
+        let mut error = if matches!(
+            reason.code.as_str(),
+            "EXECUTION_LOST" | "EXECUTION_REPLAY_EXPIRED" | "OPERATION_OUTCOME_UNKNOWN"
+        ) {
+            ClientError::Ssh(255)
+        } else {
+            reason.into()
+        };
         loop {
             self.recovery.wait(&error).await?;
             match self.replace(old, full_access).await {
@@ -164,7 +159,7 @@ impl LocalRuntime {
         let mut generation = recipe
             .open(
                 self.remote.clone(),
-                Some(old.native.binding()),
+                remote_codex_adapter::thread::OpenSource::Resume(&old.native.binding().session.id),
                 self.recovery.clone(),
                 &|_| {},
                 Some(&old.skills),

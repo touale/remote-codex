@@ -1,5 +1,5 @@
 //! Exercise paginated resume against native Codex with synthetic, interrupted history.
-use remote_codex_adapter::thread::{Codex, OpenThread, Prepared, Thread};
+use remote_codex_adapter::thread::{Codex, Creation, OpenSource, OpenThread, Prepared, Thread};
 use remote_codex_core::session::SessionBinding;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
@@ -9,7 +9,7 @@ const ID: &str = "01990000-0000-7000-8000-000000000001";
 
 #[tokio::test]
 #[ignore = "requires REMOTE_CODEX_TEST_BINARY; isolated history, no model requests"]
-async fn resume_preserves_live_settings_and_initial_history_page() -> TestResult {
+async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestResult {
     let program = std::env::var("REMOTE_CODEX_TEST_BINARY")?;
     let home = tempfile::tempdir()?;
     let cwd = home.path().to_str().ok_or("invalid temporary path")?;
@@ -25,7 +25,7 @@ async fn resume_preserves_live_settings_and_initial_history_page() -> TestResult
                 environment: "local",
                 directory: cwd,
                 execution_mode: "sandboxed",
-                existing: Some(ID),
+                source: OpenSource::Resume(ID),
                 mcp: BTreeMap::new(),
                 instructions: String::new(),
             })
@@ -95,6 +95,65 @@ async fn resume_preserves_live_settings_and_initial_history_page() -> TestResult
             assert_ne!(event["method"], "deprecationNotice");
             assert_ne!(event["method"], "turn/started");
         }
+        fork_paused_goal(&thread, Path::new(&program), home.path(), &goal).await?;
+        Ok(())
+    }
+    .await;
+    codex.shutdown().await;
+    result
+}
+
+async fn fork_paused_goal(
+    source: &Thread,
+    program: &Path,
+    home: &Path,
+    expected: &Value,
+) -> TestResult {
+    let codex = Codex::start(program, home).await?;
+    let result = async {
+        let creation = Creation::prepare(
+            "thread/fork",
+            &json!({
+            "threadId":ID, "beforeTurnId":"01990000-0000-7000-8000-000000000003",
+            "deferGoalContinuation":true,
+                "model":"gpt-5.4-mini", "config":{"model_reasoning_effort":"low"},
+            }),
+            source.binding(),
+            false,
+        )?;
+        let opened = codex
+            .open(OpenThread {
+                environment: "local",
+                directory: &source.binding().session.cwd,
+                execution_mode: "sandboxed",
+                source: OpenSource::Frontend(&creation),
+                mcp: BTreeMap::new(),
+                instructions: String::new(),
+            })
+            .await?;
+        assert_ne!(opened.session.id, ID);
+        let mut binding = source.binding().clone();
+        binding.session = opened.session.clone();
+        let thread = codex.bind(opened, binding, false)?;
+        assert_eq!(thread.bootstrap()["model"], "gpt-5.4-mini");
+        assert_eq!(thread.bootstrap()["reasoningEffort"], "low");
+        let goal = call(
+            &thread,
+            "thread/goal/get",
+            json!({"threadId":thread.binding().session.id}),
+        )
+        .await?;
+        for key in ["objective", "status", "tokenBudget", "tokensUsed"] {
+            assert_eq!(goal["goal"][key], expected["goal"][key], "{key}");
+        }
+        let mut events = thread.take_events()?;
+        while let Ok(event) = events.try_recv() {
+            assert_ne!(event["method"], "turn/started");
+        }
+        assert_eq!(
+            call(source, "thread/goal/get", json!({"threadId":ID})).await?,
+            *expected
+        );
         Ok(())
     }
     .await;

@@ -10,6 +10,7 @@ mod project_mcp;
 mod server;
 mod session;
 mod shell;
+mod terminal;
 mod transfer_creation;
 mod transfers;
 mod workspace;

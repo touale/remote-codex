@@ -6,15 +6,15 @@ use remote_codex_test_support::{ProbeResult, model::function};
 use serde_json::json;
 use std::{path::PathBuf, time::Duration};
 
-struct Offline(PathBuf);
+pub(super) struct Offline(PathBuf);
 impl Offline {
-    async fn start() -> ProbeResult<Self> {
+    pub(super) async fn start(parent: u32) -> ProbeResult<Self> {
         let path = PathBuf::from(
             std::env::var_os("REMOTE_CODEX_ACCEPTANCE_OUTAGE").ok_or("outage path missing")?,
         );
         std::fs::write(&path, b"offline")?;
         let offline = Self(path);
-        ssh::interrupt_master(std::process::id()).await?;
+        ssh::interrupt_master(parent).await?;
         Ok(offline)
     }
 }
@@ -28,7 +28,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     let session = headless::open(context, None, false).await?;
     let mut states = session.environment();
     let before = context.model.requests()?.len();
-    let offline = Offline::start().await?;
+    let offline = Offline::start(std::process::id()).await?;
     let mut held = Some(offline);
     let release = tokio::time::sleep(Duration::from_secs(31));
     tokio::pin!(release);
@@ -55,7 +55,89 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     }
     session.close().await;
     eprintln!("outage: session stayed open beyond four failed connection attempts and recovered");
-    cancelled(context).await
+    cancelled(context).await?;
+    messages(context).await
+}
+
+pub(super) async fn messages(context: &Context) -> ProbeResult<()> {
+    for cancel in [true, false] {
+        context
+            .client
+            .config()
+            .set("test", "reconnect.max_attempts", "1", false, None)
+            .await?;
+        let session = headless::open(context, None, false).await?;
+        headless::turn(&session, false).await?;
+        let before = context.model.requests()?.len();
+        let offline = Offline::start(std::process::id()).await?;
+        let mut states = session.environment();
+        tokio::time::timeout(Duration::from_secs(45), async {
+            while !matches!(&*states.borrow(), EnvironmentState::ActionRequired { code, .. } if code == "RECOVERY_RETRIES_EXHAUSTED") {
+                states.changed().await?;
+            }
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+        }).await??;
+        let snapshot = session.snapshot()?;
+        if snapshot.closed || snapshot.turn.is_some() {
+            return Err("exhaustion closed the session or retained a running turn".into());
+        }
+        context
+            .client
+            .config()
+            .set("test", "reconnect.max_attempts", "2", false, None)
+            .await?;
+        {
+            let message = session.message(
+                "Run the new instruction after reconnecting.".into(),
+                uuid::Uuid::new_v4().to_string(),
+                None,
+            );
+            tokio::pin!(message);
+            tokio::select! {
+                biased;
+                result = &mut message => return Err(format!("message did not wait for recovery: {result:?}").into()),
+                _ = std::future::ready(()) => {},
+            }
+            if cancel {
+                session.interrupt("").await?;
+                let error = tokio::time::timeout(Duration::from_secs(2), &mut message)
+                    .await?
+                    .err()
+                    .ok_or("cancelled message was submitted")?;
+                if error.code() != "MESSAGE_CANCELLED" {
+                    return Err(format!("unexpected cancellation error: {error}").into());
+                }
+            }
+            drop(offline);
+            session.retry();
+            if !cancel {
+                tokio::time::timeout(Duration::from_secs(45), &mut message).await??;
+                context.model.wait_for(before + 1).await?;
+            }
+        }
+        tokio::time::timeout(Duration::from_secs(45), async {
+            while !matches!(*states.borrow(), EnvironmentState::Ready) {
+                states.changed().await?;
+            }
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+        })
+        .await??;
+        if context.model.requests()?.len() != before + usize::from(!cancel) {
+            return Err(
+                "message recovery duplicated a submission or resumed cancelled work".into(),
+            );
+        }
+        session.close().await;
+    }
+    context
+        .client
+        .config()
+        .set("test", "reconnect.max_attempts", "10", false, None)
+        .await?;
+    eprintln!(
+        "message recovery: App submission waited for readiness; cancellation prevented late delivery"
+    );
+    Ok(())
 }
 
 async fn cancelled(context: &Context) -> ProbeResult<()> {
@@ -83,7 +165,7 @@ async fn cancelled(context: &Context) -> ProbeResult<()> {
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     })
     .await??;
-    let offline = Offline::start().await?;
+    let offline = Offline::start(std::process::id()).await?;
     let mut states = session.environment();
     tokio::time::timeout(Duration::from_secs(15), async {
         while matches!(*states.borrow(), EnvironmentState::Ready) {

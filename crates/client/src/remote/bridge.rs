@@ -104,11 +104,7 @@ impl Bridge {
             }
             }.await;
             let fault = match result {
-                Err(error) => remote_codex_protocol::Fault {
-                    code: error.code().into(),
-                    message: error.to_string(),
-                    outcome_unknown: error.outcome_is_unknown(),
-                },
+                Err(error) => error.into_fault(),
                 Ok(()) => remote_codex_protocol::Fault::unknown("execution transport closed"),
             };
             finished.send_replace(Some(fault));

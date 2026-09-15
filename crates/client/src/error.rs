@@ -51,6 +51,21 @@ pub enum ClientError {
 }
 
 impl ClientError {
+    pub(crate) fn into_fault(self) -> remote_codex_protocol::Fault {
+        if let Self::RemoteFault(code, message, outcome_unknown) = self {
+            return remote_codex_protocol::Fault {
+                code,
+                message,
+                outcome_unknown,
+            };
+        }
+        remote_codex_protocol::Fault {
+            code: self.code().into(),
+            message: self.to_string(),
+            outcome_unknown: self.outcome_is_unknown(),
+        }
+    }
+
     pub fn code(&self) -> &str {
         match self {
             Self::SessionInUse => "SESSION_IN_USE",
@@ -122,5 +137,46 @@ impl ClientError {
 impl From<remote_codex_protocol::Fault> for ClientError {
     fn from(value: remote_codex_protocol::Fault) -> Self {
         Self::RemoteFault(value.code, value.message, value.outcome_unknown)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClientError;
+    use remote_codex_protocol::Fault;
+
+    #[test]
+    fn fault_conversion_preserves_protocol_fields_and_local_outcomes()
+    -> Result<(), serde_json::Error> {
+        for original in [
+            Fault::new("SKILLS_CHANGED", "Bound resources changed."),
+            Fault::unknown("Thread creation was not acknowledged."),
+        ] {
+            let converted = ClientError::from(original.clone()).into_fault();
+            assert_eq!(
+                serde_json::to_value(converted)?,
+                serde_json::to_value(original)?
+            );
+        }
+        for (error, code, message, unknown) in [
+            (
+                ClientError::Argument("Select a workspace."),
+                "INVALID_ARGUMENT",
+                "Select a workspace.",
+                false,
+            ),
+            (
+                ClientError::Timeout,
+                "OPERATION_TIMEOUT",
+                "operation timed out; remote outcome must be inspected before retrying",
+                true,
+            ),
+        ] {
+            let converted = error.into_fault();
+            assert_eq!(converted.code, code);
+            assert_eq!(converted.message, message);
+            assert_eq!(converted.outcome_unknown, unknown);
+        }
+        Ok(())
     }
 }

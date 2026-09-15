@@ -37,7 +37,8 @@ export function Composer({
   const input = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
   const pending = useRef(false);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'action' | 'recoveryMessage' | null>(null);
+  const busy = operation !== null;
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<SettingsMenuName | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -46,6 +47,8 @@ export function Composer({
   const ready = chat.ready;
   const settingDisabled = busy || preparing || Boolean(chat.turn) || !ready;
   const newGoal = chat.composerMode === 'goal' && (!chat.goal || chat.goal.status === 'complete');
+  const canSend = ready || (chat.canReconnect === true && !newGoal);
+  const reconnectingMessage = operation === 'recoveryMessage' && !ready;
   const revisingPlan = Boolean(onCancelPlanRevision);
   useLayoutEffect(() => {
     if (focusRequest !== undefined || revisingPlan) input.current?.focus();
@@ -56,22 +59,25 @@ export function Composer({
     element.style.height = '0px';
     element.style.height = `${Math.min(184, element.scrollHeight)}px`;
   }, [chat.draft]);
-  const execute = async (operation: () => Promise<void>) => {
+  const execute = async (run: () => Promise<void>, kind: 'action' | 'recoveryMessage' = 'action') => {
     if (pending.current) throw new Error('Another operation is in progress.');
     pending.current = true;
-    setBusy(true);
+    setOperation(kind);
     setError(null);
     try {
-      await operation();
+      await run();
     } catch (error) {
       if (!ownsSubmissionDraft) setError(failure(error).message);
       throw error;
     } finally {
       pending.current = false;
-      setBusy(false);
+      setOperation(null);
     }
   };
   const perform = (action: SessionAction) => execute(() => onAction(action));
+  const cancelMessage = () => {
+    void onAction({ action: 'interrupt', turn: chat.turn ?? '' }).catch((error) => setError(failure(error).message));
+  };
   const setMode = (mode: ComposerMode) =>
     execute(async () => {
       await changeMode(chat, mode, onAction);
@@ -96,15 +102,18 @@ export function Composer({
       await command(parsed.name, parsed.argument);
       return;
     }
-    if (!ready) return;
+    if (!canSend) return;
     const text = chat.draft.trim();
-    await execute(async () => {
-      if (newGoal) {
-        await onAction({ action: 'goal', goal: { action: 'set', objective: text, token_budget: null } });
-        if (!ownsSubmissionDraft) setDraft('', chat.draft);
-      } else await onAction(chat.turn ? { action: 'steer', turn: chat.turn, text } : { action: 'submit', text });
-      input.current?.focus();
-    });
+    await execute(
+      async () => {
+        if (newGoal) {
+          await onAction({ action: 'goal', goal: { action: 'set', objective: text, token_budget: null } });
+          if (!ownsSubmissionDraft) setDraft('', chat.draft);
+        } else await onAction(chat.turn ? { action: 'steer', turn: chat.turn, text } : { action: 'submit', text });
+        input.current?.focus();
+      },
+      !ready && !chat.turn && !ownsSubmissionDraft ? 'recoveryMessage' : 'action',
+    );
   };
   return (
     <div className="composer-wrap">
@@ -194,6 +203,9 @@ export function Composer({
               event.preventDefault();
               setSelected((n) => (n + (event.key === 'ArrowDown' ? 1 : -1) + available.length) % available.length);
             } else if (event.key === 'Escape') {
+              if (reconnectingMessage) {
+                cancelMessage();
+              }
               setDismissed(true);
               setError(null);
             } else if (event.key === 'Enter' && !event.shiftKey) {
@@ -220,13 +232,17 @@ export function Composer({
             />
           </div>
           <div className="composer-send-controls">
-            {chat.turn && (
+            {(chat.turn || reconnectingMessage) && (
               <IconButton
                 className={!chat.draft.trim() ? 'send' : ''}
-                label="Stop task"
-                disabled={busy}
+                label={reconnectingMessage ? 'Cancel message' : 'Stop task'}
+                disabled={busy && !reconnectingMessage}
                 onClick={() => {
-                  void perform({ action: 'interrupt', turn: chat.turn! }).catch(() => {});
+                  if (reconnectingMessage) {
+                    cancelMessage();
+                  } else {
+                    void perform({ action: 'interrupt', turn: chat.turn! }).catch(() => {});
+                  }
                 }}
               >
                 <Square size={13} fill="currentColor" />
@@ -244,7 +260,7 @@ export function Composer({
                         ? 'Start goal'
                         : 'Send message'
                 }
-                disabled={busy || preparing || !chat.draft.trim() || (!ready && !commandInput(chat.draft))}
+                disabled={busy || preparing || !chat.draft.trim() || (!canSend && !commandInput(chat.draft))}
                 onClick={() => {
                   void submit().catch(() => {});
                 }}

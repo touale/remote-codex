@@ -15,6 +15,8 @@ pub(super) struct Intent {
     pub interrupted: Option<String>,
     pub episode: Option<String>,
     pub settings: Value,
+    pub pending_message: Option<tokio::sync::watch::Sender<bool>>,
+    pub resend_after_recovery: bool,
     cancelled: Option<String>,
 }
 
@@ -41,6 +43,8 @@ impl Intent {
                 self.limits_revision = self.limits_revision.wrapping_add(1);
             }
             SessionEvent::TurnStarted { id, timing } => {
+                self.active = Some(id.clone());
+                self.plan = None;
                 self.current_turn = Some(remote_codex_core::status::TurnState {
                     id: id.clone(),
                     status: "inProgress".into(),
@@ -52,6 +56,13 @@ impl Intent {
                 timing,
                 outcome,
             } => {
+                self.completed = Some(id.clone());
+                if self.active.as_ref() == Some(id) {
+                    self.active = None;
+                }
+                if matches!(outcome, remote_codex_core::session::TurnOutcome::Completed) {
+                    self.interrupted = None;
+                }
                 let mut timing = timing.clone();
                 if let Some(previous) = &self.current_turn
                     && previous.id == *id
@@ -95,6 +106,10 @@ impl Intent {
         }
     }
     pub(super) fn cancel(&mut self, turn: &str) {
+        self.resume_goal = None;
+        if let Some(pending) = &self.pending_message {
+            pending.send_replace(true);
+        }
         self.cancelled = Some(turn.into());
         if self.interrupted.as_deref() == Some(turn) {
             self.interrupted = None;
@@ -109,6 +124,9 @@ impl Intent {
     }
 
     pub(super) fn continuation(&mut self, rebuilt: bool) -> Option<(String, String)> {
+        if self.pending_message.is_some() {
+            return None;
+        }
         if !rebuilt && self.active.is_some() {
             return None;
         }
@@ -144,6 +162,41 @@ mod tests {
         // A late native started notification cannot resurrect cancellation.
         intent.active = Some("cancelled".into());
         intent.disconnect();
+        assert!(intent.continuation(true).is_none());
+    }
+
+    #[test]
+    fn stopped_backend_finishes_the_visible_turn_and_pending_message_can_be_cancelled() {
+        use remote_codex_core::{
+            session::{SessionEvent, TurnOutcome},
+            status::TurnTiming,
+        };
+        let mut intent = Intent::default();
+        intent.observe(&SessionEvent::TurnStarted {
+            id: "original".into(),
+            timing: TurnTiming::default(),
+        });
+        intent.disconnect();
+        intent.observe(&SessionEvent::TurnCompleted {
+            id: "original".into(),
+            timing: TurnTiming::default(),
+            outcome: TurnOutcome::Failed {
+                message: "Connection failed".into(),
+            },
+        });
+        assert!(intent.active.is_none());
+        assert!(
+            intent
+                .current_turn
+                .as_ref()
+                .is_some_and(|turn| turn.status == "failed")
+        );
+        let (pending, cancelled) = tokio::sync::watch::channel(false);
+        intent.pending_message = Some(pending);
+        assert!(intent.continuation(true).is_none());
+        intent.cancel("original");
+        assert!(*cancelled.borrow());
+        intent.pending_message = None;
         assert!(intent.continuation(true).is_none());
     }
 }

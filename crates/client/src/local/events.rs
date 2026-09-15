@@ -42,6 +42,18 @@ async fn status(
         let Some(runtime) = owner.upgrade() else {
             break;
         };
+        // Publish the native terminal event only once the owner is waiting for
+        // Retry. A user may submit immediately after seeing the failure.
+        let failure_shown = match &state {
+            EnvironmentState::ActionRequired { code, message }
+                if code == "RECOVERY_RETRIES_EXHAUSTED" =>
+            {
+                runtime
+                    .finish_disconnected_turn(Some(message))
+                    .unwrap_or(false)
+            }
+            _ => false,
+        };
         let _ = runtime.events.send(SessionEvent::EnvironmentChanged {
             state: state.clone(),
         });
@@ -62,9 +74,9 @@ async fn status(
                 if !matches!(previous, EnvironmentState::Reconnecting { attempt: old, .. } if old == *attempt)
                 {
                     let delay = if *retry_in_ms > 0 {
-                        " · retry in 5s"
+                        format!(" · retry in {}s", retry_in_ms.div_ceil(1000))
                     } else {
-                        ""
+                        String::new()
                     };
                     runtime.announce(&format!(
                         "Connection lost. Reconnecting · attempt {attempt}/{max_attempts}{delay}"
@@ -73,14 +85,26 @@ async fn status(
             }
             EnvironmentState::Ready => {
                 if !matches!(previous, EnvironmentState::Ready) {
-                    runtime.announce("Execution connection restored.");
+                    let resend = runtime
+                        .intent
+                        .lock()
+                        .map(|mut intent| std::mem::take(&mut intent.resend_after_recovery))
+                        .unwrap_or(false);
+                    runtime.announce(if resend {
+                        "Execution connection restored. Send your message again."
+                    } else {
+                        "Execution connection restored."
+                    });
                     let _ = runtime.continue_interrupted(false).await;
                     if let Err(error) = runtime.restore_goal().await {
                         runtime.announce(&format!("Goal remains paused: {error}"));
                     }
                 }
             }
-            EnvironmentState::ActionRequired { message, .. } => runtime.announce(message),
+            EnvironmentState::ActionRequired { message, .. } if !failure_shown => {
+                runtime.announce(message)
+            }
+            EnvironmentState::ActionRequired { .. } => {}
             EnvironmentState::Closed => break,
             EnvironmentState::Recovering { .. } => {}
         }
@@ -108,7 +132,7 @@ async fn pump(
             if runtime.closed.borrow().is_some() || *revoked.borrow() { return Ok(()); }
             let needs_rebuild = incoming.is_none() || (incoming.as_ref().is_some_and(|v| v["method"] == "remoteCodex/engineClosed") && runtime.recovery.ready().is_err());
             if needs_rebuild {
-                let reason = finished.borrow().as_ref().map(|f| f.message.clone()).unwrap_or_else(|| "execution environment disconnected".into());
+                let reason = finished.borrow().clone().unwrap_or_else(|| Fault::new("EXECUTION_LOST", "execution environment disconnected"));
                 generation = tokio::select! {
                     restored = runtime.rebuild(&generation, reason) => restored?,
                     _ = revoked.changed() => return Ok(()),
@@ -184,25 +208,6 @@ async fn process(
             },
         );
     }
-    {
-        let mut intent = runtime
-            .intent
-            .lock()
-            .map_err(|_| ClientError::RemoteResponse)?;
-        if event["method"] == "turn/started" {
-            intent.active = event["params"]["turn"]["id"].as_str().map(str::to_owned);
-            intent.plan = None;
-        }
-        if event["method"] == "turn/completed" {
-            intent.completed = event["params"]["turn"]["id"].as_str().map(str::to_owned);
-            if intent.active == intent.completed {
-                intent.active = None;
-            }
-            if event["params"]["turn"]["status"] == "completed" {
-                intent.interrupted = None;
-            }
-        }
-    }
     if event["method"] == "serverRequest/resolved" {
         let id = event["params"]["requestId"].to_string();
         generation
@@ -238,6 +243,36 @@ async fn process(
 }
 
 impl LocalRuntime {
+    pub(super) fn finish_disconnected_turn(&self, error: Option<&str>) -> Result<bool> {
+        let mut intent = self
+            .intent
+            .lock()
+            .map_err(|_| ClientError::RemoteResponse)?;
+        let Some(turn) = intent
+            .current_turn
+            .as_ref()
+            .filter(|turn| turn.status == "inProgress")
+        else {
+            return Ok(false);
+        };
+        let event = match error {
+            Some(message) => events::failed(&self.binding.session.id, &turn.id, message),
+            None => events::interrupted(&self.binding.session.id, &turn.id),
+        };
+        if let Some(public) = events::public_event(&event) {
+            intent.observe(&public);
+            let _ = self.events.send(public);
+        }
+        let _ = self.native_events.send(event);
+        let public = SessionEvent::ActivityChanged {
+            activity: "idle".into(),
+            active_flags: Vec::new(),
+        };
+        intent.observe(&public);
+        let _ = self.events.send(public);
+        Ok(true)
+    }
+
     pub(super) fn respond(&self, value: Value) -> Result<()> {
         if *self.lease.revoked.borrow() || self.closed.borrow().is_some() {
             return Err(

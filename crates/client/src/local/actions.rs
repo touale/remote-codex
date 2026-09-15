@@ -66,10 +66,18 @@ impl LocalRuntime {
         Ok(self.current()?.native.mcp_status().await?)
     }
     pub(super) async fn action(&self, action: Action) -> Result<serde_json::Value> {
+        let _pending = if matches!(
+            &action,
+            Action::Message {
+                expected_turn: None,
+                ..
+            }
+        ) {
+            self.recover_for_message().await?
+        } else {
+            None
+        };
         let generation = self.current()?;
-        if let Action::Interrupt(turn) = &action {
-            self.cancel_continuation(turn)?;
-        }
         let prepared = generation.native.prepare_action(
             action,
             self.has_history.load(Ordering::Acquire),
@@ -151,12 +159,11 @@ impl LocalRuntime {
             .into());
         }
         self.cancel_continuation(turn)?;
-        self.pause_goal().await?;
         if self.recovery.ready().is_err() {
-            self.cancel_continuation(turn)?;
             let _ = self.current()?.native.queue_interrupt(turn);
             return Ok(());
         }
+        self.pause_goal().await?;
         self.action(Action::Interrupt(turn.into())).await?;
         Ok(())
     }

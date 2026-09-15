@@ -11,6 +11,7 @@ const REQUESTS: &[(&str, &[&str])] = &[
         &["environments", "dynamicTools", "sandbox", "approvalPolicy"],
     ),
     ("thread/resume", &["threadId", "excludeTurns"]),
+    ("thread/fork", &["threadId", "beforeTurnId", "excludeTurns"]),
     ("thread/settings/update", &["threadId"]),
     ("thread/turns/list", &["threadId"]),
     ("thread/items/list", &["threadId"]),

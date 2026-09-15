@@ -172,4 +172,42 @@ describe('Shared controls in native WebKit', () => {
   it('keeps the menu target highlighted without changing the selected session', async () => {
     await treeMenuHighlight((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });
+  it('allows a new message after exhausted recovery, retaining it on failure or cancellation', async () => {
+    await $('button=Fixture recovery').click();
+    const input = $('textarea[aria-label="Message Codex"]');
+    const send = $('button[aria-label="Send message"]');
+    const text = await input.getValue();
+    await expect(send).toBeEnabled();
+    await send.click();
+    await expect(send).toBeDisabled();
+    await expect($('button[aria-label="Cancel message"]')).toBeEnabled();
+    await $('button=Fail reconnect').click();
+    await expect(input).toHaveValue(text);
+    await expect(send).toBeEnabled();
+    await send.click();
+    await input.click();
+    await browser.keys('Escape');
+    await expect(send).toBeEnabled();
+    await expect(input).toHaveValue(text);
+    await expect($('#recovery-submitted')).toHaveText('0');
+    await send.click();
+    await $('button=Restore connection').click();
+    await expect($('#recovery-submitted')).toHaveText('1');
+    await expect(input).toHaveValue('');
+    // A setting change can also lose its connection; it is not a queued message.
+    await input.setValue('/plan');
+    await send.click();
+    await expect(send).toBeDisabled();
+    await expect($('button[aria-label="Cancel message"]')).not.toExist();
+    await input.click();
+    await browser.keys('Escape');
+    await expect(send).toBeDisabled();
+    await $('button=Restore connection').click();
+    await expect($('button[aria-label="Permissions"]')).toBeEnabled();
+    await expect($('#recovery-submitted')).toHaveText('1');
+    await input.setValue(text);
+    await $('button=Block identity').click();
+    await expect(send).toBeDisabled();
+    await $('button=Fixture recovery').click();
+  });
 });

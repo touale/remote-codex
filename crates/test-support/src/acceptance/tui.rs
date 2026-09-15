@@ -73,10 +73,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     }
     let mut resumed = start(context, &["resume", &session.session.id])?;
     resumed.wait_for(MARKER).await?;
-    resumed.send(b"\x03")?;
-    tokio::time::sleep(Duration::from_millis(350)).await;
-    resumed.send(b"\x03")?;
-    if resumed.wait_exit().await? != Some(0) {
+    if resumed.interrupt().await? != Some(0) {
         return Err(resumed.diagnostics().into());
     }
     if context.model.requests()?.len() != before + 2 {

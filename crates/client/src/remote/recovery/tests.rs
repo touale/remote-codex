@@ -21,19 +21,24 @@ async fn fixed_interval_and_budget_span_transport_and_native_recovery() -> TestR
     let (_root, recovery) = fixture().await?;
     tokio::time::pause();
     for attempt in 1..=10 {
-        let error = if attempt < 3 {
-            ClientError::Ssh(255)
-        } else {
-            recovery.begin_rebuild();
-            Fault {
+        let error = match attempt {
+            1 => ClientError::Ssh(255),
+            2 => {
+                recovery.begin_rebuild();
+                // Bridge completion crosses the Fault boundary before rebuilding.
+                ClientError::RemoteResponse.into_fault().into()
+            }
+            _ => Fault {
                 code: "CODEX_RESPONSE_TIMEOUT".into(),
                 message: "thread/resume timed out".into(),
                 outcome_unknown: true,
             }
-            .into()
+            .into(),
         };
         let started = tokio::time::Instant::now();
-        recovery.wait(&error).await?;
+        tokio::time::timeout(Duration::from_secs(6), recovery.wait(&error))
+            .await
+            .map_err(|_| "automatic recovery waited for manual intervention")??;
         assert!(
             (Duration::from_secs(5)..=Duration::from_millis(5001)).contains(&started.elapsed())
         );
@@ -149,6 +154,40 @@ async fn retry_clicks_only_wake_the_current_wait() -> TestResult {
     assert!(started.elapsed() >= Duration::from_secs(5));
     assert_eq!(recovery.attempts().await?, (2, 10));
     tokio::time::resume();
+    recovery.store.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn exhausted_transport_returns_to_owner_before_waiting_for_a_new_message() -> TestResult {
+    let (_root, recovery) = fixture().await?;
+    tokio::time::pause();
+    for _ in 0..10 {
+        recovery.wait(&ClientError::Ssh(255)).await?;
+    }
+    let error = recovery
+        .wait(&ClientError::Ssh(255))
+        .await
+        .err()
+        .ok_or("transport stayed open")?;
+    assert_eq!(error.code(), "RECOVERY_RETRIES_EXHAUSTED");
+    assert!(!matches!(
+        *recovery.state.borrow(),
+        EnvironmentState::ActionRequired { .. }
+    ));
+    recovery.begin_rebuild();
+    tokio::time::resume();
+    {
+        let waiting = recovery.wait(&error);
+        tokio::pin!(waiting);
+        assert!(futures_util::poll!(&mut waiting).is_pending());
+        assert!(
+            matches!(&*recovery.state.borrow(), EnvironmentState::ActionRequired { code, message } if code == "RECOVERY_RETRIES_EXHAUSTED" && message.starts_with("Connection failed after 10 attempts."))
+        );
+        recovery.retry();
+        waiting.await?;
+    }
+    assert_eq!(recovery.attempts().await?, (1, 10));
     recovery.store.close().await;
     Ok(())
 }

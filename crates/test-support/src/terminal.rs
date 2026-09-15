@@ -51,8 +51,10 @@ impl Terminal {
 
     pub fn send(&self, input: &[u8]) -> ProbeResult<()> {
         let mut writer = self.writer.lock().map_err(|_| "terminal writer poisoned")?;
-        writer.write_all(input)?;
-        writer.flush()?;
+        writer
+            .write_all(input)
+            .and_then(|()| writer.flush())
+            .map_err(|error| format!("terminal input failed: {error}: {}", self.diagnostics()))?;
         Ok(())
     }
 
@@ -88,6 +90,17 @@ impl Terminal {
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
+    }
+
+    pub async fn interrupt(&mut self) -> ProbeResult<Option<u32>> {
+        self.send(b"\x03")?;
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        // Native remote frontends may exit on the first Ctrl+C.
+        if let Some(status) = self.child.try_wait()? {
+            return Ok(Some(status.exit_code()));
+        }
+        self.send(b"\x03")?;
+        self.wait_exit().await
     }
 
     pub fn diagnostics(&self) -> String {

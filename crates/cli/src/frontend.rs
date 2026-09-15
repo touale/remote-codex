@@ -1,6 +1,9 @@
 mod authentication;
 use crate::{args::Cli, ui};
-use remote_codex_client::{ClientError, Result, application::SessionHandle};
+use remote_codex_client::{
+    ClientError, Result,
+    application::{SessionHandle, TerminalAttachment},
+};
 use std::{ffi::OsString, process::Stdio};
 
 pub(crate) async fn run(cli: &Cli, runtime: SessionHandle, arguments: &[OsString]) -> Result<()> {
@@ -11,7 +14,20 @@ pub(crate) async fn run(cli: &Cli, runtime: SessionHandle, arguments: &[OsString
         ui::text(&runtime.session().cwd)
     );
     println!("Local session: {}", ui::text(&runtime.session().id));
-    let result = attach(runtime.clone(), arguments, &mut interrupt).await;
+    let (runtime, result) = match runtime.terminal(arguments).await {
+        Ok(mut gateway) => {
+            let current = gateway.current.clone();
+            let result = match attach(&mut gateway, &mut interrupt).await {
+                Ok(()) => gateway.finish().await,
+                Err(error) => {
+                    drop(gateway);
+                    Err(error)
+                }
+            };
+            (current.borrow().clone(), result)
+        }
+        Err(error) => (runtime, Err(error)),
+    };
     // Every returning exit path shares cleanup and recovery guidance, including
     // failed frontend launch, native errors and interactive interruption.
     runtime.close().await;
@@ -28,14 +44,14 @@ pub(crate) async fn run(cli: &Cli, runtime: SessionHandle, arguments: &[OsString
 }
 
 async fn attach(
-    runtime: SessionHandle,
-    arguments: &[OsString],
+    gateway: &mut TerminalAttachment,
     interrupt: &mut tokio::signal::unix::Signal,
 ) -> Result<()> {
     let terminal = authentication::Terminal::capture();
+    let mut sessions = gateway.current.clone();
+    let mut runtime = sessions.borrow_and_update().clone();
     let mut environment = runtime.environment();
     let mut auth_attempted = false;
-    let mut gateway = runtime.terminal(arguments).await?;
     let mut closed = gateway.closed.clone();
     let mut child = gateway
         .command
@@ -46,6 +62,13 @@ async fn attach(
         .spawn()?;
     let status = loop {
         tokio::select! {
+          changed=sessions.changed()=>{
+              if changed.is_ok() {
+                  runtime = sessions.borrow_and_update().clone();
+                  environment = runtime.environment();
+                  auth_attempted = false;
+              }
+          },
           result=child.wait()=>break result?,
           _=closed.changed()=>break wait_for_exit(&mut child).await?,
           _=interrupt.recv()=>{
@@ -77,7 +100,6 @@ async fn attach(
             u8::try_from(status.code().unwrap_or(1)).unwrap_or(1),
         ));
     }
-    gateway.finish().await?;
     Ok(())
 }
 
