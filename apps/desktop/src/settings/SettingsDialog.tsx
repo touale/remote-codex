@@ -9,6 +9,7 @@ import { useDialog } from '../ui/useDialog';
 import { ArchivedSessions } from './ArchivedSessions';
 import { CodexSettings } from './CodexSettings';
 import { GeneralSettings } from './GeneralSettings';
+import { UpdatesSettings } from './UpdatesSettings';
 import { McpSettings } from './McpSettings';
 
 export function SettingsDialog({
@@ -50,7 +51,7 @@ export function SettingsDialog({
       <Modal title="Settings" className="settings-modal" onClose={close} wide>
         <div className="settings-layout">
           <nav className="settings-nav" aria-label="Settings sections">
-            {['General', 'Codex', 'MCP', 'Sessions'].map((name) => (
+            {['General', 'Codex', 'MCP', 'Sessions', 'Updates'].map((name) => (
               <button
                 key={name}
                 className={tab === name ? 'selected' : ''}
@@ -72,6 +73,7 @@ export function SettingsDialog({
           </nav>
           <div className="settings-content">
             {tab === 'General' && <GeneralSettings report={(error) => setError(failure(error).message)} />}
+            {tab === 'Updates' && <UpdatesSettings />}
             {tab === 'Codex' && <CodexSettings preferences={preferences} onPreferences={onPreferences} />}
             {tab === 'Sessions' && <ArchivedSessions />}
             {tab === 'MCP' && (

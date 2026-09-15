@@ -66,6 +66,10 @@
     "allow-transfer-skipped",
     "allow-transfer-reveal",
     "allow-editor-window-ready",
-    "allow-editor-window-cancel"
+    "allow-editor-window-cancel",
+    "allow-update-status",
+    "allow-update-check",
+    "allow-update-install",
+    "allow-update-configure"
   ]
 }

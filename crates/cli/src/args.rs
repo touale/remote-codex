@@ -38,6 +38,11 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    /// Check for and install Remote Codex CLI updates.
+    Update {
+        #[command(subcommand)]
+        command: Option<UpdateCommand>,
+    },
     /// Initialize, inspect or remove saved servers.
     Server {
         #[command(subcommand)]
@@ -64,6 +69,19 @@ pub(crate) enum Command {
     },
     /// Open an interactive SSH shell on the selected server.
     Shell,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum UpdateCommand {
+    /// Check the latest stable Remote Codex release.
+    Check,
+    /// Show the CLI version and update status.
+    Status,
+    /// View or change the shared product update policy.
+    Config {
+        #[arg(long, value_parser = ["notify", "auto", "manual"])]
+        mode: Option<String>,
+    },
 }
 
 impl Cli {

@@ -1,4 +1,8 @@
 pub(crate) const COMMANDS: &[&str] = &[
+    "update_status",
+    "update_check",
+    "update_install",
+    "update_configure",
     "transfer_pick",
     "transfer_upload",
     "transfer_download",

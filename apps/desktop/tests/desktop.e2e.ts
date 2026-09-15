@@ -4,6 +4,32 @@ import { contextAt } from './interaction-controls';
 import { sharedAppearanceAndUsage } from './settings-controls';
 
 describe('Remote Codex desktop', () => {
+  it('offers Remote Codex update settings without connecting a server', async () => {
+    await $('button=Settings').waitForDisplayed();
+    await $('button=Settings').click();
+    await $('button=Updates').click();
+    await $('#update-mode').waitForDisplayed();
+    await expect($('button=Check for Updates')).toBeEnabled();
+    await expect($('[role=dialog]')).toHaveText(expect.stringContaining('App version'));
+    await $('#update-mode').click();
+    await $('[role="option"]=Check manually').click();
+    await expect($('#update-mode')).toHaveText('Check manually');
+    await browser.waitUntil(
+      async () =>
+        (await browser.tauri.execute(async ({ core }) => (await core.invoke('update_status')) as { mode: string }))
+          .mode === 'manual',
+    );
+    await $('[role=dialog] button[aria-label=Close]').click();
+    await $('button=Settings').click();
+    await $('button=Updates').click();
+    await expect($('#update-mode')).toHaveText('Check manually');
+    await browser.saveScreenshot(path.resolve('../../.artifacts/desktop-e2e/updates.png'));
+    await browser.tauri.execute(async ({ core }) => {
+      await core.invoke('update_configure', { mode: 'notify' });
+    });
+    await expect($('#update-mode')).toHaveText('Check automatically');
+    await $('[role=dialog] button[aria-label=Close]').click();
+  });
   it('opens a compact native window with both sidebar trees', async () => {
     await $('section[aria-label="Connections and sessions"]').waitForDisplayed();
     await expect($('section[aria-label="Remote files"]')).toBeDisplayed();

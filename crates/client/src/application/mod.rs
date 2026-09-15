@@ -17,6 +17,10 @@ mod workspace;
 pub use crate::ssh::interaction::{
     AuthenticationHandler, AuthenticationKind, AuthenticationPrompt,
 };
+pub use crate::updates::{
+    UPDATE_CHECK_INTERVAL, UpdateComponent, UpdateMode, UpdateProgress, UpdateRelease,
+    UpdateSnapshot, Updater,
+};
 pub use authentication::ServerAuthentication;
 pub use directory::DirectoryBrowser;
 pub use files::FileHandle;

@@ -81,6 +81,8 @@ jobs:
           path: target/execution-service
       - run: npm run check:frontend --prefix apps/desktop
       - run: cargo clippy -p remote-codex-desktop --all-targets --locked --offline -- -D warnings
+      - name: Verify macOS update replacement
+        run: cargo test -p remote-codex-client updates::tests::atomic_replacement --locked --offline
       - name: Build isolated desktop E2E application
         run: |
           npm --prefix apps/desktop run build -- --mode e2e

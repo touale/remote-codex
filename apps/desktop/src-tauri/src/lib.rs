@@ -32,6 +32,7 @@ pub fn run() {
         .on_webview_event(transfer_grants::dropped)
         .setup(|app| {
             menu::install(app)?;
+            commands::updates::start();
             Ok(())
         })
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -40,6 +41,10 @@ pub fn run() {
             }
         }))
         .invoke_handler(tauri::generate_handler![
+            commands::updates::update_status,
+            commands::updates::update_check,
+            commands::updates::update_install,
+            commands::updates::update_configure,
             commands::catalog::attach,
             commands::transfer_selection::transfer_pick,
             commands::transfer_selection::transfer_upload,

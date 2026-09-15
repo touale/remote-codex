@@ -10,6 +10,7 @@ pub(crate) mod session_controls;
 pub(crate) mod terminals;
 pub(crate) mod transfer_selection;
 pub(crate) mod transfers;
+pub(crate) mod updates;
 pub(crate) mod window;
 
 pub(crate) mod editor_windows;

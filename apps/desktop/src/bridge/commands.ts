@@ -28,6 +28,7 @@ import type {
 
 import type { AppPreferences, AppPreferencesPatch } from './preferences';
 import type { AccountUsage, SessionAction, Submission } from './session';
+import type { UpdateMode, UpdateProgress, UpdateSnapshot } from './updates';
 
 type Command<Args, Result = void> = { args: Args; result: Result };
 type Operation = { operationId: string };
@@ -46,6 +47,10 @@ type NativeAction =
 
 // The private desktop IPC contract. Callers infer results from the command name.
 export interface Commands {
+  update_status: Command<Record<string, never>, UpdateSnapshot>;
+  update_check: Command<Record<string, never>, UpdateSnapshot>;
+  update_install: Command<{ channel: Channel<UpdateProgress> }, UpdateSnapshot>;
+  update_configure: Command<{ mode: UpdateMode }, UpdateSnapshot>;
   attach: Command<{ channel: Channel<AppEvent> }, WindowTarget | null>;
   acknowledge: Command<Id>;
   catalog: Command<{ archived: boolean }, Catalog>;

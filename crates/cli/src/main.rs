@@ -8,6 +8,7 @@ mod progress;
 mod selection;
 mod server;
 mod ui;
+mod update;
 
 use args::{Cli, Command};
 use context::Context;
@@ -47,11 +48,25 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: &Cli) -> Result<()> {
+    if let Some(Command::Update { command }) = &cli.command {
+        return update::run(cli, command.as_ref()).await;
+    }
     if matches!(&cli.command, Some(Command::Config { .. })) {
         config::require_server(cli)?;
     }
     let context = Context::open(cli).await?;
+    let background = if !cli.json
+        && matches!(
+            &cli.command,
+            None | Some(Command::Resume { read: false, .. })
+        ) {
+        update::notice(cli.data_dir.clone()).await;
+        Some(update::background(cli.data_dir.clone()))
+    } else {
+        None
+    };
     let result = match &cli.command {
+        Some(Command::Update { command }) => update::run(cli, command.as_ref()).await,
         Some(Command::Server { command }) => server::run(cli, &context, command).await,
         Some(Command::Config { command }) => config::run(cli, &context.client, command).await,
         Some(Command::Resume {
@@ -88,5 +103,10 @@ async fn run(cli: &Cli) -> Result<()> {
         None => chat::start(cli, &context).await,
     };
     context.client.close().await;
+    if let Some(background) = background {
+        background.abort();
+        let _ = background.await;
+        update::notice(cli.data_dir.clone()).await;
+    }
     result
 }

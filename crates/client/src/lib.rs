@@ -10,6 +10,7 @@ mod servers;
 mod sessions;
 mod ssh;
 mod store;
+mod updates;
 mod workspace_lock;
 
 pub use error::{ClientError, Result};
