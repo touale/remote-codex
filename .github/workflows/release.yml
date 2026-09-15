@@ -113,12 +113,13 @@ jobs:
           npm --prefix apps/desktop run tauri -- build --bundles app,dmg --config "$RUNNER_TEMP/updater-config.json"
           codesign --verify --deep --strict 'target/release/bundle/macos/Remote Codex.app'
           for image in target/release/bundle/dmg/*.dmg; do hdiutil verify "$image"; done
+          rm -rf target/release-artifacts
           mkdir -p target/release-artifacts
-          tar -czf target/release-artifacts/remote-codex-macos-arm64.tar.gz -C target/release remote-codex
-          npm --prefix apps/desktop run tauri -- signer sign "$GITHUB_WORKSPACE/target/release-artifacts/remote-codex-macos-arm64.tar.gz"
-          cp target/release/bundle/dmg/*.dmg target/release-artifacts/remote-codex-macos-arm64.dmg
-          cp 'target/release/bundle/macos/Remote Codex.app.tar.gz' target/release-artifacts/remote-codex-macos-arm64.app.tar.gz
-          cp 'target/release/bundle/macos/Remote Codex.app.tar.gz.sig' target/release-artifacts/remote-codex-macos-arm64.app.tar.gz.sig
+          COPYFILE_DISABLE=1 tar -czf target/release-artifacts/remote-codex-cli-macos-arm64.tar.gz -C target/release remote-codex
+          npm --prefix apps/desktop run tauri -- signer sign "$GITHUB_WORKSPACE/target/release-artifacts/remote-codex-cli-macos-arm64.tar.gz"
+          cp target/release/bundle/dmg/*.dmg target/release-artifacts/remote-codex-app-macos-arm64.dmg
+          cp 'target/release/bundle/macos/Remote Codex.app.tar.gz' target/release-artifacts/remote-codex-app-macos-arm64.tar.gz
+          cp 'target/release/bundle/macos/Remote Codex.app.tar.gz.sig' target/release-artifacts/remote-codex-app-macos-arm64.tar.gz.sig
           cd target/release-artifacts
           shasum -a 256 *.tar.gz *.dmg *.sig > SHA256SUMS
       - name: Upload release packages
@@ -158,7 +159,14 @@ jobs:
             base64 --decode "$archive.sig" > "$RUNNER_TEMP/update.sig"
             minisign -Vm "$archive" -p "$RUNNER_TEMP/update-public.key" -x "$RUNNER_TEMP/update.sig"
           done
-          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+          release_url="https://github.com/$GH_REPO/releases/download/$RELEASE_VERSION"
+          {
+            printf '## Downloads\n\n'
+            printf '| Platform | Desktop app | CLI |\n'
+            printf '| --- | --- | --- |\n'
+            printf '| macOS · Apple Silicon | [Download App](%s/remote-codex-app-macos-arm64.dmg) | [Download CLI](%s/remote-codex-cli-macos-arm64.tar.gz) |\n\n' "$release_url" "$release_url"
+            printf '%s\n' "$RELEASE_NOTES"
+          } > "$RUNNER_TEMP/release-notes.md"
           gh release create "$RELEASE_VERSION" ./* --draft \
             --target "$GITHUB_SHA" --title "$RELEASE_VERSION" \
             --notes-file "$RUNNER_TEMP/release-notes.md"

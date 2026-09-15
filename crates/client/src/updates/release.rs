@@ -74,8 +74,8 @@ pub(super) fn select(value: &serde_json::Value) -> Result<Release> {
     let mut assets = BTreeMap::new();
     let list = value["assets"].as_array().ok_or_else(invalid)?;
     for (component, name) in [
-        (UpdateComponent::Cli, "remote-codex-macos-arm64.tar.gz"),
-        (UpdateComponent::App, "remote-codex-macos-arm64.app.tar.gz"),
+        (UpdateComponent::Cli, "remote-codex-cli-macos-arm64.tar.gz"),
+        (UpdateComponent::App, "remote-codex-app-macos-arm64.tar.gz"),
     ] {
         let url = format!("{REPOSITORY}/releases/download/{tag}/{name}");
         let sig = format!("{url}.sig");

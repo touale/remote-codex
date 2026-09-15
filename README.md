@@ -79,22 +79,23 @@ Get the latest release from [GitHub Releases](https://github.com/touale/remote-c
 
 #### Desktop app
 
-Download the DMG, open it, and drag **Remote Codex** into **Applications**.
+Download [remote-codex-app-macos-arm64.dmg](https://github.com/touale/remote-codex/releases/latest/download/remote-codex-app-macos-arm64.dmg),
+open it, and drag **Remote Codex** into **Applications**.
 
 #### CLI
 
-Download `remote-codex-macos-arm64.tar.gz` from [GitHub Releases](https://github.com/touale/remote-codex/releases).
+Download [remote-codex-cli-macos-arm64.tar.gz](https://github.com/touale/remote-codex/releases/latest/download/remote-codex-cli-macos-arm64.tar.gz).
 Alternatively, use `wget`:
 
 ```sh
-wget -O remote-codex-macos-arm64.tar.gz \
-  https://github.com/touale/remote-codex/releases/latest/download/remote-codex-macos-arm64.tar.gz
+wget -O remote-codex-cli-macos-arm64.tar.gz \
+  https://github.com/touale/remote-codex/releases/latest/download/remote-codex-cli-macos-arm64.tar.gz
 ```
 
 In the download directory, extract and install:
 
 ```sh
-tar -xzf remote-codex-macos-arm64.tar.gz
+tar -xzf remote-codex-cli-macos-arm64.tar.gz
 mkdir -p "$HOME/.local/bin"
 install -m 755 remote-codex "$HOME/.local/bin/remote-codex"
 ```

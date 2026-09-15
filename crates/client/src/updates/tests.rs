@@ -7,8 +7,8 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 fn fixture_release() -> serde_json::Value {
     let mut assets = Vec::new();
     for name in [
-        "remote-codex-macos-arm64.tar.gz",
-        "remote-codex-macos-arm64.app.tar.gz",
+        "remote-codex-cli-macos-arm64.tar.gz",
+        "remote-codex-app-macos-arm64.tar.gz",
     ] {
         for suffix in ["", ".sig"] {
             assets.push(json!({ "name": format!("{name}{suffix}"), "size": 128,
@@ -25,12 +25,12 @@ fn release_requires_stable_versions_and_signed_assets_from_this_repository() -> 
     assert!(
         release.assets[&UpdateComponent::Cli]
             .url
-            .ends_with("remote-codex-macos-arm64.tar.gz")
+            .ends_with("remote-codex-cli-macos-arm64.tar.gz")
     );
     assert!(
         release.assets[&UpdateComponent::App]
             .url
-            .ends_with("remote-codex-macos-arm64.app.tar.gz")
+            .ends_with("remote-codex-app-macos-arm64.tar.gz")
     );
     value["assets"][1]["browser_download_url"] = json!("https://example.invalid/signature");
     assert!(
