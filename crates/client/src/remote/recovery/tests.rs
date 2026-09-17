@@ -28,6 +28,11 @@ async fn fixed_interval_and_budget_span_transport_and_native_recovery() -> TestR
                 // Bridge completion crosses the Fault boundary before rebuilding.
                 ClientError::RemoteResponse.into_fault().into()
             }
+            3 | 5 | 7 | 9 => Fault::new(
+                "RECOVERY_SETTINGS_UNCONFIRMED",
+                "native settings do not match the recovery snapshot",
+            )
+            .into(),
             _ => Fault {
                 code: "CODEX_RESPONSE_TIMEOUT".into(),
                 message: "thread/resume timed out".into(),

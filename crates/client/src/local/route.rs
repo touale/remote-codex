@@ -41,7 +41,9 @@ pub(super) async fn request(
             .retry_for_message()
             .map_err(ClientError::into_fault)?;
     }
-    if matches!(method, "thread/goal/set" | "thread/goal/clear") {
+    if matches!(method, "thread/goal/set" | "thread/goal/clear")
+        && matches!(&prepared, Prepared::Operation(operation) if operation.kind == OperationKind::GoalControl)
+    {
         runtime
             .intent
             .lock()
@@ -221,6 +223,18 @@ async fn dispatch(
             "MESSAGE_CANCELLED",
             "Message cancelled before submission.",
         ));
+    }
+    // An activation rejected during recovery must not cancel the paused goal's
+    // automatic continuation. Explicit pause/clear is handled before dispatch.
+    if matches!(
+        operation.kind,
+        OperationKind::GoalStart | OperationKind::GoalDefine
+    ) {
+        runtime
+            .intent
+            .lock()
+            .map_err(|_| Fault::new("SESSION_STATE", "Session state unavailable"))?
+            .resume_goal = None;
     }
     let result = generation.native.execute(operation).await;
     if let Some(ticket) = ticket {

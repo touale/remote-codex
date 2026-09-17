@@ -190,6 +190,7 @@ pub(super) async fn run() -> ProbeResult<()> {
             return tui_edit::exercise(&context).await;
         }
         if context.environment.args.recovery_only {
+            goals::exercise(&context).await?;
             outage::messages(&context).await?;
             return tui_recovery::exercise(&context).await;
         }

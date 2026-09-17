@@ -33,6 +33,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     context.environment.stop_service().await?;
     let mut suspended = false;
     let mut resumed = false;
+    let mut rejected_resume = false;
     tokio::time::timeout(Duration::from_secs(90), async {
         loop {
             match events.recv().await? {
@@ -45,6 +46,19 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
                 SessionEvent::EnvironmentChanged {
                     state: EnvironmentState::ActionRequired { code, message },
                 } => return Err(format!("goal recovery requires action: {code}: {message}").into()),
+                SessionEvent::EnvironmentChanged {
+                    state: EnvironmentState::Reconnecting { .. },
+                } if !rejected_resume && session.snapshot()?.turn.is_none() => {
+                    let error = session
+                        .goal(GoalAction::Resume)
+                        .await
+                        .err()
+                        .ok_or("goal resumed before the environment was ready")?;
+                    if error.code() != "ENVIRONMENT_NOT_READY" {
+                        return Err(format!("unexpected goal recovery rejection: {error}").into());
+                    }
+                    rejected_resume = true;
+                }
                 SessionEvent::Closed { reason } => {
                     return Err(format!("goal recovery closed the session: {reason:?}").into());
                 }
@@ -54,6 +68,9 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     })
     .await??;
+    if !rejected_resume {
+        return Err("goal recovery did not exercise a rejected resume".into());
+    }
     if context.environment.read("goal-restart-count").await? != "once" {
         return Err("goal recovery duplicated remote execution".into());
     }

@@ -64,7 +64,7 @@ impl LocalRuntime {
         if matches!(action, GoalAction::Set { .. } | GoalAction::Resume) {
             self.idle()?;
         }
-        if !matches!(action, GoalAction::Budget { .. }) {
+        if matches!(action, GoalAction::Pause | GoalAction::Clear) {
             self.intent
                 .lock()
                 .map_err(|_| ClientError::RemoteResponse)?

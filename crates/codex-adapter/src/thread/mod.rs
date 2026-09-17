@@ -6,6 +6,7 @@ mod execution_policy;
 mod goal_attachments;
 pub mod history;
 mod request;
+mod restoration;
 mod settings;
 
 use crate::engine::Engine;
@@ -208,42 +209,6 @@ impl Thread {
         settings["sandboxPolicy"] = settings["sandbox"].clone();
         settings["effort"] = settings["reasoningEffort"].clone();
         settings
-    }
-
-    pub async fn restore_settings(
-        &mut self,
-        snapshot: &Value,
-        full_access: bool,
-    ) -> Result<bool, Fault> {
-        let params = settings::restore(snapshot, &self.binding, full_access)?;
-        let mut events = self.subscribe();
-        self.codex
-            .engine
-            .call("thread/settings/update", params)
-            .await?;
-        let confirmed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            loop {
-                let event = events
-                    .recv()
-                    .await
-                    .map_err(|_| Fault::unknown("native settings confirmation lost"))?;
-                if event["method"] == "thread/settings/updated"
-                    && event["params"]["threadId"] == self.binding.session.id
-                {
-                    return Ok::<_, Fault>(event["params"]["threadSettings"].clone());
-                }
-            }
-        })
-        .await
-        .map_err(|_| Fault::unknown("native settings were not confirmed after recovery"))??;
-        if let Some(settings) = confirmed.as_object() {
-            for (key, value) in settings {
-                self.bootstrap[key] = value.clone();
-            }
-        }
-        self.bootstrap["sandbox"] = confirmed["sandboxPolicy"].clone();
-        self.bootstrap["reasoningEffort"] = confirmed["effort"].clone();
-        Ok(confirmed["sandboxPolicy"]["type"] == "dangerFullAccess")
     }
 
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Value> {

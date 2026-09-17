@@ -95,6 +95,7 @@ impl Recovery {
                         | "CODEX_CHANGED"
                         | "RUNTIME_UNAVAILABLE"
                         | "RECOVERY_RETRIES_EXHAUSTED"
+                        | "RECOVERY_SETTINGS_UNCONFIRMED"
                 ));
         let manual = if !recoverable || used >= u32::from(limit) {
             let (code, message) = if let ClientError::RemoteFault(code, message, _) = error

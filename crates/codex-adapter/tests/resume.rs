@@ -40,7 +40,7 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
             execution_mode: "sandboxed".into(),
             revision: 1,
         };
-        let thread = codex.bind(opened, binding, false)?;
+        let mut thread = codex.bind(opened, binding, false)?;
         let sandbox = thread.settings_snapshot()["sandbox"].clone();
         call(
             &thread,
@@ -86,6 +86,31 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
         )
         .await?;
         assert_eq!(older["data"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            call(&thread, "thread/goal/get", json!({"threadId":ID})).await?,
+            goal
+        );
+        // Restoring identical settings produces no native notification. Recovery
+        // must verify live state instead of treating that no-op as a failure.
+        let mut settings = resumed.clone();
+        settings["sandboxPolicy"] = settings["sandbox"].clone();
+        settings["effort"] = settings["reasoningEffort"].clone();
+        assert!(!thread.restore_settings(&settings, false).await?);
+        assert!(!thread.restore_settings(&settings, false).await?);
+        assert_eq!(thread.bootstrap()["model"], "gpt-5.4-mini");
+        assert_eq!(thread.bootstrap()["reasoningEffort"], "low");
+        let mut full = settings.clone();
+        full["model"] = json!("gpt-6-astra");
+        full["effort"] = json!("medium");
+        full["sandboxPolicy"] = json!({"type":"dangerFullAccess"});
+        assert!(thread.restore_settings(&full, false).await.is_err());
+        assert!(thread.restore_settings(&full, true).await?);
+        assert!(thread.restore_settings(&full, true).await?);
+        assert_eq!(thread.bootstrap()["model"], "gpt-6-astra");
+        assert_eq!(thread.bootstrap()["reasoningEffort"], "medium");
+        assert!(!thread.restore_settings(&settings, true).await?);
+        assert_eq!(thread.bootstrap()["model"], "gpt-5.4-mini");
+        assert_eq!(thread.bootstrap()["sandbox"], sandbox);
         assert_eq!(
             call(&thread, "thread/goal/get", json!({"threadId":ID})).await?,
             goal
