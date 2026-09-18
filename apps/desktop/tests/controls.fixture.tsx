@@ -13,6 +13,7 @@ import { Modal } from '../src/ui/controls';
 import { ToolRecordsFixture } from './tool-records.fixture';
 import { ActivityFixture } from './activity.fixture';
 import { RecoveryFixture } from './recovery.fixture';
+import { MathFixture } from './math.fixture';
 const Editor = lazy(() => import('../src/files/Editor'));
 const choices = Array.from({ length: 35 }, (_, i) => ({
   value: String(i),
@@ -52,6 +53,7 @@ function Fixture() {
   const [tools, setTools] = useState(false);
   const [activity, setActivity] = useState(false);
   const [recovery, setRecovery] = useState(false);
+  const [math, setMath] = useState(false);
   return (
     <Tooltip.Provider>
       <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -63,8 +65,11 @@ function Fixture() {
           <button onClick={() => setTools(!tools)}>Fixture tools</button>
           <button onClick={() => setActivity(!activity)}>Fixture activity</button>
           <button onClick={() => setRecovery(!recovery)}>Fixture recovery</button>
+          <button onClick={() => setMath(!math)}>Fixture math</button>
         </div>
-        {recovery ? (
+        {math ? (
+          <MathFixture />
+        ) : recovery ? (
           <RecoveryFixture />
         ) : activity ? (
           <ActivityFixture />

@@ -59,6 +59,10 @@ function Fixture() {
     state.status.limits_updated_at = Date.now() / 1000;
     const markdown =
       '### Implementation\n\nA realistic response with **formatting**, a [reference](https://example.com), and code.\n\n' +
+      String.raw`Inline \(x_i^2\) and a display formula:` +
+      '\n\n' +
+      String.raw`[ \max_I \frac{1}{K}\sum_k L_{R_k}(y\mid I,s) ]` +
+      '\n\n' +
       '| Change | Result |\n| --- | --- |\n' +
       '| Parser | Validated |\n'.repeat(6) +
       '\n```rust\n' +
