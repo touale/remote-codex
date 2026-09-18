@@ -12,6 +12,7 @@ import { FolderIcon } from '../ui/FolderIcon';
 import { RowMenu } from '../ui/RowMenu';
 import { FileTreeSkeleton } from './FileLoading';
 import { useFileTree } from './useFileTree';
+import { remotePath } from './context';
 
 export function FileTree({
   context,
@@ -77,6 +78,9 @@ export function FileTree({
   const create = async (directory: boolean, parent = '') => {
     if (await onCreate(directory, parent)) await reveal(parent);
   };
+  const copyPath = (path: string, relative: boolean) => {
+    if (root) void navigator.clipboard.writeText(relative ? path : remotePath(root, path)).catch(report);
+  };
   const creationItems = (parent: string): MenuItem[] => [
     { label: 'New file…', action: () => void create(false, parent), disabled: !context },
     { label: 'New folder…', action: () => void create(true, parent), disabled: !context },
@@ -118,6 +122,8 @@ export function FileTree({
       const parent = entry.directory ? entry.path : entry.path.split('/').slice(0, -1).join('/');
       const items: MenuItem[] = [
         ...(!entry.directory && onWindow ? [{ label: 'Open in New Window', action: () => onWindow(entry.path) }] : []),
+        { label: 'Copy path', action: () => copyPath(entry.path, false), disabled: !root },
+        { label: 'Copy relative path', action: () => copyPath(entry.path, true), disabled: !root },
         { label: 'Download…', action: () => onDownload(entry.path), disabled: entry.symlink },
         ...uploadItems(parent),
         ...(entry.directory ? creationItems(entry.path) : []),

@@ -15,6 +15,7 @@ import { ActivityFixture } from './activity.fixture';
 import { RecoveryFixture } from './recovery.fixture';
 import { MathFixture } from './math.fixture';
 import { FileLinksFixture } from './file-links.fixture';
+import { FileTreeFixture } from './file-tree.fixture';
 const Editor = lazy(() => import('../src/files/Editor'));
 const choices = Array.from({ length: 35 }, (_, i) => ({
   value: String(i),
@@ -56,6 +57,7 @@ function Fixture() {
   const [recovery, setRecovery] = useState(false);
   const [math, setMath] = useState(false);
   const [links, setLinks] = useState(false);
+  const [files, setFiles] = useState(false);
   return (
     <Tooltip.Provider>
       <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -69,8 +71,11 @@ function Fixture() {
           <button onClick={() => setRecovery(!recovery)}>Fixture recovery</button>
           <button onClick={() => setMath(!math)}>Fixture math</button>
           <button onClick={() => setLinks(!links)}>Fixture links</button>
+          <button onClick={() => setFiles(!files)}>Fixture files</button>
         </div>
-        {links ? (
+        {files ? (
+          <FileTreeFixture />
+        ) : links ? (
           <FileLinksFixture app={app} />
         ) : math ? (
           <MathFixture />

@@ -9,6 +9,7 @@ import { activityTimes } from './activity';
 import { treeMenuHighlight } from './tree-menu';
 import { mathRendering } from './math';
 import { fileLinks } from './file-links';
+import { copyFilePaths } from './file-tree';
 
 describe('Shared controls in native WebKit', () => {
   let main: string;
@@ -50,6 +51,7 @@ describe('Shared controls in native WebKit', () => {
   });
   it('renders formulas in both themes and completes streamed math', mathRendering);
   it('opens conversation links in the owning remote editor and preserves tabs across navigation', fileLinks);
+  it('copies remote file and directory paths through both menus', copyFilePaths);
   it('handles nested, horizontal and terminal scrolling without revealing on scroll', async () => {
     await edgeScrollbar('#fixture-input', 'y');
     await expect($('#fixture-native')).not.toHaveAttribute('data-scroll-y');
