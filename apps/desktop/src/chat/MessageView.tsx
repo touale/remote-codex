@@ -15,6 +15,7 @@ export const MessageView = memo(function MessageView({
   onAnswer,
   questionReply,
   onDiff,
+  onOpenFile,
   report,
   onPlan,
   activePlan,
@@ -29,18 +30,19 @@ export const MessageView = memo(function MessageView({
   activePlan?: boolean;
   revisingPlan?: boolean;
   onDiff: (change: FileChange, newWindow?: boolean) => void;
+  onOpenFile?: (href: string) => Promise<void>;
   report: (error: unknown) => void;
 }) {
   if (message.role === 'user' && message.clientId?.startsWith('question:'))
     return <QuestionResult text={message.text} />;
-  if (message.tool) return <ToolMessage tool={message.tool} onDiff={onDiff} report={report} />;
+  if (message.tool) return <ToolMessage tool={message.tool} onDiff={onDiff} onOpenFile={onOpenFile} report={report} />;
   if (editor) return <article className="message user editing-message">{editor}</article>;
   if (message.delivery === 'async' && message.questions?.length)
     return <AsyncQuestions message={message} reply={questionReply} onAnswer={onAnswer} />;
   return (
     <article className={`message ${message.role} ${message.plan ? 'plan-card' : ''}`}>
       <div className="message-body">
-        <MarkdownBody text={message.text} report={report} />
+        <MarkdownBody text={message.text} report={report} onOpenFile={onOpenFile} />
       </div>
       {message.plan && message.complete && (
         <div className="plan-actions">

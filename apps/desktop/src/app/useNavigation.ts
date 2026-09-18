@@ -6,6 +6,7 @@ import { DraftStore } from '../chat/drafts/store';
 import { submitDraft, type DraftSubmission } from '../chat/drafts/submit';
 import type { useChats } from '../chat/useChats';
 import type { useFiles } from '../files/useFiles';
+import { workspaceFilePath } from '../files/links';
 import { useDirectoryFiles } from '../files/useDirectoryFiles';
 import { workspaceAncestorKeys } from '../navigation/workspaceTree';
 import type { useDialog } from '../ui/useDialog';
@@ -23,7 +24,7 @@ export function useNavigation(
     'store' | 'chats' | 'register' | 'action' | 'update' | 'close' | 'loadHistory'
   >,
   dialog: Pick<ReturnType<typeof useDialog>, 'ask'>,
-  files: Pick<ReturnType<typeof useFiles>, 'tabs' | 'retainedContexts'>,
+  files: Pick<ReturnType<typeof useFiles>, 'tabs' | 'retainedContexts' | 'open'>,
 ) {
   const [drafts] = useState(() => new DraftStore());
   const [location, setLocation] = useState<NavigationLocation>({ kind: 'home' });
@@ -210,6 +211,13 @@ export function useNavigation(
       if (browsing) return directoryFiles.connect();
       if (!target) return Promise.reject(new Error('Choose a workspace first.'));
       return connect(target.server, target.path);
+    },
+    openSessionFile: async (id: string, href: string) => {
+      if (location.kind !== 'session' || location.id !== id) return;
+      const context = location.workspace;
+      const relative = workspaceFilePath(href, context.path);
+      app.changePreferences({ editor_visible: true });
+      await files.open(context.id, relative, context.server, context.path);
     },
     submitDraft: (key: string, action: DraftSubmission) => {
       if (activeDraft.current === key) setBusy(true);

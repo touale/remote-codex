@@ -5,6 +5,20 @@ import { MarkdownBody } from './MarkdownBody';
 const formula = String.raw`\max_I \frac{1}{K}\sum_k L_{R_k}(y\mid I,s)`;
 const render = (text: string) => renderToStaticMarkup(<MarkdownBody text={text} report={() => {}} />);
 
+it('preserves remote file hrefs without allowing arbitrary protocols', () => {
+  const html = render(
+    '[absolute](/home/fixture/project/decision.md)\n\n' +
+      '[app](tauri://localhost/home/fixture/project/decision.md)\n\n' +
+      '[relative](<notes/中文 report.md>)\n\n' +
+      '[script](javascript:alert%281%29)\n\n[foreign](tauri://other/etc/passwd)',
+  );
+  expect(html).toContain('href="/home/fixture/project/decision.md"');
+  expect(html).toContain('href="tauri://localhost/home/fixture/project/decision.md"');
+  expect(html).toContain('href="notes/%E4%B8%AD%E6%96%87%20report.md"');
+  expect(html).not.toContain('href="javascript:');
+  expect(html).not.toContain('href="tauri://other');
+});
+
 describe('math in conversation Markdown', () => {
   it.each([
     `[ ${formula} ]`,

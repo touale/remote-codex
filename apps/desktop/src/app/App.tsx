@@ -203,6 +203,7 @@ function WorkspaceApp({
                   <SessionChat
                     id={nav.selected}
                     controller={chats}
+                    onOpenFile={nav.openSessionFile}
                     onFreshPlan={async (chat, plan) => {
                       const { key, action } = preparePlanDraft(nav.drafts, chat, plan);
                       nav.newSession(chat.server, chat.session.cwd, key);

@@ -11,6 +11,7 @@ export function SessionChat({
   onResume,
   onFreshPlan,
   onDiff,
+  onOpenFile,
   report,
 }: {
   id: string | null;
@@ -21,12 +22,19 @@ export function SessionChat({
   onResume: () => void;
   onFreshPlan: (chat: ChatState, plan: Message) => Promise<void>;
   onDiff: (change: FileChange, newWindow?: boolean) => void;
+  onOpenFile?: (id: string, href: string) => Promise<void>;
   report: (error: unknown) => void;
 }) {
   const { store, update, action, loadHistory, revert, reloadEdit } = controller;
   const subscribe = useCallback((listener: () => void) => (id ? store.subscribe(id, listener) : () => {}), [store, id]);
   const snapshot = useCallback(() => (id ? store.get(id) : undefined), [store, id]);
   const chat = useSyncExternalStore(subscribe, snapshot);
+  const openFile = useCallback(
+    async (href: string) => {
+      if (id && onOpenFile) await onOpenFile(id, href);
+    },
+    [id, onOpenFile],
+  );
   const change = useCallback<ChatUpdate>(
     (value) => {
       if (id) update(id, (previous) => (typeof value === 'function' ? value(previous) : { ...previous, ...value }));
@@ -58,6 +66,7 @@ export function SessionChat({
         if (id) await reloadEdit(id);
       }}
       onDiff={onDiff}
+      onOpenFile={onOpenFile ? openFile : undefined}
       report={report}
     />
   );

@@ -16,6 +16,7 @@ export const Conversation = memo(function Conversation({
   editor,
   turns,
   onDiff,
+  onOpenFile,
   onPlan,
   activePlan,
   revisingPlan,
@@ -28,6 +29,7 @@ export const Conversation = memo(function Conversation({
   editor?: ReactNode;
   turns: Record<string, TurnState>;
   onDiff: (change: FileChange, newWindow?: boolean) => void;
+  onOpenFile?: (href: string) => Promise<void>;
   onPlan?: (message: Message, choice: PlanChoice) => void;
   activePlan?: string;
   revisingPlan?: boolean;
@@ -69,6 +71,7 @@ export const Conversation = memo(function Conversation({
                   onAnswer={onAnswer}
                   questionReply={replies.get(questionReplyId(message.id))}
                   onDiff={onDiff}
+                  onOpenFile={onOpenFile}
                   report={report}
                   activePlan={message.plan && message.id === activePlan}
                   revisingPlan={revisingPlan && message.id === activePlan}

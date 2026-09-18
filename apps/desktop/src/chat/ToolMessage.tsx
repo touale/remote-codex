@@ -29,10 +29,12 @@ const statuses: Record<string, string> = {
 export const ToolMessage = memo(function ToolMessage({
   tool,
   onDiff,
+  onOpenFile,
   report,
 }: {
   tool: ToolItem;
   onDiff: (change: FileChange, newWindow?: boolean) => void;
+  onOpenFile?: (href: string) => Promise<void>;
   report: (error: unknown) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -97,7 +99,7 @@ export const ToolMessage = memo(function ToolMessage({
           {tool.output &&
             (tool.kind === 'reasoning' ? (
               <div className="message-body tool-reasoning">
-                <MarkdownBody text={tool.output} report={report} />
+                <MarkdownBody text={tool.output} report={report} onOpenFile={onOpenFile} />
               </div>
             ) : (
               <section>

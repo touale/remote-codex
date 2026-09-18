@@ -23,6 +23,7 @@ export function Chat({
   onRevert,
   onReloadEdit,
   onDiff,
+  onOpenFile,
   report,
 }: {
   chat: ChatState | undefined;
@@ -34,6 +35,7 @@ export function Chat({
   onRevert: (turn: string) => Promise<void>;
   onReloadEdit: () => Promise<void>;
   onDiff: (change: FileChange, newWindow?: boolean) => void;
+  onOpenFile?: (href: string) => Promise<void>;
   report: (error: unknown) => void;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
@@ -183,6 +185,7 @@ export function Chat({
             activePlan={latestPlan?.plan ? latestPlan.id : undefined}
             revisingPlan={revision}
             onDiff={onDiff}
+            onOpenFile={onOpenFile}
             report={report}
             onPlan={chat.turn || choosingPlan || chat.closed || chat.edit || !ready ? undefined : choosePlan}
           />
