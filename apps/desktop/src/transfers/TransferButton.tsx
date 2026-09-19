@@ -1,26 +1,72 @@
-import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, FolderOpen, Pause, Play, Trash2, X } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  ArrowDownUp,
+  ArrowUpFromLine,
+  CircleAlert,
+  FolderOpen,
+  Pause,
+  Play,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import { call } from '../bridge/client';
 import type { Choice, SkippedTransfers, Transfer } from '../bridge/files';
 import { IconButton } from '../ui/controls';
 import { transferStore, useTransferList } from './store';
-const finished = (task: Transfer) => task.status === 'completed' || task.status === 'cancelled';
+import { finished, transferSummary } from './summary';
 
 import styles from './transfers.module.css';
 import type { TransferActions } from './useTransfers';
 export function TransferButton({ actions, report }: { actions: TransferActions; report: (error: unknown) => void }) {
   const tasks = useTransferList();
   const [clearing, setClearing] = useState(false);
-  const removable = tasks.filter((t) => finished(t) && !t.active);
-  const pending = tasks.filter((t) => !finished(t)).length;
   if (!tasks.length) return null;
+  const removable = tasks.filter((t) => finished(t) && !t.active);
+  const summary = transferSummary(tasks, transferStore.speed);
+  const attentionLabel = `${summary.attention} transfer${summary.attention === 1 ? ' needs' : 's need'} attention`;
+  const details = [summary.label];
+  if (summary.active)
+    details.push(
+      summary.percent === null
+        ? `${size(summary.bytes)} transferred`
+        : `${size(summary.bytes)} / ${size(summary.total)}`,
+    );
+  if (summary.percent !== null) details.push(`${summary.percent}%`);
+  if (summary.speed !== null) details.push(`${size(summary.speed)}/s`);
+  if (summary.active && summary.waiting)
+    details.push(`${summary.waiting} waiting${summary.attention ? ` (${attentionLabel})` : ''}`);
+  const description = details.join(' · ');
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button className={styles.trigger} aria-label="File transfers">
-          <ArrowDownUp size={13} />
-          {pending ? `${pending} transfer${pending > 1 ? 's' : ''}` : 'Transfers'}
+        <button
+          className={styles.trigger}
+          aria-label="File transfers"
+          aria-description={description}
+          title={description}
+        >
+          {summary.direction === 'upload' ? (
+            <ArrowUpFromLine size={13} />
+          ) : summary.direction === 'download' ? (
+            <ArrowDownToLine size={13} />
+          ) : (
+            <ArrowDownUp size={13} />
+          )}
+          <span className={styles.label}>{summary.label}</span>
+          {summary.percent !== null && <span className={styles.percent}>{summary.percent}%</span>}
+          {summary.active > 0 && (
+            <progress aria-label="File transfer progress" max={100} value={summary.percent ?? undefined} />
+          )}
+          {summary.speed !== null && <span className={styles.speed}>{size(summary.speed)}/s</span>}
+          {summary.attention > 0 ? (
+            <span className={styles.attention} aria-label={attentionLabel}>
+              <CircleAlert size={12} />
+            </span>
+          ) : summary.active > 0 && summary.waiting > 0 ? (
+            <span title={`${summary.waiting} waiting`}>+{summary.waiting}</span>
+          ) : null}
         </button>
       </Popover.Trigger>
       <Popover.Portal>

@@ -61,6 +61,18 @@
 .session {
   font-variant-numeric: tabular-nums;
 }
+.transfers {
+  display: flex;
+  min-width: 0;
+  max-width: 280px;
+}
+.transfers:empty {
+  display: none;
+}
+.bar .transfers > button {
+  flex: 0 1 auto;
+  min-width: 0;
+}
 .operations {
   gap: 4px;
 }

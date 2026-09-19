@@ -7,6 +7,29 @@
   color: var(--muted);
   font-size: 11px;
   min-height: 22px;
+  min-width: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.trigger > svg,
+.percent,
+.attention {
+  flex: none;
+}
+.label,
+.speed {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.attention {
+  display: inline-flex;
+  color: var(--danger);
+}
+@media (max-width: 1100px) {
+  .speed {
+    display: none;
+  }
 }
 .panel {
   width: min(420px, calc(100vw - 32px));

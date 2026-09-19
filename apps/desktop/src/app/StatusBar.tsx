@@ -134,7 +134,7 @@ export function StatusBar({
           </Popover.Portal>
         </Popover.Root>
       )}
-      {transfers}
+      <div className={styles.transfers}>{transfers}</div>
       {chat && (
         <button
           className={styles.session}

@@ -11,6 +11,7 @@ import { mathRendering } from './math';
 import { fileLinks } from './file-links';
 import { copyFilePaths } from './file-tree';
 import { createWorkspaceFolder } from './workspace-create';
+import { transferProgress } from './transfer-progress';
 
 describe('Shared controls in native WebKit', () => {
   let main: string;
@@ -54,6 +55,7 @@ describe('Shared controls in native WebKit', () => {
   it('opens conversation links in the owning remote editor and preserves tabs across navigation', fileLinks);
   it('copies remote file and directory paths through both menus', copyFilePaths);
   it('creates workspace folders at the menu target and retries opening without creating twice', createWorkspaceFolder);
+  it('shows transfer progress without opening the panel and fits beside connection progress', transferProgress);
   it('handles nested, horizontal and terminal scrolling without revealing on scroll', async () => {
     await edgeScrollbar('#fixture-input', 'y');
     await expect($('#fixture-native')).not.toHaveAttribute('data-scroll-y');
