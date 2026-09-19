@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { attach, call, failure, listen } from '../bridge/client';
+import { attach, call, failure, listen, watchFullscreen } from '../bridge/client';
 import type { AuthPrompt, Catalog, Preferences, Progress, WindowTarget } from '../bridge/types';
 
 import { acceptPreferences, useAppPreferences } from '../settings/preferences';
@@ -103,6 +103,13 @@ export function useApplication() {
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   }, [dark]);
+  useEffect(
+    () =>
+      watchFullscreen((fullscreen) => {
+        document.documentElement.dataset.fullscreen = String(fullscreen);
+      }, report),
+    [report],
+  );
   useEffect(() => {
     if (!loaded.current) return;
     const timer = setTimeout(() => {

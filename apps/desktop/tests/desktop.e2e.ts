@@ -2,8 +2,10 @@ import { $, browser, expect } from '@wdio/globals';
 import path from 'node:path';
 import { contextAt } from './interaction-controls';
 import { sharedAppearanceAndUsage } from './settings-controls';
+import { fullscreenTitlebar } from './fullscreen';
 
 describe('Remote Codex desktop', () => {
+  it('removes traffic light spacing only while each native window is fullscreen', fullscreenTitlebar);
   it('offers Remote Codex update settings without connecting a server', async () => {
     await $('button=Settings').waitForDisplayed();
     await $('button=Settings').click();

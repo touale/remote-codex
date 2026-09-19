@@ -1,4 +1,5 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type { Commands } from './commands';
 import type { AppEvent, Failure, WindowTarget } from './types';
@@ -49,6 +50,36 @@ export function failure(error: unknown): Failure {
 }
 export const operationId = () => crypto.randomUUID();
 export const openLink = (url: string) => call('external_link', { url });
+
+export function watchFullscreen(changed: (fullscreen: boolean) => void, report: (error: unknown) => void) {
+  const window = getCurrentWindow();
+  let active = true;
+  let revision = 0;
+  let unlisten: (() => void) | undefined;
+  const update = async () => {
+    const current = ++revision;
+    try {
+      const fullscreen = await window.isFullscreen();
+      if (active && current === revision) changed(fullscreen);
+    } catch (error) {
+      if (active && current === revision) report(error);
+    }
+  };
+  void window
+    .onResized(update)
+    .then((stop) => {
+      if (!active) return stop();
+      unlisten = stop;
+      void update();
+    })
+    .catch((error) => {
+      if (active) report(error);
+    });
+  return () => {
+    active = false;
+    unlisten?.();
+  };
+}
 
 export function onFileDrag(listener: (position: { x: number; y: number } | null) => void) {
   return getCurrentWebview().onDragDropEvent(({ payload }) => {

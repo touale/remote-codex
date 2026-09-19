@@ -7,7 +7,12 @@
         {
           "identifier": "webdriver-tests",
           "windows": ["main", "workspace-*"],
-          "permissions": ["wdio:default", "wdio-webdriver:default", "core:window:allow-close"]
+          "permissions": [
+            "wdio:default",
+            "wdio-webdriver:default",
+            "core:window:allow-close",
+            "core:window:allow-set-fullscreen"
+          ]
         }
       ]
     }

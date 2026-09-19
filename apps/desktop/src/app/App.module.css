@@ -20,6 +20,12 @@
   align-self: stretch;
   flex: none;
 }
+:global(html[data-fullscreen='true']) .titlebar {
+  padding-left: 10px;
+}
+:global(html[data-fullscreen='true']) .trafficSpace {
+  display: none;
+}
 .product {
   font-size: 12px;
   font-weight: 550;
