@@ -16,6 +16,7 @@ export function WorkspaceNodes({ node, level, ...tree }: TreeContext & { node: P
     ? [
         { label: 'Open workspace', action: () => actions.onSelectWorkspace(workspace) },
         { label: 'New session', action: () => actions.onNew(workspace) },
+        { label: 'New folder…', action: () => actions.onCreateFolder({ server: node.server, path: node.path }) },
         { label: 'Refresh', action: actions.onRefresh, disabled: actions.refreshing },
         { label: 'Open terminal', action: () => actions.onTerminal(workspace) },
         {
@@ -27,6 +28,7 @@ export function WorkspaceNodes({ node, level, ...tree }: TreeContext & { node: P
       ]
     : [
         { label: 'Open directory', action: () => actions.onSelectDirectory({ server: node.server, path: node.path }) },
+        { label: 'New folder…', action: () => actions.onCreateFolder({ server: node.server, path: node.path }) },
         { label: expanded ? 'Collapse' : 'Expand', action: () => toggle(node.key) },
         { label: 'Copy path', action: () => copyTreeText(node.path, actions) },
       ];

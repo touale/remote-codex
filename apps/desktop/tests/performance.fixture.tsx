@@ -248,6 +248,7 @@ function Fixture() {
           onEditServer={noop}
           onRemoveServer={noop}
           onAddWorkspace={noop}
+          onCreateFolder={noop}
           onRemoveWorkspace={noop}
           onSelectWorkspace={noop}
           onSelectSession={noop}

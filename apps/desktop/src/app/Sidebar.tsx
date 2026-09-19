@@ -2,12 +2,14 @@ import { Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { call } from '../bridge/client';
 import type { Server, Workspace } from '../bridge/types';
+import type { WorkspaceTarget } from '../bridge/files';
 import type { useChats } from '../chat/useChats';
 import { FileTree } from '../files/FileTree';
 import { fileKey } from '../files/tabs';
 import type { useFileActions } from '../files/useFileActions';
 import type { useFiles } from '../files/useFiles';
 import { ConnectionTree } from '../navigation/ConnectionTree';
+import { CreateWorkspaceDialog } from '../navigation/CreateWorkspaceDialog';
 import type { TransferActions } from '../transfers/useTransfers';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import styles from './Sidebar.module.css';
@@ -65,6 +67,7 @@ export function Sidebar({
 }) {
   const area = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(500);
+  const [newFolder, setNewFolder] = useState<WorkspaceTarget | null>(null);
   useEffect(() => {
     if (!area.current) return;
     const observer = new ResizeObserver(([entry]) => setHeight(entry.contentRect.height));
@@ -112,6 +115,7 @@ export function Sidebar({
               onEditServer={onEditServer}
               onRemoveServer={(s) => run(resources.removeServer(s))}
               onAddWorkspace={onAddWorkspace}
+              onCreateFolder={setNewFolder}
               onRemoveWorkspace={(w) => run(resources.removeWorkspace(w))}
               onSessionMenu={(id, action) =>
                 run(chats.metadata(id, action, app.catalog.sessions.find((c) => c.session.id === id)?.session.title))
@@ -191,6 +195,9 @@ export function Sidebar({
           <small>Local Codex</small>
         </div>
       </aside>
+      {newFolder && (
+        <CreateWorkspaceDialog parent={newFolder} onOpen={nav.openWorkspace} onClose={() => setNewFolder(null)} />
+      )}
       <ResizeHandle
         axis="x"
         label="Resize sidebar"

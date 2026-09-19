@@ -14,6 +14,7 @@ export interface TreeActions {
   onEditServer: (server: Server) => void;
   onRemoveServer: (server: Server) => void;
   onAddWorkspace: (server: Server) => void;
+  onCreateFolder: (parent: WorkspaceTarget) => void;
   onRemoveWorkspace: (workspace: Workspace) => void;
   onSessionMenu: (id: string, action: 'rename' | 'archive' | 'close') => void;
   onTerminal: (workspace: Workspace) => void;

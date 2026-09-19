@@ -16,6 +16,7 @@ const actions = {
   onEditServer: noop,
   onRemoveServer: noop,
   onAddWorkspace: noop,
+  onCreateFolder: noop,
   onRemoveWorkspace: noop,
   onSessionMenu: noop,
   onTerminal: noop,
