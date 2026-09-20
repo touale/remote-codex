@@ -44,6 +44,8 @@ fn resolve(config: &Value, catalog: Catalog, mode: &str) -> Result<SessionDefaul
             model,
             effort,
             full_access: crate::thread::binding::full_access(mode),
+            // New threads start on-request, regardless of their execution ceiling.
+            approval_policy: crate::thread::binding::START_APPROVAL_POLICY.into(),
             reviewer: config["approvals_reviewer"]
                 .as_str()
                 .unwrap_or("user")
@@ -126,6 +128,7 @@ mod tests {
         assert_eq!(value.settings.effort.as_deref(), Some("medium"));
         assert_eq!(value.settings.reviewer, "user");
         assert!(!value.settings.full_access);
+        assert_eq!(value.settings.approval_policy, "on-request");
         let value = resolve(
             &json!({"model":"custom", "model_reasoning_effort":"high", "approvals_reviewer":"auto_review"}),
             catalog(),
@@ -135,6 +138,7 @@ mod tests {
         assert_eq!(value.settings.effort.as_deref(), Some("high"));
         assert_eq!(value.settings.reviewer, "auto_review");
         assert!(value.settings.full_access);
+        assert_eq!(value.settings.approval_policy, "on-request");
         Ok(())
     }
     #[test]

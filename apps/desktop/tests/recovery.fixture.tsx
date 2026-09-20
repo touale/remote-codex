@@ -41,7 +41,14 @@ export function RecoveryFixture() {
           ready: connection === 'ready',
           canReconnect: connection === 'failed',
           models: [],
-          settings: { mode: 'agent', model: 'fixture-model', effort: 'low', full_access: false, reviewer: 'user' },
+          settings: {
+            mode: 'agent',
+            model: 'fixture-model',
+            effort: 'low',
+            full_access: false,
+            approval_policy: 'on-request',
+            reviewer: 'user',
+          },
         }}
         setDraft={setDraft}
         setComposerMode={() => {}}

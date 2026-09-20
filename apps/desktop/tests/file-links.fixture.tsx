@@ -39,6 +39,7 @@ export function FileLinksFixture({ app }: { app: ReturnType<typeof useApplicatio
           model: 'fixture',
           effort: 'medium',
           full_access: false,
+          approval_policy: 'on-request',
           reviewer: 'user',
         },
         [],

@@ -20,7 +20,9 @@ pub struct ConfirmedSettings {
     pub mode: crate::goals::CollaborationMode,
     pub model: String,
     pub effort: Option<String>,
+    /// Native sandbox access; approval policy is independent.
     pub full_access: bool,
+    pub approval_policy: String,
     pub reviewer: String,
 }
 /// Read-only preview; an opened native thread remains authoritative.

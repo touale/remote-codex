@@ -3,6 +3,7 @@ import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import type { ComposerMode, SessionAction } from '../../bridge/session';
 import { Modal } from '../../ui/controls';
+import { permissionLabel } from '../permissions';
 import type { ComposerState } from './model';
 export type SettingsMenuName = 'mode' | 'model' | 'permissions';
 const modeLabels = { code: 'Code', plan: 'Plan', goal: 'Goal' };
@@ -24,14 +25,7 @@ export function SettingsMenu({
   const [confirmFull, setConfirmFull] = useState(false);
   const [custom, setCustom] = useState('');
   const [customVisible, setCustomVisible] = useState(false);
-  const permission =
-    chat.settings.full_access === null
-      ? 'Permissions unavailable'
-      : chat.settings.full_access
-        ? 'Full Access'
-        : chat.settings.reviewer === 'user'
-          ? 'Ask for approval'
-          : 'Auto-review';
+  const permission = permissionLabel(chat.settings);
   const model = chat.models.find((m) => m.id === chat.settings.model);
   const ModeIcon = { code: Code2, plan: ListTodo, goal: Target }[chat.composerMode];
   const settings = (value: Extract<SessionAction, { action: 'settings' }>['settings']) =>

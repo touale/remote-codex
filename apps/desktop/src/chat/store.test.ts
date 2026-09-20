@@ -17,7 +17,14 @@ it('coalesces stream paints without losing order or delaying control events', ()
       initialChat(
         { id, title: id, cwd: '/test', created_at: 0, updated_at: 0, archived: false, state: 'idle' },
         'dev',
-        { mode: 'agent', model: 'model', effort: null, full_access: false, reviewer: 'user' },
+        {
+          mode: 'agent',
+          model: 'model',
+          effort: null,
+          full_access: false,
+          approval_policy: 'on-request',
+          reviewer: 'user',
+        },
         [],
       ),
     );

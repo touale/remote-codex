@@ -241,10 +241,12 @@ pub fn settings(thread: &str, options: SessionSettings) -> Value {
         value["effort"] = json!(effort);
     }
     if let Some(preset) = options.permissions {
-        value["permissions"] = json!(match preset {
-            PermissionPreset::Workspace => ":workspace",
-            PermissionPreset::FullAccess => ":danger-full-access",
-        });
+        let (permissions, approval) = match preset {
+            PermissionPreset::Workspace => (":workspace", "on-request"),
+            PermissionPreset::FullAccess => (":danger-full-access", "never"),
+        };
+        value["permissions"] = json!(permissions);
+        value["approvalPolicy"] = json!(approval);
     }
     if let Some(reviewer) = options.reviewer {
         value["approvalsReviewer"] = json!(match reviewer {

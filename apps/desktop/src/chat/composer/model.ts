@@ -17,6 +17,7 @@ export interface ComposerState {
     model: string | null;
     effort: string | null;
     full_access: boolean | null;
+    approval_policy: string | null;
     reviewer: string | null;
   };
 }

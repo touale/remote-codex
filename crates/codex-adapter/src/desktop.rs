@@ -92,6 +92,7 @@ pub fn settings(value: &Value) -> ConfirmedSettings {
         model: text(value, "model"),
         effort: value["effort"].as_str().map(str::to_owned),
         full_access: value["sandboxPolicy"]["type"] == "dangerFullAccess",
+        approval_policy: value["approvalPolicy"].as_str().unwrap_or("custom").into(),
         reviewer: value["approvalsReviewer"].as_str().unwrap_or("user").into(),
     }
 }

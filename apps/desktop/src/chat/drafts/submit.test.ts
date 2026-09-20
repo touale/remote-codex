@@ -25,6 +25,7 @@ function fixture() {
         model: 'default-model',
         effort: null,
         full_access: false,
+        approval_policy: 'on-request',
         reviewer: 'user',
       },
       [],

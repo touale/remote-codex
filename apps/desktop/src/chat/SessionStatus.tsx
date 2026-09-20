@@ -5,6 +5,7 @@ import { IconButton, Modal } from '../ui/controls';
 import { Limits } from '../usage/Limits';
 import { useSessionUsage } from '../usage/session';
 import { goalLabels } from './composer/GoalProgress';
+import { permissionLabel } from './permissions';
 import { duration } from './time';
 export function SessionStatus({
   chat,
@@ -67,13 +68,17 @@ export function SessionStatus({
           {row('Model', `${chat.settings.model}${chat.settings.effort ? ` · ${chat.settings.effort}` : ''}`)}
           {row('Provider', status.provider ?? 'Unavailable')}
           {row('Mode', chat.composerMode === 'goal' ? 'Goal' : chat.settings.mode === 'plan' ? 'Plan' : 'Code')}
+          {row('Permissions', permissionLabel(chat.settings))}
           {row(
-            'Permissions',
-            chat.settings.full_access
-              ? 'Full Access'
-              : chat.settings.reviewer === 'user'
-                ? 'Ask for approval'
-                : 'Auto-review',
+            'Approval policy',
+            (
+              {
+                'on-request': 'On request',
+                never: 'Never',
+                'on-failure': 'On failure',
+                untrusted: 'Untrusted commands',
+              } as Record<string, string>
+            )[chat.settings.approval_policy] ?? 'Custom',
           )}
           {row('Codex', activity)}
           {status.active_flags.length > 0 &&

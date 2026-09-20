@@ -55,6 +55,11 @@ export function DraftChat({
       full_access: draft.settings.permissions
         ? draft.settings.permissions === 'full_access'
         : (defaults?.settings.full_access ?? null),
+      approval_policy: draft.settings.permissions
+        ? draft.settings.permissions === 'full_access'
+          ? 'never'
+          : 'on-request'
+        : (defaults?.settings.approval_policy ?? null),
       reviewer: draft.settings.reviewer ?? defaults?.settings.reviewer ?? null,
     },
   };

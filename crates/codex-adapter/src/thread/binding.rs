@@ -1,9 +1,12 @@
 use remote_codex_core::session::{Session, SessionBinding};
 use remote_codex_protocol::Fault;
 use serde_json::{Value, json};
+
+pub(crate) const START_APPROVAL_POLICY: &str = "on-request";
+
 pub(crate) fn start_params(environment: &str, cwd: &str, mode: &str) -> Value {
     json!({"cwd":cwd,"environments":[{"environmentId":environment,"cwd":cwd}],
-        "approvalPolicy":"on-request","sandbox":if full_access(mode) {"danger-full-access"} else {"workspace-write"},
+        "approvalPolicy":START_APPROVAL_POLICY,"sandbox":if full_access(mode) {"danger-full-access"} else {"workspace-write"},
         "config":{"features.multi_agent":false},"experimentalRawEvents":false})
 }
 

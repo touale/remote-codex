@@ -1,4 +1,5 @@
 import type { ChatState, Message } from '../state';
+import { permissionPreset } from '../permissions';
 import type { DraftStore } from './store';
 
 /** A fresh context carries the approved plan and settings, never the conversation history. */
@@ -18,7 +19,8 @@ export function preparePlanDraft(store: DraftStore, chat: ChatState, plan: Messa
       mode: 'agent',
       ...(chat.settings.model ? { model: chat.settings.model } : {}),
       ...(chat.settings.effort ? { effort: chat.settings.effort } : {}),
-      permissions: chat.settings.full_access ? 'full_access' : 'workspace',
+      // A custom combination must not silently become approval-free Full Access.
+      permissions: permissionPreset(chat.settings) ?? 'workspace',
       reviewer: chat.settings.reviewer === 'auto_review' ? 'auto_review' : 'user',
     },
   }));

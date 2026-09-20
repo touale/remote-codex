@@ -17,7 +17,14 @@ const chat = () =>
   initialChat(
     session,
     'dev',
-    { mode: 'agent', model: 'model', effort: null, full_access: false, reviewer: 'user' },
+    {
+      mode: 'agent',
+      model: 'model',
+      effort: null,
+      full_access: false,
+      approval_policy: 'on-request',
+      reviewer: 'user',
+    },
     [],
   );
 const tool: ToolItem = {

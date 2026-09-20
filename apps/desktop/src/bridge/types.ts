@@ -34,6 +34,7 @@ export interface Settings {
   model: string;
   effort: string | null;
   full_access: boolean;
+  approval_policy: string;
   reviewer: string;
 }
 export interface Model {

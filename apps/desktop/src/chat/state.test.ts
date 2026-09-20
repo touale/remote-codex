@@ -12,7 +12,14 @@ const session = {
   archived: false,
   state: 'idle',
 };
-const settings = { mode: 'agent' as const, model: 'model-a', effort: 'medium', full_access: false, reviewer: 'user' };
+const settings = {
+  mode: 'agent' as const,
+  model: 'model-a',
+  effort: 'medium',
+  full_access: false,
+  approval_policy: 'on-request',
+  reviewer: 'user',
+};
 describe('native session projection', () => {
   it('replaces reverted turns without resurrecting late messages and retains async choices', () => {
     let state = initialChat(session, 'dev', settings, []);

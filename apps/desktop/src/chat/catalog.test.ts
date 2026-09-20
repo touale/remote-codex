@@ -19,7 +19,7 @@ const cached: CachedSession = {
 const chat = initialChat(
   { ...cached.session, title: 'Live title', updated_at: 150, archived: true },
   'dev',
-  { mode: 'agent', model: 'model', effort: null, full_access: false, reviewer: 'user' },
+  { mode: 'agent', model: 'model', effort: null, full_access: false, approval_policy: 'on-request', reviewer: 'user' },
   [],
 );
 

@@ -33,6 +33,7 @@ const settings = {
   model: 'fixture-model',
   effort: 'medium',
   full_access: false,
+  approval_policy: 'on-request',
   reviewer: 'user',
 };
 const report = (error: unknown) => {
