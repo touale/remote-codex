@@ -165,6 +165,20 @@ jobs:
             printf '| Platform | Desktop app | CLI |\n'
             printf '| --- | --- | --- |\n'
             printf '| macOS · Apple Silicon | [Download App](%s/remote-codex-app-macos-arm64.dmg) | [Download CLI](%s/remote-codex-cli-macos-arm64.tar.gz) |\n\n' "$release_url" "$release_url"
+            cat <<'APP_HELP'
+          **macOS: App won’t open?**
+
+          Move **Remote Codex** to **Applications** first. If macOS blocks it, go to **System Settings → Privacy & Security → [Open Anyway](https://support.apple.com/en-us/102445)**.
+
+          If you trust this download and it remains blocked, run:
+
+          ```sh
+          xattr -dr com.apple.quarantine "/Applications/Remote Codex.app"
+          ```
+
+          Then open the app again.
+
+          APP_HELP
             printf '%s\n' "$RELEASE_NOTES"
           } > "$RUNNER_TEMP/release-notes.md"
           gh release create "$RELEASE_VERSION" ./* --draft \
