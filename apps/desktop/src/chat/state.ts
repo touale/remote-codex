@@ -274,8 +274,6 @@ export function reduceEvent(state: ChatState, event: SessionEvent): ChatState {
         composerMode:
           event.settings.mode === 'plan' ? 'plan' : state.composerMode === 'plan' ? 'code' : state.composerMode,
       };
-    case 'permissions_updated':
-      return { ...state, settings: { ...state.settings, full_access: event.full_access } };
     case 'environment_changed':
       return { ...state, environment: event.state };
     case 'warning':

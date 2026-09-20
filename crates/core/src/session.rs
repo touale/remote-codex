@@ -139,9 +139,6 @@ pub enum SessionEvent {
         timing: crate::status::TurnTiming,
         outcome: TurnOutcome,
     },
-    PermissionsUpdated {
-        full_access: bool,
-    },
     Closed {
         reason: Option<String>,
     },

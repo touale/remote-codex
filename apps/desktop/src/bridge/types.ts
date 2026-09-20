@@ -155,7 +155,6 @@ export type SessionEvent =
   | { type: 'turn_started'; id: string; timing: TurnTiming }
   | { type: 'turn_completed'; id: string; timing: TurnTiming; outcome: { status: string; message?: string } }
   | { type: 'settings_changed'; settings: Settings }
-  | { type: 'permissions_updated'; full_access: boolean }
   | { type: 'environment_changed'; state: Environment }
   | { type: 'warning'; message: string }
   | { type: 'closed'; reason: string | null };
