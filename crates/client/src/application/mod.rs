@@ -150,12 +150,12 @@ impl Client {
         }
     }
     pub async fn select_program(&self, path: PathBuf) -> Result<()> {
-        let path = remote_codex_adapter::program::validate(path).await?;
+        let program = self.0.resolve_program(Some(path)).await?;
         *self
             .0
             .selected_program
             .lock()
-            .map_err(|_| crate::ClientError::RemoteResponse)? = Some(path);
+            .map_err(|_| crate::ClientError::RemoteResponse)? = Some(program.path);
         Ok(())
     }
     pub async fn close(&self) {
@@ -184,16 +184,26 @@ impl Client {
 }
 
 impl State {
-    async fn program(&self) -> Result<PathBuf> {
+    async fn program(&self) -> Result<remote_codex_adapter::program::Launch> {
         let selected = self
             .selected_program
             .lock()
             .map_err(|_| crate::ClientError::RemoteResponse)?
             .clone();
+        self.resolve_program(selected).await
+    }
+
+    async fn resolve_program(
+        &self,
+        selected: Option<PathBuf>,
+    ) -> Result<remote_codex_adapter::program::Launch> {
         Ok(if self.options.desktop_discovery {
             remote_codex_adapter::program::discover_desktop(selected).await?
-        } else if let Some(path) = &selected {
-            remote_codex_adapter::program::validate(path.clone()).await?
+        } else if let Some(path) = selected {
+            remote_codex_adapter::program::validate(remote_codex_adapter::program::Launch::new(
+                path,
+            ))
+            .await?
         } else {
             remote_codex_adapter::program::discover().await?
         })

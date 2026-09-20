@@ -1,4 +1,5 @@
 //! Exercise paginated resume against native Codex with synthetic, interrupted history.
+use remote_codex_adapter::program::Launch;
 use remote_codex_adapter::thread::{Codex, Creation, OpenSource, OpenThread, Prepared, Thread};
 use remote_codex_core::session::SessionBinding;
 use serde_json::{Value, json};
@@ -10,7 +11,7 @@ const ID: &str = "01990000-0000-7000-8000-000000000001";
 #[tokio::test]
 #[ignore = "requires REMOTE_CODEX_TEST_BINARY; isolated history, no model requests"]
 async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestResult {
-    let program = std::env::var("REMOTE_CODEX_TEST_BINARY")?;
+    let program = Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
     let home = tempfile::tempdir()?;
     let cwd = home.path().to_str().ok_or("invalid temporary path")?;
     std::fs::write(
@@ -18,7 +19,7 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
         "model=\"gpt-6-astra\"\nmodel_provider=\"offline\"\n[model_providers.offline]\nname=\"Offline\"\nbase_url=\"http://127.0.0.1:9/v1\"\nwire_api=\"responses\"\nrequires_openai_auth=false\n[analytics]\nenabled=false\n",
     )?;
     history(home.path())?;
-    let codex = Codex::start(Path::new(&program), home.path()).await?;
+    let codex = Codex::start(&program, home.path()).await?;
     let result = async {
         let opened = codex
             .open(OpenThread {
@@ -120,7 +121,7 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
             assert_ne!(event["method"], "deprecationNotice");
             assert_ne!(event["method"], "turn/started");
         }
-        fork_paused_goal(&thread, Path::new(&program), home.path(), &goal).await?;
+        fork_paused_goal(&thread, &program, home.path(), &goal).await?;
         Ok(())
     }
     .await;
@@ -130,7 +131,7 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
 
 async fn fork_paused_goal(
     source: &Thread,
-    program: &Path,
+    program: &Launch,
     home: &Path,
     expected: &Value,
 ) -> TestResult {

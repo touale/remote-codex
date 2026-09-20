@@ -246,7 +246,7 @@ fn project_trust_is_limited_to_the_bound_workspace_and_valid_choices() -> TestRe
 #[ignore = "requires REMOTE_CODEX_TEST_BINARY; temporary Codex home, no model turn"]
 async fn native_project_trust_survives_restart_without_changing_execution_defaults() -> TestResult {
     use crate::engine::Engine;
-    let program = std::path::PathBuf::from(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
+    let program = crate::program::Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
     let home = tempfile::tempdir()?;
     let mut bound = binding()?;
     bound.codex_home = home.path().to_str().ok_or("invalid test path")?.into();

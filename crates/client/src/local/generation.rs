@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[derive(Clone)]
 pub(super) struct Recipe {
-    pub program: PathBuf,
+    pub program: remote_codex_adapter::program::Launch,
     pub runtime_cache: PathBuf,
     pub home: PathBuf,
     pub cwd: String,
@@ -71,7 +71,9 @@ impl Recipe {
         )
         .await?;
         progress(PrepareEvent::Stage(PrepareStage::StartLocalCodex));
-        let codex = match Codex::start(&program.path, &self.home).await {
+        let mut launch = self.program.clone();
+        launch.path.clone_from(&program.path);
+        let codex = match Codex::start(&launch, &self.home).await {
             Ok(codex) => codex,
             Err(error) => {
                 bridge.detach().await;

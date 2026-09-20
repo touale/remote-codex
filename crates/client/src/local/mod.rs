@@ -58,7 +58,7 @@ pub(crate) struct LocalRuntime {
 
 pub(crate) struct OpenOptions<'a> {
     pub(crate) directory: &'a Path,
-    pub(crate) program: &'a Path,
+    pub(crate) program: &'a remote_codex_adapter::program::Launch,
     pub(crate) path: &'a str,
     pub(crate) existing: Option<SessionBinding>,
     pub(crate) takeover: bool,
@@ -104,7 +104,7 @@ impl LocalRuntime {
             false,
         )?;
         let recipe = Recipe {
-            program: options.program.into(),
+            program: options.program.clone(),
             runtime_cache: options.directory.join("cache/runtime"),
             home,
             cwd,

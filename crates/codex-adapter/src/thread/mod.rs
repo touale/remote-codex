@@ -60,7 +60,7 @@ pub struct Thread {
 }
 
 impl Codex {
-    pub async fn start(program: &Path, home: &Path) -> Result<Self, Fault> {
+    pub async fn start(program: &crate::program::Launch, home: &Path) -> Result<Self, Fault> {
         let (engine, initialized) = Engine::local(program, home).await?;
         Ok(Self {
             engine,

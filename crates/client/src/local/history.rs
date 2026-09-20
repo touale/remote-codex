@@ -4,7 +4,7 @@ use remote_codex_core::session::{HistoryPage, SessionBinding};
 use std::path::Path;
 
 pub(crate) async fn read(
-    program: &Path,
+    program: &remote_codex_adapter::program::Launch,
     binding: &SessionBinding,
     cursor: Option<&str>,
 ) -> Result<HistoryPage> {

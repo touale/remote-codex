@@ -1,13 +1,13 @@
 use crate::{Result, local::LocalRuntime};
 use remote_codex_core::session::{ApprovalDecision, Session, SessionEvent, SessionSettings};
-use std::{ffi::OsString, path::PathBuf, sync::Arc};
+use std::{ffi::OsString, sync::Arc};
 use tokio::sync::{broadcast, watch};
 
 /// A shared session owner. Independent processes coordinate through a lease.
 #[derive(Clone)]
 pub struct SessionHandle {
     pub(super) runtime: Arc<LocalRuntime>,
-    pub(super) program: PathBuf,
+    pub(super) program: remote_codex_adapter::program::Launch,
     pub(super) client: super::Client,
 }
 
@@ -34,7 +34,11 @@ impl SessionHandle {
     pub async fn mcp_status(&self) -> Result<Vec<super::McpStatus>> {
         self.runtime.mcp_status().await
     }
-    pub(super) fn new(runtime: Arc<LocalRuntime>, program: PathBuf, client: super::Client) -> Self {
+    pub(super) fn new(
+        runtime: Arc<LocalRuntime>,
+        program: remote_codex_adapter::program::Launch,
+        client: super::Client,
+    ) -> Self {
         Self {
             runtime,
             program,

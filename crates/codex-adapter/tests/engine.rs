@@ -1,14 +1,14 @@
-use remote_codex_adapter::engine::Engine;
+use remote_codex_adapter::{engine::Engine, program::Launch};
 use serde_json::json;
 use std::{os::unix::fs::PermissionsExt, path::Path};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-fn executable(home: &Path, body: &str) -> std::io::Result<std::path::PathBuf> {
+fn executable(home: &Path, body: &str) -> std::io::Result<Launch> {
     let path = home.join("codex-fixture");
     std::fs::write(&path, format!("#!/bin/sh\n{body}"))?;
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
-    Ok(path)
+    Ok(Launch::new(path))
 }
 
 #[tokio::test]
@@ -72,7 +72,7 @@ done
 #[tokio::test]
 #[ignore = "requires explicit native Codex executable and home; reads configured plugin metadata without a model turn"]
 async fn configured_native_catalog_keeps_serving_requests() -> TestResult {
-    let program = std::path::PathBuf::from(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
+    let program = Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
     let home = std::path::PathBuf::from(std::env::var("REMOTE_CODEX_TEST_NATIVE_HOME")?);
     let (engine, _) = Engine::local(&program, &home).await?;
     let catalog = engine

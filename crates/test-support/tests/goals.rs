@@ -1,4 +1,4 @@
-use remote_codex_adapter::{engine::Engine, goals};
+use remote_codex_adapter::{engine::Engine, goals, program::Launch};
 use remote_codex_client::application::GoalStatus;
 use remote_codex_test_support::{
     ProbeResult,
@@ -9,7 +9,7 @@ use serde_json::json;
 #[tokio::test]
 #[ignore = "requires REMOTE_CODEX_TEST_BINARY; isolated Codex and loopback model, no remote execution"]
 async fn native_goal_resume_runs_and_stops_at_completion() -> ProbeResult<()> {
-    let program = std::path::PathBuf::from(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
+    let program = Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
     let home = tempfile::tempdir()?;
     let model = ModelFixture::start().await?;
     std::fs::write(

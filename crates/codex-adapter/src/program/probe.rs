@@ -1,4 +1,4 @@
-use super::{missing, schema};
+use super::{Launch, missing, schema};
 use remote_codex_protocol::Fault;
 use std::{
     collections::HashMap,
@@ -53,15 +53,19 @@ impl Program {
     }
 }
 
-pub async fn inspect(program: &Path) -> Result<Program, Fault> {
-    if !program.is_absolute() {
+pub async fn inspect(program: &Launch) -> Result<Program, Fault> {
+    if !program.path.is_absolute() {
         return Err(missing());
     }
-    let path = program.canonicalize().map_err(|_| missing())?;
+    let path = program.path.canonicalize().map_err(|_| missing())?;
     let stamp = identity(&path)?;
-    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Program>>> = OnceLock::new();
+    let launch = Launch {
+        path: path.clone(),
+        search_path: program.search_path.clone(),
+    };
+    static CACHE: OnceLock<Mutex<HashMap<Launch, Program>>> = OnceLock::new();
     let mut cache = CACHE.get_or_init(Mutex::default).lock().await;
-    if let Some(found) = cache.get(&path).filter(|p| p.identity == stamp) {
+    if let Some(found) = cache.get(&launch).filter(|p| p.identity == stamp) {
         return Ok(found.clone());
     }
     let home = tempfile::tempdir().map_err(|_| {
@@ -72,7 +76,7 @@ pub async fn inspect(program: &Path) -> Result<Program, Fault> {
     })?;
     let output = tokio::time::timeout(
         Duration::from_secs(10),
-        tokio::process::Command::new(&path)
+        tokio::process::Command::from(launch.command())
             .arg("--version")
             .env("CODEX_HOME", home.path())
             .current_dir(home.path())
@@ -105,7 +109,7 @@ pub async fn inspect(program: &Path) -> Result<Program, Fault> {
             "local Codex reported an invalid release version",
         )
     })?;
-    schema::inspect(&path, home.path()).await?;
+    schema::inspect(&launch, home.path()).await?;
     let found = Program {
         path: path.clone(),
         version: version.into(),
@@ -116,7 +120,7 @@ pub async fn inspect(program: &Path) -> Result<Program, Fault> {
     if cache.len() >= 16 {
         cache.clear();
     }
-    cache.insert(path, found.clone());
+    cache.insert(launch, found.clone());
     Ok(found)
 }
 

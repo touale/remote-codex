@@ -28,11 +28,11 @@ const REQUESTS: &[(&str, &[&str])] = &[
     ("config/batchWrite", &["edits"]),
 ];
 
-pub(super) async fn inspect(program: &Path, home: &Path) -> Result<(), Fault> {
+pub(super) async fn inspect(program: &super::Launch, home: &Path) -> Result<(), Fault> {
     let output = home.join("schema");
     let status = tokio::time::timeout(
         Duration::from_secs(30),
-        tokio::process::Command::new(program)
+        tokio::process::Command::from(program.command())
             .args([
                 "app-server",
                 "generate-json-schema",

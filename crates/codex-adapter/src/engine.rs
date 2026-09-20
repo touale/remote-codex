@@ -50,8 +50,11 @@ impl Drop for Inner {
 pub struct Engine(Arc<Inner>);
 
 impl Engine {
-    pub async fn local(program: &Path, home: &Path) -> Result<(Self, Value), Fault> {
-        let mut command = Command::new(program);
+    pub async fn local(
+        program: &crate::program::Launch,
+        home: &Path,
+    ) -> Result<(Self, Value), Fault> {
+        let mut command = Command::from(program.command());
         command.current_dir(home);
         command
             .args(["app-server", "--listen", "stdio://"])

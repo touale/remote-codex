@@ -1,12 +1,12 @@
 //! Contract checks exercise native state, not a mocked copy of these mappings.
-use remote_codex_adapter::{engine::Engine, goals};
+use remote_codex_adapter::{engine::Engine, goals, program::Launch};
 use remote_codex_core::goals::{CollaborationMode, GoalStatus};
 use serde_json::json;
 
 #[tokio::test]
 #[ignore = "requires REMOTE_CODEX_TEST_BINARY; uses a temporary Codex home, no model turn"]
 async fn native_plan_and_persisted_goal_contract() -> Result<(), Box<dyn std::error::Error>> {
-    let program = std::path::PathBuf::from(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
+    let program = Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
     let home = tempfile::tempdir()?;
     std::fs::write(
         home.path().join("config.toml"),

@@ -8,7 +8,7 @@ pub struct NativeAccount {
     engine: Engine,
 }
 impl NativeAccount {
-    pub async fn open(program: &Path, home: &Path) -> Result<Self, Fault> {
+    pub async fn open(program: &crate::program::Launch, home: &Path) -> Result<Self, Fault> {
         Ok(Self {
             engine: Engine::local(program, home).await?.0,
         })

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 pub async fn update(
-    program: &Path,
+    program: &crate::program::Launch,
     bound: &SessionBinding,
     name: Option<&str>,
     archived: Option<bool>,
@@ -42,7 +42,7 @@ pub async fn update(
 }
 
 pub async fn read(
-    program: &Path,
+    program: &crate::program::Launch,
     bound: &SessionBinding,
     cursor: Option<&str>,
 ) -> Result<HistoryPage, Fault> {

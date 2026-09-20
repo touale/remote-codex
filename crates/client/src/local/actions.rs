@@ -174,7 +174,7 @@ impl LocalRuntime {
 
     pub(crate) fn frontend(
         &self,
-        program: &Path,
+        program: &remote_codex_adapter::program::Launch,
         socket: &Path,
         arguments: &[OsString],
     ) -> Result<std::process::Command> {

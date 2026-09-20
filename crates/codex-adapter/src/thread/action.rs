@@ -68,12 +68,12 @@ impl Thread {
 
     pub fn frontend(
         &self,
-        program: &Path,
+        program: &crate::program::Launch,
         socket: &Path,
         arguments: &[OsString],
     ) -> Result<std::process::Command, Fault> {
         validate_frontend_arguments(arguments)?;
-        let mut command = std::process::Command::new(program);
+        let mut command = program.command();
         command
             .env("CODEX_HOME", &self.binding.codex_home)
             .current_dir(&self.binding.codex_home)

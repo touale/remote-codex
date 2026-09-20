@@ -6,7 +6,7 @@ use crate::{
     remote::Remote,
 };
 use remote_codex_core::session::SessionBinding;
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 pub struct SessionService {
     pub(super) client: Client,
@@ -36,7 +36,7 @@ pub struct PreparedSession {
     options: OpenSession,
     remote: Arc<Remote>,
     project: ProjectMcp,
-    program: PathBuf,
+    program: remote_codex_adapter::program::Launch,
     existing: Option<SessionBinding>,
 }
 

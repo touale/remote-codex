@@ -38,14 +38,16 @@ impl NativeService {
     pub async fn open(&self) -> Result<NativeHandle> {
         let program = self.client.0.program().await?;
         let inspected = remote_codex_adapter::program::inspect(&program).await?;
-        let account = NativeAccount::open(&inspected.path, &crate::local::codex_home()?).await?;
+        let mut launch = program.clone();
+        launch.path.clone_from(&inspected.path);
+        let account = NativeAccount::open(&launch, &crate::local::codex_home()?).await?;
         if let Err(error) = inspected.verify() {
             account.close().await;
             return Err(error.into());
         }
         Ok(NativeHandle {
             account,
-            program,
+            program: program.path,
             version: inspected.version,
         })
     }
