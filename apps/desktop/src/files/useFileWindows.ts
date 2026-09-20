@@ -2,29 +2,33 @@ import { useRef } from 'react';
 import { call, failure, operationId } from '../bridge/client';
 import type { FileDocument } from '../bridge/editor';
 import { captureView } from './editorView';
-import type { FileTabs } from './tabs';
+import { isText, type FileTabs } from './tabs';
 
 export function useFileWindows(store: FileTabs) {
   const pending = useRef(new Map<string, Promise<void>>());
   const moveWindow = (key: string): Promise<void> => {
-    const buffer = store.buffer(key);
-    if (!buffer || buffer.saving || buffer.pendingMove || !buffer.context)
+    const buffer = store.ready(key);
+    if (!buffer || (isText(buffer) && buffer.saving) || buffer.pendingMove || !buffer.context)
       return Promise.reject(new Error('Wait for this file to finish opening or saving.'));
     if (buffer.transferring) return pending.current.get(buffer.transferring) ?? Promise.resolve();
     const transfer = operationId();
-    const document: FileDocument = {
-      server: buffer.server,
-      root: buffer.root,
-      path: buffer.path,
-      text: buffer.text,
-      original: buffer.original,
-      revision: buffer.revision,
-      view: captureView(key),
-    };
-    store.update(key, { transferring: transfer });
+    const identity = { server: buffer.server, root: buffer.root, path: buffer.path };
+    const document: FileDocument =
+      'preview' in buffer
+        ? { ...identity, kind: 'preview', previewView: buffer.previewView }
+        : {
+            ...identity,
+            kind: 'text',
+            text: buffer.text,
+            original: buffer.original,
+            revision: buffer.revision,
+            view: captureView(key) ?? buffer.view,
+            mode: buffer.mode,
+          };
+    store.setTransfer(key, transfer);
     const task = call('new_window', { target: { kind: 'file', context: buffer.context, transfer, document } })
       .then(() => {
-        const latest = store.buffers().find((b) => b.transferring === transfer);
+        const latest = store.snapshot().find((b) => b.status === 'ready' && b.transferring === transfer);
         if (latest) store.close(latest.key);
       })
       .catch((error) => {
@@ -32,8 +36,8 @@ export function useFileWindows(store: FileTabs) {
       })
       .finally(() => {
         pending.current.delete(transfer);
-        const latest = store.buffers().find((b) => b.transferring === transfer);
-        if (latest) store.update(latest.key, { transferring: undefined });
+        const latest = store.snapshot().find((b) => b.status === 'ready' && b.transferring === transfer);
+        if (latest) store.setTransfer(latest.key);
       });
     pending.current.set(transfer, task);
     return task;

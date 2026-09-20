@@ -15,6 +15,7 @@ it('keeps and unlocks the source on failure, and removes it only after the desti
     server: 'dev',
     root: '/workspace',
     path: 'a.txt',
+    kind: 'text' as const,
     text: 'unsaved',
     original: 'saved',
     revision: 'revision',
@@ -61,4 +62,34 @@ it('keeps and unlocks the source on failure, and removes it only after the desti
     ...file,
     context: 'destination-context',
   });
+});
+
+it('moves preview identity and view state without putting binary data into the window payload', async () => {
+  const source = new FileTabs(async () => ({
+    preview: {
+      format: 'pdf',
+      mime: 'application/pdf',
+      data: new ArrayBuffer(1024),
+    },
+  }));
+  const file = { key: fileKey('dev', '/', 'paper.pdf'), context: 'files', server: 'dev', root: '/', path: 'paper.pdf' };
+  await source.open(file);
+  source.setPreviewView(file.key, { page: 2, scale: 'fit' });
+  let actions!: ReturnType<typeof useFileWindows>;
+  function Harness() {
+    actions = useFileWindows(source);
+    return null;
+  }
+  renderToString(createElement(Harness));
+  vi.mocked(call).mockResolvedValueOnce('window');
+  await actions.moveWindow(file.key);
+  const args = vi.mocked(call).mock.calls.at(-1)?.[1] as { target: { document: unknown } };
+  expect(args.target.document).toEqual({
+    kind: 'preview',
+    server: 'dev',
+    root: '/',
+    path: 'paper.pdf',
+    previewView: { page: 2, scale: 'fit' },
+  });
+  expect(source.snapshot()).toEqual([]);
 });

@@ -2,7 +2,7 @@ import { ArrowLeft, Save, X, ExternalLink } from 'lucide-react';
 import { RowMenu } from '../ui/RowMenu';
 import { useEffect, useRef } from 'react';
 import { IconButton } from '../ui/controls';
-import type { FileTab } from './tabs';
+import { isText, type FileTab } from './tabs';
 import type { FileChange } from './useFiles';
 
 export function EditorHeader({
@@ -58,7 +58,10 @@ export function EditorHeader({
                       {
                         label: 'Move to New Window',
                         disabled:
-                          buffer.status !== 'ready' || !!buffer.transferring || buffer.saving || !!buffer.pendingMove,
+                          buffer.status !== 'ready' ||
+                          !!buffer.transferring ||
+                          (isText(buffer) && buffer.saving) ||
+                          !!buffer.pendingMove,
                         action: () => onWindow(buffer.key),
                       },
                     ]
@@ -74,7 +77,7 @@ export function EditorHeader({
                   onClick={() => onSelect(buffer.key)}
                 >
                   <span className="tab-name">{buffer.path.split('/').at(-1)}</span>
-                  {buffer.status === 'ready' && buffer.original !== buffer.text && <span className="dirty-dot" />}
+                  {isText(buffer) && buffer.original !== buffer.text && <span className="dirty-dot" />}
                 </button>
                 <IconButton
                   label={`Close ${buffer.path}`}
@@ -98,18 +101,22 @@ export function EditorHeader({
           onWindow && (
             <IconButton
               label="Move to New Window"
-              disabled={active.status !== 'ready' || !!active.transferring || active.saving || !!active.pendingMove}
+              disabled={
+                active.status !== 'ready' ||
+                !!active.transferring ||
+                (isText(active) && active.saving) ||
+                !!active.pendingMove
+              }
               onClick={() => onWindow(active.key)}
             >
               <ExternalLink size={14} />
             </IconButton>
           )
         )}
-        {active && !diff && (
+        {active && isText(active) && !diff && (
           <IconButton
             label="Save file (⌘S)"
             disabled={
-              active.status !== 'ready' ||
               !active.context ||
               !!active.pendingMove ||
               active.saving ||

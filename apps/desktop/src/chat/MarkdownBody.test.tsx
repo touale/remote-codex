@@ -100,3 +100,19 @@ describe('math in conversation Markdown', () => {
     expect(html).not.toContain('<img');
   });
 });
+
+it('generates stable, unique heading anchors only for document previews', () => {
+  const text = '# One *title*\n\n# One title\n\n# One title-1\n\n# One title\n\n[Jump](#one-title)';
+  const preview = () => renderToStaticMarkup(<MarkdownBody text={text} headingIds report={() => {}} />);
+  const html = preview();
+  expect([...html.matchAll(/<h1 id="([^"]+)"/g)].map((match) => match[1])).toEqual([
+    'one-title',
+    'one-title-1',
+    'one-title-1-1',
+    'one-title-2',
+  ]);
+  expect(html).toContain('href="#one-title"');
+  expect(preview()).toBe(html);
+  expect(render(text)).not.toContain('id="one-title');
+  expect(render(text)).not.toContain('href="#one-title"');
+});

@@ -1,6 +1,7 @@
 import { failure } from '../bridge/client';
 import type { TextFile } from '../bridge/types';
-import type { FileDocument, EditorView } from '../bridge/editor';
+import type { FileDocument, EditorView, MarkdownMode, PreviewView } from '../bridge/editor';
+import type { PreviewContent } from './preview';
 import { movedPath, relativePath, remotePath, within } from './context';
 
 interface FileIdentity {
@@ -15,17 +16,26 @@ interface FileIdentity {
 export interface Buffer extends FileIdentity, TextFile {
   transferring?: string;
   view?: EditorView;
+  mode?: MarkdownMode;
   original: string;
   saving: boolean;
   conflict?: TextFile;
 }
+export interface PreviewBuffer extends FileIdentity, PreviewContent {
+  transferring?: string;
+  previewView?: PreviewView;
+}
+export type ReadyFile = (Buffer | PreviewBuffer) & { status: 'ready' };
 export type FileTab =
-  | (FileIdentity & { status: 'loading' })
-  | (FileIdentity & { status: 'failed'; error: string })
-  | (Buffer & { status: 'ready' });
-const isReady = (tab: FileTab): tab is Buffer & { status: 'ready' } => tab.status === 'ready';
+  (FileIdentity & { status: 'loading' }) | (FileIdentity & { status: 'failed'; error: string }) | ReadyFile;
+export const isText = (tab: FileTab): tab is Buffer & { status: 'ready' } =>
+  tab.status === 'ready' && !('preview' in tab);
 const protectedTab = (tab: FileTab) =>
-  Boolean(tab.pendingMove || (isReady(tab) && (tab.transferring || tab.saving || tab.text !== tab.original)));
+  Boolean(
+    tab.pendingMove ||
+    (tab.status === 'ready' && tab.transferring) ||
+    (isText(tab) && (tab.saving || tab.text !== tab.original)),
+  );
 export const fileKey = (server: string, root: string, path: string) => JSON.stringify([server, remotePath(root, path)]);
 
 // Owns read lifetimes independently of tabs: closing a tab invalidates its result,
@@ -33,9 +43,11 @@ export const fileKey = (server: string, root: string, path: string) => JSON.stri
 export class FileTabs {
   private tabs: FileTab[] = [];
   private listeners = new Set<() => void>();
-  private requests = new Map<symbol, { context: string; task: Promise<void> }>();
+  private requests = new Map<symbol, { context: string; task: Promise<void>; controller: AbortController }>();
   private generations = new Map<string, symbol>();
-  constructor(private read: (context: string, path: string) => Promise<TextFile>) {}
+  constructor(
+    private read: (context: string, path: string, signal: AbortSignal) => Promise<TextFile | PreviewContent>,
+  ) {}
 
   snapshot = () => this.tabs;
   subscribe = (listener: () => void) => {
@@ -51,15 +63,26 @@ export class FileTabs {
   get = (key: string) => this.tabs.find((tab) => tab.key === key);
   buffer = (key: string) => {
     const tab = this.get(key);
-    return tab?.status === 'ready' ? tab : undefined;
+    return tab && isText(tab) ? tab : undefined;
   };
-  buffers = () => this.tabs.filter(isReady);
+  buffers = () => this.tabs.filter(isText);
   update = (key: string, values: Partial<Buffer>) => {
     const current = this.get(key);
-    if (!current || !isReady(current) || (current.transferring && values.text !== undefined)) return;
-    this.publish(this.tabs.map((tab) => (tab.key === key && isReady(tab) ? { ...tab, ...values } : tab)));
+    if (!current || !isText(current) || (current.transferring && values.text !== undefined)) return;
+    this.publish(this.tabs.map((tab) => (tab.key === key && isText(tab) ? { ...tab, ...values } : tab)));
+  };
+  ready = (key: string) => {
+    const tab = this.get(key);
+    return tab?.status === 'ready' ? tab : undefined;
+  };
+  setTransfer = (key: string, transferring?: string) => {
+    this.publish(this.tabs.map((tab) => (tab.key === key && tab.status === 'ready' ? { ...tab, transferring } : tab)));
+  };
+  setPreviewView = (key: string, previewView: PreviewView) => {
+    this.publish(this.tabs.map((tab) => (tab.key === key && 'preview' in tab ? { ...tab, previewView } : tab)));
   };
   close = (key: string) => {
+    this.requests.get(this.generations.get(key)!)?.controller.abort();
     this.generations.delete(key);
     this.publish(this.tabs.filter((tab) => tab.key !== key));
   };
@@ -78,7 +101,7 @@ export class FileTabs {
     if (tab?.pendingMove) throw new Error(tab.locationError);
     if (tab?.status === 'ready' && tab.transferring) throw new Error('This file is moving to a new window.');
   };
-  adopt = (context: string, file: FileDocument) => {
+  adopt = (context: string, file: FileDocument & { kind: 'text' }) => {
     const key = fileKey(file.server, file.root, file.path);
     this.publish([
       ...this.tabs.filter((t) => t.key !== key),
@@ -109,20 +132,23 @@ export class FileTabs {
         !tabs.includes(tab)
       )
         continue;
+      this.requests.get(this.generations.get(tab.key)!)?.controller.abort();
       this.generations.delete(tab.key);
       const relative = relativePath(tab.root, next);
       const root = relative === undefined ? '/' : tab.root;
       const path = relative ?? next.slice(1);
       const key = fileKey(server, root, path);
       const target = tabs.find((other) => other !== tab && other.key === key);
-      const waiting =
-        tab.status === 'ready' ? { saving: false } : { status: 'failed' as const, error: 'Opening the moved file…' };
+      const moved: FileTab = isText(tab)
+        ? { ...tab, saving: false }
+        : tab.status === 'ready'
+          ? tab
+          : { ...tab, status: 'failed', error: 'Opening the moved file…' };
       if (target && protectedTab(target)) {
         tabs = tabs.map((current) =>
           current === tab
             ? {
-                ...tab,
-                ...waiting,
+                ...moved,
                 pendingMove: next,
                 locationError: `This file moved to ${next}. Close the conflicting destination tab, then retry.`,
               }
@@ -131,19 +157,19 @@ export class FileTabs {
         continue;
       }
       if (target) {
+        this.requests.get(this.generations.get(target.key)!)?.controller.abort();
         this.generations.delete(target.key);
         tabs = tabs.filter((current) => current !== target);
       }
       const file = {
-        ...tab,
-        ...waiting,
+        ...moved,
         root,
         path,
         context: relative === undefined ? '' : tab.context,
         key,
         pendingMove: undefined,
         locationError: undefined,
-        ...(isReady(tab) ? { conflict: tab.conflict && { ...tab.conflict, path } } : {}),
+        ...(isText(tab) ? { conflict: tab.conflict && { ...tab.conflict, path } } : {}),
       };
       keys.set(tab.key, file.key);
       tabs = tabs.map((current) => (current === tab ? file : current));
@@ -160,10 +186,11 @@ export class FileTabs {
   };
   retry = (key: string): Promise<void> => {
     const tab = this.get(key);
-    return tab?.status === 'failed' ? this.load(tab) : Promise.resolve();
+    return tab && (tab.status === 'failed' || 'preview' in tab) ? this.load(tab) : Promise.resolve();
   };
   private load({ key, context, server, root, path }: FileIdentity) {
     const token = Symbol(key);
+    const controller = new AbortController();
     const file = { key, context, server, root, path };
     this.generations.set(key, token);
     const settle = (tab: FileTab) => {
@@ -177,12 +204,17 @@ export class FileTabs {
       }
     };
     const task = Promise.resolve()
-      .then(() => this.read(context, path))
+      .then(() => this.read(context, path, controller.signal))
       .then(
-        (content) => settle({ ...content, ...file, status: 'ready', original: content.text, saving: false }),
+        (content) =>
+          settle(
+            'preview' in content
+              ? { ...content, ...file, status: 'ready' }
+              : { ...content, ...file, status: 'ready', original: content.text, saving: false },
+          ),
         (error) => settle({ ...file, status: 'failed', error: failure(error).message }),
       );
-    this.requests.set(token, { context, task });
+    this.requests.set(token, { context, task, controller });
     const loading: FileTab = { ...file, status: 'loading' };
     // Preserve tab order when retrying an existing file.
     this.publish(

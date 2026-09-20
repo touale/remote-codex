@@ -1,0 +1,123 @@
+.file-preview,
+.file-surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.preview-toolbar button,
+.preview-toolbar input {
+  min-height: 24px;
+  height: 24px;
+  padding: 0 7px;
+  font-size: 11px;
+  border: 0;
+  background: transparent;
+}
+.preview-toolbar button[aria-pressed='true'] {
+  background: var(--hover);
+  color: var(--text);
+}
+.preview-toolbar input {
+  width: 48px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.image-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+}
+.image-viewport img {
+  margin: auto;
+  max-width: none;
+  flex: none;
+  object-fit: contain;
+}
+.image-viewport img.fit {
+  max-width: 100%;
+  max-height: 100%;
+}
+.pdf-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.pdf-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+.pdf-preview .pdfViewer {
+  --page-bg-color: #fff;
+  --page-margin: 10px auto;
+  --page-border: 0;
+}
+.preview-loading,
+.preview-error {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+}
+.preview-error {
+  padding: 16px;
+}
+.markdown-panes {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.markdown-source {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.markdown-rendered {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 20px 24px;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.markdown-rendered img {
+  max-width: 100%;
+  height: auto;
+}
+.markdown-rendered .preview-image-error {
+  color: var(--muted);
+  font-size: 12px;
+}
+.markdown-rendered :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 16px;
+}
+.markdown-rendered table {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+}

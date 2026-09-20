@@ -25,6 +25,7 @@
     "allow-file-context-close",
     "allow-file-list",
     "allow-file-read",
+    "allow-file-preview-read",
     "allow-file-write",
     "allow-file-change",
     "allow-project-mcp",

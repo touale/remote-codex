@@ -72,6 +72,7 @@ pub fn run() {
             commands::file_contexts::file_context_close,
             commands::files::file_list,
             commands::files::file_read,
+            commands::files::file_preview_read,
             commands::files::file_write,
             commands::files::file_change,
             commands::files::project_mcp,

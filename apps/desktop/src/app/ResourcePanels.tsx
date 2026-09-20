@@ -14,6 +14,8 @@ interface Props {
   files: Pick<
     ReturnType<typeof useFiles>,
     | 'tabs'
+    | 'open'
+    | 'setPreviewView'
     | 'selected'
     | 'diff'
     | 'setDiff'
@@ -63,6 +65,9 @@ export function EditorArea({ app, nav, files, fileActions }: Pick<Props, 'app' |
               onRetry={(key) => run(files.retry(key))}
               onClose={(key) => run(fileActions.close(key))}
               onSave={(key, resolve) => run(fileActions.save(key, resolve))}
+              onMode={(key, mode, view) => files.update(key, { mode, ...(view ? { view } : {}) })}
+              onPreviewView={files.setPreviewView}
+              onOpenFile={files.open}
               onChange={(key, text) => files.update(key, { text })}
               onHide={() => app.changePreferences({ editor_visible: false })}
               onCloseDiff={() => files.setDiff(null)}

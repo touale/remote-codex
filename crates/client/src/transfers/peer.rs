@@ -78,7 +78,11 @@ impl Peer {
             _ => Err(ClientError::RemoteResponse),
         }
     }
-    async fn call(&mut self, command: Command, bytes: &[u8]) -> Result<(Reply, Vec<u8>)> {
+    pub(super) async fn call(
+        &mut self,
+        command: Command,
+        bytes: &[u8],
+    ) -> Result<(Reply, Vec<u8>)> {
         tokio::time::timeout(Duration::from_secs(600), async {
             wire::write(&mut self.writer, &command, bytes).await?;
             let (reply, bytes) = wire::read::<

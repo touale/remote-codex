@@ -88,6 +88,31 @@ export async function fileLinks() {
     await expect($('#link-session')).toHaveText('alpha');
     await $('a=Relative').click();
     await expect($('.monaco-editor .view-lines')).toHaveText(expect.stringContaining('draft'));
+    await browser.setWindowSize(1000, 900);
+    await $('a=Summary').click();
+    await expect($('.editor-pane')).toBeDisplayed();
+    await expect($('.monaco-editor .view-lines')).toHaveText(expect.stringContaining('program/5/result_A4/summary.md'));
+    for (const width of [900, 1440]) {
+      await browser.setWindowSize(width, 900);
+      await expect($('.editor-pane')).toBeDisplayed();
+      await expect($('section[aria-label="Conversation"]')).toBeDisplayed();
+      await expect($('[role="separator"][aria-label="Resize editor"]')).toBeDisplayed();
+    }
+    // A wide window can still have little room after expanding its sidebar.
+    await browser.execute(() => {
+      const content = document.querySelector('.editor-pane')!.parentElement!.parentElement!;
+      content.style.width = '600px';
+    });
+    await browser.waitUntil(() =>
+      browser.execute(() => {
+        const editor = document.querySelector('.editor-pane')!;
+        const content = editor.parentElement!.parentElement!;
+        const bounds = content.getBoundingClientRect();
+        const file = editor.getBoundingClientRect();
+        const chat = content.querySelector('.chat')!.getBoundingClientRect();
+        return chat.width > 0 && file.width > 0 && chat.left >= bounds.left && file.right <= bounds.right + 1;
+      }),
+    );
   } finally {
     await browser.execute(() => {
       window.linkFixture.release?.();

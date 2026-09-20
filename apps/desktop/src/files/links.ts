@@ -16,7 +16,7 @@ export function linkKind(href: string): 'web' | 'file' | 'unsupported' {
 
 // Resolve only within the conversation's remote workspace, never the WebView's
 // origin or this computer's filesystem. Decode once before checking traversal.
-export function workspaceFilePath(href: string, workspace: string): string {
+export function workspaceFilePath(href: string, workspace: string, base = workspace): string {
   if (linkKind(href) !== 'file') throw new Error('This is not a supported remote file link.');
   const encoded = /^tauri:/i.test(href) ? new URL(href).pathname : href.split(/[?#]/, 1)[0];
   let path: string;
@@ -27,7 +27,7 @@ export function workspaceFilePath(href: string, workspace: string): string {
   }
   if (!path || /[\x00-\x1f\x7f\\]/.test(path)) throw new Error('The file link contains an invalid path.');
   const parts: string[] = [];
-  for (const part of (path.startsWith('/') ? path : `${workspace}/${path}`).split('/')) {
+  for (const part of (path.startsWith('/') ? path : `${base}/${path}`).split('/')) {
     if (!part || part === '.') continue;
     if (part === '..') parts.pop();
     else parts.push(part);

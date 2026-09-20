@@ -84,6 +84,7 @@ export interface Commands {
   file_context_close: Command<Id>;
   file_list: Command<FilePath, DirectoryPage>;
   file_read: Command<FilePath, TextFile>;
+  file_preview_read: Command<FilePath & Operation, ArrayBuffer>;
   file_write: Command<FilePath & { text: string; revision: string | null | undefined }, string>;
   file_change: Command<{ context: string; change: FileChange }>;
   project_mcp: Command<{ workspace: string; servers: McpConfig['servers'] | null; revision: string | null }, McpConfig>;

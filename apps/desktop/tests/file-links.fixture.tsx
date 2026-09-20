@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { EditorArea } from '../src/app/ResourcePanels';
+import styles from '../src/app/App.module.css';
 import type { useApplication } from '../src/app/useApplication';
 import { useNavigation } from '../src/app/useNavigation';
 import { SessionChat } from '../src/chat/SessionChat';
@@ -12,6 +13,7 @@ const cwd = '/home/fixture/project';
 const markdown = [
   '[Absolute](/home/fixture/project/decision.md)',
   '[Relative](./decision.md)',
+  '[Summary](tauri://localhost/home/fixture/project/program/5/result_A4/summary.md)',
   '[Encoded](tauri://localhost/home/fixture/project/%E4%B8%AD%E6%96%87%20file.md)',
   '[Outside](../private.md)',
   '[Missing](missing.md)',
@@ -57,16 +59,18 @@ export function FileLinksFixture({ app }: { app: ReturnType<typeof useApplicatio
         <output id="link-session">{nav.selected}</output>
         <output id="link-error">{error}</output>
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <SessionChat
-          id={nav.selected}
-          controller={chats}
-          onResume={() => {}}
-          onFreshPlan={async () => {}}
-          onDiff={() => {}}
-          onOpenFile={nav.openSessionFile}
-          report={report}
-        />
+      <div className={styles.content}>
+        <div className={styles.chatColumn}>
+          <SessionChat
+            id={nav.selected}
+            controller={chats}
+            onResume={() => {}}
+            onFreshPlan={async () => {}}
+            onDiff={() => {}}
+            onOpenFile={nav.openSessionFile}
+            report={report}
+          />
+        </div>
         <EditorArea
           app={{ ...app, report }}
           nav={nav}

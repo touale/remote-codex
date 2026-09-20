@@ -4,6 +4,22 @@ use serde::Deserialize;
 use tauri::{State, WebviewWindow};
 
 #[tauri::command]
+pub(crate) async fn file_preview_read(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    operation_id: String,
+    context: String,
+    path: String,
+) -> Result<tauri::ipc::Response> {
+    let owner = state.window(&window)?;
+    let files = owner.files(&context)?;
+    crate::state::operation(&owner, operation_id, async {
+        Ok(tauri::ipc::Response::new(files.read_preview(&path).await?))
+    })
+    .await
+}
+
+#[tauri::command]
 pub(crate) async fn file_list(
     window: WebviewWindow,
     state: State<'_, AppState>,

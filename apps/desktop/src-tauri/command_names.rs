@@ -30,6 +30,7 @@ pub(crate) const COMMANDS: &[&str] = &[
     "file_context_close",
     "file_list",
     "file_read",
+    "file_preview_read",
     "file_write",
     "file_change",
     "project_mcp",

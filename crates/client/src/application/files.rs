@@ -121,6 +121,12 @@ impl FileHandle {
             revision: revision.ok_or(ClientError::RemoteResponse)?,
         })
     }
+    /// Read a preview without exposing remote paths to the local WebView.
+    pub async fn read_preview(&self, path: &str) -> Result<Vec<u8>> {
+        let _guard = self.operation_lock().await?;
+        self.0.remote.recover(false).await?;
+        crate::transfers::preview::read(&self.0.remote, &self.0.path, path).await
+    }
     pub async fn write(&self, path: &str, text: &str, revision: Option<String>) -> Result<String> {
         let _guard = self.operation_lock().await?;
         if text.len() > remote_codex_protocol::MAX_TEXT_FILE {

@@ -1,5 +1,4 @@
-import { Save } from 'lucide-react';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Tooltip } from 'radix-ui';
 import { call, failure, operationId } from '../bridge/client';
 import type { ContentTarget } from '../bridge/editor';
@@ -9,12 +8,13 @@ import { EditorSkeleton } from '../files/FileLoading';
 import { useFiles } from '../files/useFiles';
 import { useFileActions } from '../files/useFileActions';
 import { Authentication } from '../settings/Authentication';
-import { Empty, ErrorText, IconButton } from '../ui/controls';
+import { ErrorText } from '../ui/controls';
 import { useDialog } from '../ui/useDialog';
 import type { useApplication } from './useApplication';
 import styles from './App.module.css';
 import './content-window.css';
-const EditorSurface = lazy(() => import('../files/EditorSurface'));
+import EditorPane from '../files/Editor';
+import { fileKey, isText } from '../files/tabs';
 
 export function ContentWindow({
   app,
@@ -29,7 +29,6 @@ export function ContentWindow({
   const files = useFiles();
   const dialog = useDialog();
   const [context, setContext] = useState<FileContext | null>(null);
-  const [ready, setReady] = useState(target.kind === 'diff');
   const started = useRef(false);
   const closing = useRef(false);
   const actions = useFileActions(
@@ -39,8 +38,7 @@ export function ContentWindow({
     () => {},
     () => {},
   );
-  const active = files.tabs.find((file) => file.status === 'ready');
-  const failed = files.tabs.find((file) => file.status === 'failed');
+  const active = files.tabs.find((file) => file.key === files.selected[context?.id ?? '']) ?? files.tabs.at(-1);
   const run = (task: Promise<unknown>) => void task.catch(app.report);
   useEffect(() => {
     if (started.current || target.kind !== 'file') return;
@@ -50,13 +48,17 @@ export function ContentWindow({
       const doc = target.document;
       const context = await call('file_context_open', { operationId: operation, server: doc.server, path: doc.root });
       setContext(context);
-      if (target.transfer) {
+      if (target.transfer && doc.kind === 'text') {
         files.adopt(context.id, doc);
-        await call('editor_window_ready', { error: null });
       } else {
         await files.open(context.id, doc.path, doc.server, context.path);
+        const tab = files.allTabs().find((tab) => tab.key === fileKey(doc.server, context.path, doc.path));
+        if (tab?.status !== 'ready')
+          throw new Error(tab?.status === 'failed' ? tab.error : 'File could not be opened.');
+        if (doc.kind === 'preview' && doc.previewView) files.setPreviewView(tab.key, doc.previewView);
+        if (doc.kind === 'text' && doc.mode) files.update(tab.key, { mode: doc.mode });
       }
-      setReady(true);
+      if (target.transfer) await call('editor_window_ready', { error: null });
     })().catch(async (error) => {
       app.report(error);
       if (target.transfer) await call('editor_window_ready', { error: failure(error).message }).catch(() => {});
@@ -66,9 +68,11 @@ export function ContentWindow({
     if (closing.current) return;
     closing.current = true;
     try {
-      if (ready && active && !(await actions.close(active.key))) {
-        await call('close_window', { cancel: true });
-        return;
+      for (const tab of files.allTabs()) {
+        if (!(await actions.close(tab.key))) {
+          await call('close_window', { cancel: true });
+          return;
+        }
       }
       await call('close_window', { cancel: false });
     } catch (error) {
@@ -84,8 +88,8 @@ export function ContentWindow({
       if (
         (event.metaKey || event.ctrlKey) &&
         event.key.toLowerCase() === 's' &&
-        ready &&
         active &&
+        isText(active) &&
         !document.querySelector('[role=dialog]')
       ) {
         event.preventDefault();
@@ -115,17 +119,6 @@ export function ContentWindow({
             </small>
           </div>
           <div className={styles.dragSpace} data-tauri-drag-region />
-          {target.kind === 'file' && (
-            <IconButton
-              label="Save file (⌘S)"
-              disabled={!ready || !active || active.saving || active.text === active.original}
-              onClick={() => {
-                if (active) run(actions.save(active.key));
-              }}
-            >
-              <Save size={16} />
-            </IconButton>
-          )}
         </header>
         {app.error && (
           <div className="content-error">
@@ -134,28 +127,31 @@ export function ContentWindow({
         )}
         {target.kind === 'diff' ? (
           <ChangeView diff={target.document.diff} standalone />
-        ) : failed ? (
-          <Empty title="Could not open file">
-            <ErrorText message={failed.error} />
-            <button onClick={() => run(files.retry(failed.key))}>Retry</button>
-          </Empty>
-        ) : !ready || !active ? (
+        ) : !context ? (
           <EditorSkeleton />
         ) : (
-          <Suspense fallback={<EditorSkeleton />}>
-            <EditorSurface
-              active={active}
-              dark={app.dark}
-              onRetry={(key) => run(files.retry(key))}
-              onSave={(key, resolve) => run(actions.save(key, resolve))}
-              onChange={(key, text) => files.update(key, { text })}
-              onDismissConflict={(key) => files.update(key, { conflict: undefined })}
-              onDiscardConflict={(key) => {
-                files.discard(key);
-                app.setError('');
-              }}
-            />
-          </Suspense>
+          <EditorPane
+            context={context}
+            tabs={files.tabs}
+            selected={files.selected[context.id]}
+            dark={app.dark}
+            diff={null}
+            onSelect={(key) => files.select(context.id, key)}
+            onClose={(key) => run(actions.close(key))}
+            onHide={() => run(close())}
+            onCloseDiff={() => {}}
+            onRetry={(key) => run(files.retry(key))}
+            onSave={(key, resolve) => run(actions.save(key, resolve))}
+            onChange={(key, text) => files.update(key, { text })}
+            onMode={(key, mode, view) => files.update(key, { mode, ...(view ? { view } : {}) })}
+            onPreviewView={files.setPreviewView}
+            onOpenFile={files.open}
+            onDismissConflict={(key) => files.update(key, { conflict: undefined })}
+            onDiscardConflict={(key) => {
+              files.discard(key);
+              app.setError('');
+            }}
+          />
         )}
         {dialog.dialog}
         {app.prompts[0] && <Authentication key={app.prompts[0].id} request={app.prompts[0]} onAnswer={app.answer} />}

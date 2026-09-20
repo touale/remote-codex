@@ -4,10 +4,20 @@ export interface EditorView {
   top: number;
   left: number;
 }
-export interface FileDocument {
+interface DocumentIdentity {
   server: string;
   root: string;
   path: string;
+}
+export type MarkdownMode = 'edit' | 'preview' | 'split';
+export interface PreviewView {
+  page?: number;
+  scale?: number | 'fit';
+}
+export type FileDocument = DocumentIdentity & (TextDocument | { kind: 'preview'; previewView?: PreviewView });
+interface TextDocument {
+  kind: 'text';
+  mode?: MarkdownMode;
   text: string;
   original: string;
   revision: string;

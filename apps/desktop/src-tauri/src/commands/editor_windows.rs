@@ -18,11 +18,50 @@ pub(crate) struct FileDocument {
     pub server: String,
     pub root: String,
     pub path: String,
-    pub text: String,
-    pub original: String,
-    pub revision: String,
+    #[serde(flatten)]
+    pub content: FileContent,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum FileContent {
+    Text {
+        text: String,
+        original: String,
+        revision: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        view: Option<EditorView>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mode: Option<MarkdownMode>,
+    },
+    Preview {
+        #[serde(rename = "previewView", skip_serializing_if = "Option::is_none")]
+        preview_view: Option<PreviewView>,
+    },
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MarkdownMode {
+    Edit,
+    Preview,
+    Split,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub(crate) enum PreviewScale {
+    Number(f64),
+    Fit(FitScale),
+}
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) enum FitScale {
+    #[serde(rename = "fit")]
+    Fit,
+}
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) struct PreviewView {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub view: Option<EditorView>,
+    page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scale: Option<PreviewScale>,
 }
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct ChangeDocument {
@@ -43,8 +82,10 @@ pub(super) fn check_file(file: &FileDocument) -> Result<()> {
             .split('/')
             .any(|p| p.is_empty() || p == "." || p == "..")
         || file.path.chars().any(char::is_control)
-        || file.text.len() > 4 * 1024 * 1024
-        || file.original.len() > 4 * 1024 * 1024
+        || matches!(&file.content, FileContent::Text { text, original, .. }
+            if text.len() > 4 * 1024 * 1024 || original.len() > 4 * 1024 * 1024)
+        || matches!(&file.content, FileContent::Preview { preview_view: Some(view) }
+            if matches!(view.scale, Some(PreviewScale::Number(scale)) if !scale.is_finite() || !(0.1..=10.0).contains(&scale)))
     {
         return Err(Error::new(
             "INVALID_FILE",
@@ -80,10 +121,19 @@ pub(crate) async fn editor_window_ready(
                 .get_mut(window.label())
             {
                 transfer.clear();
-                document.text.clear();
-                document.original.clear();
-                document.revision.clear();
-                document.view = None;
+                if let FileContent::Text {
+                    text,
+                    original,
+                    revision,
+                    view,
+                    ..
+                } = &mut document.content
+                {
+                    text.clear();
+                    original.clear();
+                    revision.clear();
+                    *view = None;
+                }
             }
             Ok(())
         }
@@ -150,5 +200,29 @@ pub(super) async fn discard(window: &WebviewWindow, state: &AppState, label: &st
     }
     if let Some(child) = window.app_handle().get_webview_window(label) {
         let _ = child.destroy();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn validates_preview_paths_and_view_without_text_payloads() -> Result<()> {
+        let value = json!({"server":"dev", "root":"/project", "path":"paper.pdf",
+            "kind":"preview", "previewView":{"page":2,"scale":"fit"}});
+        let document: FileDocument = serde_json::from_value(value.clone())?;
+        check_file(&document)?;
+        assert_eq!(serde_json::to_value(&document)?, value);
+        for (field, replacement) in [
+            ("path", json!("../private.pdf")),
+            ("previewView", json!({"scale": -1})),
+        ] {
+            let mut invalid = value.clone();
+            invalid[field] = replacement;
+            assert!(check_file(&serde_json::from_value(invalid)?).is_err());
+        }
+        Ok(())
     }
 }

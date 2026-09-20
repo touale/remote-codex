@@ -3,6 +3,7 @@ import { call, failure, listen, operationId } from '../bridge/client';
 import { transferStore } from '../transfers/store';
 import { overlaps, remotePath, within } from './context';
 import type { FileContext } from '../bridge/files';
+import { readFile } from './preview';
 import { FileTabs, fileKey } from './tabs';
 import { useFileWindows } from './useFileWindows';
 export interface FileChange {
@@ -11,7 +12,7 @@ export interface FileChange {
   workspace?: string;
 }
 export function useFiles() {
-  const [store] = useState(() => new FileTabs((context, path) => call('file_read', { context, path })));
+  const [store] = useState(() => new FileTabs(readFile));
   const windows = useFileWindows(store);
   const tabs = useSyncExternalStore(store.subscribe, store.snapshot);
   const commits = useRef(new Map<string, Promise<void>>());
@@ -92,6 +93,7 @@ export function useFiles() {
   }, [tabs, store]);
   useEffect(
     () => () => {
+      for (const tab of store.snapshot()) store.close(tab.key);
       for (const request of roots.current.values())
         void request.then(
           (context) => call('file_context_close', { id: context.id }).catch(() => {}),
@@ -208,6 +210,16 @@ export function useFiles() {
         if (event.kind !== 'transfer') return;
         const t = event.transfer;
         if (t.active || t.direction !== 'upload') return;
+        for (const tab of store.snapshot()) {
+          if (
+            'preview' in tab &&
+            tab.server === t.server &&
+            !tab.pendingMove &&
+            !tab.transferring &&
+            within(remotePath(t.workspace, t.destination), remotePath(tab.root, tab.path))
+          )
+            void store.retry(tab.key);
+        }
         for (const buffer of store
           .buffers()
           .filter(
@@ -260,5 +272,6 @@ export function useFiles() {
     close,
     select,
     retainedContexts: store.retainedContexts,
+    setPreviewView: store.setPreviewView,
   };
 }

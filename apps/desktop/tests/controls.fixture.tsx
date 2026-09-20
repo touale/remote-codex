@@ -17,6 +17,7 @@ import { MathFixture } from './math.fixture';
 import { FileLinksFixture } from './file-links.fixture';
 import { FileTreeFixture } from './file-tree.fixture';
 import { WorkspaceCreateFixture } from './workspace-create.fixture';
+import { PreviewFixture } from './preview.fixture';
 import { TransferProgressFixture } from './transfer-progress.fixture';
 const Editor = lazy(() => import('../src/files/Editor'));
 const choices = Array.from({ length: 35 }, (_, i) => ({
@@ -61,6 +62,7 @@ function Fixture() {
   const [links, setLinks] = useState(false);
   const [files, setFiles] = useState(false);
   const [workspaceCreate, setWorkspaceCreate] = useState(false);
+  const [previews, setPreviews] = useState(false);
   const [transferProgress, setTransferProgress] = useState(false);
   return (
     <Tooltip.Provider>
@@ -77,9 +79,12 @@ function Fixture() {
           <button onClick={() => setLinks(!links)}>Fixture links</button>
           <button onClick={() => setFiles(!files)}>Fixture files</button>
           <button onClick={() => setWorkspaceCreate(!workspaceCreate)}>Fixture workspace creation</button>
+          <button onClick={() => setPreviews(!previews)}>Fixture previews</button>
           <button onClick={() => setTransferProgress(!transferProgress)}>Fixture transfer progress</button>
         </div>
-        {transferProgress ? (
+        {previews ? (
+          <PreviewFixture app={app} />
+        ) : transferProgress ? (
           <TransferProgressFixture />
         ) : workspaceCreate ? (
           <WorkspaceCreateFixture app={app} />
@@ -110,6 +115,9 @@ function Fixture() {
               ]}
               dark={app.dark}
               diff={null}
+              onMode={() => {}}
+              onPreviewView={() => {}}
+              onOpenFile={async () => {}}
               onSelect={noop}
               onClose={noop}
               onRetry={noop}

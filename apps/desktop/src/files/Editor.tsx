@@ -1,4 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
+import type { MarkdownMode, PreviewView, EditorView } from '../bridge/editor';
+import { call, failure } from '../bridge/client';
+import { previewType } from './preview';
 import type { FileContext } from '../bridge/files';
 import { Empty, ErrorText } from '../ui/controls';
 import { EditorHeader } from './EditorHeader';
@@ -7,7 +10,7 @@ import { visibleIn } from './context';
 import type { FileTab } from './tabs';
 import type { FileChange } from './useFiles';
 import { ChangeView } from './ChangeView';
-const EditorSurface = lazy(() => import('./EditorSurface'));
+const FileSurface = lazy(() => import('./FileSurface'));
 
 export default function EditorPane({
   context,
@@ -26,6 +29,9 @@ export default function EditorPane({
   onDiscardConflict,
   onWindow,
   onDiffWindow,
+  onMode,
+  onPreviewView,
+  onOpenFile,
 }: {
   context: FileContext | null;
   tabs: FileTab[];
@@ -43,7 +49,11 @@ export default function EditorPane({
   onDiscardConflict: (key: string) => void;
   onWindow?: (key: string) => void;
   onDiffWindow?: () => void;
+  onMode: (key: string, mode: MarkdownMode, view?: EditorView) => void;
+  onPreviewView: (key: string, view: PreviewView) => void;
+  onOpenFile: (context: string, path: string, server: string, root: string) => Promise<void>;
 }) {
+  const [downloadError, setDownloadError] = useState<{ key: string; message: string } | null>(null);
   const visible = tabs.filter((buffer) => visibleIn(context, buffer));
   const active = visible.find((buffer) => buffer.key === selected) ?? visible.at(-1);
   return (
@@ -67,14 +77,30 @@ export default function EditorPane({
       ) : active?.status === 'failed' ? (
         <Empty title="Could not open file">
           <ErrorText message={active.locationError ?? active.error} />
+          <ErrorText message={downloadError?.key === active.key ? downloadError.message : undefined} />
           <div className="actions">
+            {previewType(active.path) && (
+              <button
+                onClick={() => {
+                  void call('transfer_download', { context: active.context, source: active.path })
+                    .then((task) => task && call('transfer_run', { id: task.id }))
+                    .catch((error) => setDownloadError({ key: active.key, message: failure(error).message }));
+                }}
+              >
+                Download
+              </button>
+            )}
             <button onClick={() => onClose(active.key)}>Close file</button>
             <button onClick={() => onRetry(active.key)}>Retry</button>
           </div>
         </Empty>
       ) : active?.status === 'ready' ? (
         <Suspense fallback={<EditorSkeleton />}>
-          <EditorSurface
+          <FileSurface
+            key={active.key}
+            onMode={onMode}
+            onPreviewView={onPreviewView}
+            onOpenFile={(path) => onOpenFile(active.context, path, active.server, active.root)}
             active={active}
             onRetry={onRetry}
             dark={dark}

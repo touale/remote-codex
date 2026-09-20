@@ -21,7 +21,9 @@ export function useFileActions(
   };
   const close = async (key: string) => {
     const buffer = files.get(key);
-    if (buffer?.transferring) throw new Error('Wait for the file to finish moving to its new window.');
+    const tab = files.allTabs().find((file) => file.key === key);
+    if (tab?.status === 'ready' && tab.transferring)
+      throw new Error('Wait for the file to finish moving to its new window.');
     if (buffer && buffer.text !== buffer.original) {
       const answer = await ask({
         title: 'Save changes?',
