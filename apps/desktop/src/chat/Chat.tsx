@@ -239,7 +239,10 @@ export function Chat({
             ...chat,
             ready,
             canReconnect:
-              chat.environment.status === 'action_required' && chat.environment.code === 'RECOVERY_RETRIES_EXHAUSTED',
+              chat.environment.status === 'action_required' &&
+              ['RECOVERY_RETRIES_EXHAUSTED', 'MCP_CONFIGURATION_INVALID', 'MCP_NAME_CONFLICT'].includes(
+                chat.environment.code,
+              ),
           }}
           setDraft={(draft, expected) =>
             update((current) => ({

@@ -124,6 +124,9 @@ impl Backend for TerminalSessions {
     fn events(&self) -> broadcast::Receiver<Value> {
         self.events.subscribe()
     }
+    fn pending_requests(&self) -> Result<Vec<Value>, Fault> {
+        self.current.borrow().runtime.pending_requests()
+    }
     fn revoked(&self) -> watch::Receiver<bool> {
         self.revoked.subscribe()
     }

@@ -17,13 +17,10 @@ pub(crate) async fn run(cli: &Cli, runtime: SessionHandle, arguments: &[OsString
     let (runtime, result) = match runtime.terminal(arguments).await {
         Ok(mut gateway) => {
             let current = gateway.current.clone();
-            let result = match attach(&mut gateway, &mut interrupt).await {
-                Ok(()) => gateway.finish().await,
-                Err(error) => {
-                    drop(gateway);
-                    Err(error)
-                }
-            };
+            let frontend = attach(&mut gateway, &mut interrupt).await;
+            // Always collect the gateway's cause, even when its closure made the
+            // native child exit with a generic nonzero status.
+            let result = gateway.finish().await.and(frontend);
             (current.borrow().clone(), result)
         }
         Err(error) => (runtime, Err(error)),

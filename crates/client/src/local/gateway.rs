@@ -23,6 +23,17 @@ impl Backend for LocalRuntime {
     fn events(&self) -> broadcast::Receiver<Value> {
         self.native_events.subscribe()
     }
+    fn pending_requests(&self) -> Result<Vec<Value>, Fault> {
+        let generation = self.current().map_err(crate::ClientError::into_fault)?;
+        let pending = generation
+            .pending_requests
+            .lock()
+            .map_err(|_| Fault::new("SESSION_STATE", "pending requests unavailable"))?;
+        Ok(pending
+            .values()
+            .map(|request| request.event.clone())
+            .collect())
+    }
     fn revoked(&self) -> watch::Receiver<bool> {
         self.lease.revoked.clone()
     }

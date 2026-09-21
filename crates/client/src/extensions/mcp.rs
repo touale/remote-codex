@@ -12,6 +12,7 @@ use std::{collections::BTreeMap, path::Path};
 #[path = "mcp_tests.rs"]
 mod tests;
 
+#[derive(Clone)]
 pub(crate) struct ProjectMcp {
     pub(crate) path: String,
     pub(crate) names: Vec<String>,
@@ -20,11 +21,10 @@ pub(crate) struct ProjectMcp {
     servers: BTreeMap<String, Value>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub(crate) struct McpPlan {
     pub(crate) config: BTreeMap<String, Value>,
     pub(crate) commands: Vec<ExecutionCommand>,
-    local_digest: String,
 }
 
 pub(crate) async fn inspect(store: &LocalStore, remote: &Remote, path: &str) -> Result<ProjectMcp> {
@@ -94,27 +94,38 @@ impl ProjectMcp {
         }
         let local = match std::fs::read_to_string(home.join("config.toml")) {
             Ok(text) => toml::from_str::<toml::Value>(&text)
-                .map_err(|_| ClientError::Argument("local Codex config contains invalid TOML"))?,
+                .map_err(|_| invalid_local("local Codex config.toml contains invalid TOML"))?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 toml::Value::Table(Default::default())
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => {
+                return Err(invalid_local(&format!(
+                    "cannot read local Codex config.toml: {error}"
+                )));
+            }
         };
-        let mut plan = McpPlan {
-            local_digest: local_digest(&local)?,
-            ..Default::default()
-        };
+        if local
+            .get("mcp_servers")
+            .is_some_and(|value| !value.is_table())
+        {
+            return Err(invalid_local("local mcp_servers must be a table"));
+        }
+        let mut plan = McpPlan::default();
         if let Some(servers) = local.get("mcp_servers").and_then(toml::Value::as_table) {
             for (name, definition) in servers {
+                if !definition.is_table() {
+                    return Err(invalid_local("local MCP server settings must be a table"));
+                }
                 let mut settings = serde_json::to_value(definition)?;
                 if settings["enabled"] == false {
+                    plan.config.insert(format!("mcp_servers.{name}"), settings);
                     continue;
                 }
                 if settings["environment_id"]
                     .as_str()
                     .is_some_and(|id| id != "local")
                 {
-                    return Err(ClientError::Argument(
+                    return Err(invalid_local(
                         "local Codex MCP references another execution environment; configure remote MCP in this project's .codex/config.toml",
                     ));
                 }
@@ -201,29 +212,10 @@ pub(crate) fn validate(value: &Value) -> Result<()> {
     Ok(())
 }
 
-fn local_digest(config: &toml::Value) -> Result<String> {
-    Ok(format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&config.get("mcp_servers"))?)
-    ))
-}
-
-impl McpPlan {
-    pub(crate) fn verify_local(&self, home: &Path) -> Result<()> {
-        let text = match std::fs::read_to_string(home.join("config.toml")) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(error) => return Err(error.into()),
-        };
-        let config: toml::Value = toml::from_str(&text)
-            .map_err(|_| ClientError::Argument("local Codex configuration is invalid"))?;
-        if local_digest(&config)? != self.local_digest {
-            return Err(remote_codex_protocol::Fault::new(
-                "MCP_CHANGED",
-                "local MCP configuration changed; reopen the session to apply it",
-            )
-            .into());
-        }
-        Ok(())
-    }
+fn invalid_local(message: &str) -> ClientError {
+    remote_codex_protocol::Fault::new(
+        "MCP_CONFIGURATION_INVALID",
+        &format!("{message}; fix the configuration and retry in this session"),
+    )
+    .into()
 }

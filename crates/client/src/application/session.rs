@@ -116,11 +116,6 @@ impl PreparedSession {
                 .trust(&state.store, &self.remote.server.id)
                 .await?;
         }
-        let mcp = self.project.resolve(
-            &crate::local::codex_home()?,
-            &format!("rc_{}", self.remote.server.id.replace('-', "")),
-            self.options.mcp_source.as_deref(),
-        )?;
         let runtime = LocalRuntime::open(
             &state.store,
             self.remote,
@@ -130,7 +125,8 @@ impl PreparedSession {
                 path: &self.options.path,
                 existing: self.existing,
                 takeover: self.options.takeover,
-                mcp,
+                mcp: self.project,
+                mcp_source: self.options.mcp_source,
                 progress: crate::progress::current().or_else(|| state.options.progress.clone()),
             },
         )

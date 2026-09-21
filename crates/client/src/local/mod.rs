@@ -62,7 +62,8 @@ pub(crate) struct OpenOptions<'a> {
     pub(crate) path: &'a str,
     pub(crate) existing: Option<SessionBinding>,
     pub(crate) takeover: bool,
-    pub(crate) mcp: crate::extensions::mcp::McpPlan,
+    pub(crate) mcp: crate::extensions::mcp::ProjectMcp,
+    pub(crate) mcp_source: Option<String>,
     pub(crate) progress: Option<Arc<dyn Fn(crate::progress::PrepareEvent) + Send + Sync>>,
 }
 
@@ -78,6 +79,12 @@ impl LocalRuntime {
         if let Some(binding) = &options.existing {
             binding::validate(binding, &remote, &home, &mode)?;
         }
+        // Reject invalid configuration before takeover can revoke another frontend.
+        let mcp = options.mcp.resolve(
+            &home,
+            &format!("rc_{}", remote.server.id.replace('-', "")),
+            options.mcp_source.as_deref(),
+        )?;
         let lease = match &options.existing {
             Some(binding) => Some(
                 lease::Lease::acquire(options.directory, &binding.session.id, options.takeover)
@@ -111,6 +118,7 @@ impl LocalRuntime {
             mode,
             revision: snapshot.revision.saved,
             mcp: options.mcp,
+            mcp_source: options.mcp_source,
             config: snapshot.effective,
             project,
         };
@@ -125,6 +133,7 @@ impl LocalRuntime {
                     .map_or(remote_codex_adapter::thread::OpenSource::New, |b| {
                         remote_codex_adapter::thread::OpenSource::Resume(&b.session.id)
                     }),
+                mcp,
                 recovery.clone(),
                 &*progress,
                 None,

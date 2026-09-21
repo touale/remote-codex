@@ -53,30 +53,80 @@ async fn local_mcp_path_works_for_new_and_cold_resumed_sessions() -> ProbeResult
         ),
     )?;
     let (engine, _) = Engine::local(&launch, home.path()).await?;
-    let result = async {
-        for (method, params) in [
-            ("thread/resume", json!({"threadId":original,"excludeTurns":true})),
+    let result: ProbeResult<()> = async {
+        for (method, mut params) in [
+            (
+                "thread/resume",
+                json!({"threadId":original,"excludeTurns":true}),
+            ),
             ("thread/start", json!({"cwd":home.path()})),
         ] {
+            params["config"] = json!({"mcp_servers.fixture": {
+                "command":"remote-codex-mcp-fixture", "cwd":home.path(),
+                "required":true, "environment_id":"local", "env":{"PROBE_MARKER":"MCP_PATH_READY"}
+            }});
             let thread = engine.call(method, params).await?;
             let id = thread["thread"]["id"].as_str().ok_or("thread missing")?;
-            let call = function("probe_identity", json!({}), Some("mcp__fixture"));
-            let call_id = call["call_id"].clone();
-            model.script([
-                json!({"type":"tool_search_call","id":"fixture_search","call_id":"fixture_search","execution":"client","arguments":{"query":"fixture probe_identity","limit":1},"status":"completed"}),
-                call,
-                message("MCP fixture finished."),
-            ])?;
-            turn(&engine, id).await?;
-            let requests = model.requests()?;
-            let inputs = requests.last().and_then(|r| r["input"].as_array()).ok_or("model inputs missing")?;
-            let output = inputs.iter().find(|item| item["type"] == "function_call_output" && item["call_id"] == call_id).ok_or("MCP output missing")?;
-            assert!(output.to_string().contains("MARKER=MCP_PATH_READY"), "{method}: MCP did not execute locally");
+            probe_identity(&engine, &model, id, "MCP_PATH_READY").await?;
         }
         Ok(())
-    }.await;
+    }
+    .await;
     engine.shutdown().await;
-    result
+    result?;
+
+    // Rebuilding the native backend must use current overrides, including removals,
+    // rather than reviving the MCP settings persisted with this thread.
+    for (enabled, marker) in [
+        (Some(true), "UPDATED"),
+        (None, "REMOVED"),
+        (Some(true), "RESTORED"),
+        (Some(false), "DISABLED"),
+    ] {
+        let settings = json!({"command":"remote-codex-mcp-fixture","cwd":home.path(),"required":true,
+            "enabled":enabled.unwrap_or(false),"env":{"PROBE_MARKER":marker}});
+        let mut current = config.clone();
+        let mut overrides = json!({});
+        if enabled.is_some() {
+            current.push_str(&toml::to_string(
+                &json!({"mcp_servers":{"fixture":settings}}),
+            )?);
+            overrides["mcp_servers.fixture"] = settings;
+            overrides["mcp_servers.fixture"]["environment_id"] = json!("local");
+        }
+        std::fs::write(home.path().join("config.toml"), current)?;
+        let (engine, _) = Engine::local(&launch, home.path()).await?;
+        let result = async {
+            engine
+                .call(
+                    "thread/resume",
+                    json!({"threadId":original,"excludeTurns":true,"config":overrides}),
+                )
+                .await?;
+            let status = engine
+                .call("mcpServerStatus/list", json!({"threadId":original}))
+                .await?;
+            let available = status["data"]
+                .as_array()
+                .ok_or("MCP status missing")?
+                .iter()
+                .any(|server| {
+                    server["name"] == "fixture"
+                        && server["tools"]
+                            .as_object()
+                            .is_some_and(|tools| !tools.is_empty())
+                });
+            assert_eq!(available, enabled == Some(true), "{marker}: {status}");
+            if available {
+                probe_identity(&engine, &model, &original, marker).await?;
+            }
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+        }
+        .await;
+        engine.shutdown().await;
+        result?;
+    }
+    Ok(())
 }
 
 #[tokio::test]
@@ -146,6 +196,40 @@ async fn permission_presets_control_mcp_write_approval_in_both_directions() -> P
     }.await;
     engine.shutdown().await;
     result
+}
+
+async fn probe_identity(
+    engine: &Engine,
+    model: &ModelFixture,
+    id: &str,
+    marker: &str,
+) -> ProbeResult<()> {
+    let call = function("probe_identity", json!({}), Some("mcp__fixture"));
+    let call_id = call["call_id"].clone();
+    model.script([
+        json!({
+            "type":"tool_search_call", "id":"fixture_search", "call_id":"fixture_search",
+            "execution":"client", "arguments":{"query":"fixture probe_identity","limit":1},
+            "status":"completed"
+        }),
+        call,
+        message("MCP fixture finished."),
+    ])?;
+    turn(engine, id).await?;
+    let requests = model.requests()?;
+    let inputs = requests
+        .last()
+        .and_then(|r| r["input"].as_array())
+        .ok_or("model inputs missing")?;
+    let output = inputs
+        .iter()
+        .find(|item| item["type"] == "function_call_output" && item["call_id"] == call_id)
+        .ok_or("MCP output missing")?;
+    assert!(
+        output.to_string().contains(&format!("MARKER={marker}")),
+        "MCP marker missing: {marker}"
+    );
+    Ok(())
 }
 
 async fn turn(engine: &Engine, id: &str) -> ProbeResult<usize> {

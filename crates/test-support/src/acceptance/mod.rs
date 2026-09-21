@@ -1,8 +1,10 @@
 mod environment;
 mod extensions;
+mod frontend_recovery;
 mod goals;
 mod headless;
 mod lifecycle;
+mod mcp_recovery;
 mod outage;
 mod password_recovery;
 mod reconnect;
@@ -190,6 +192,8 @@ pub(super) async fn run() -> ProbeResult<()> {
             return tui_edit::exercise(&context).await;
         }
         if context.environment.args.recovery_only {
+            frontend_recovery::exercise(&context).await?;
+            mcp_recovery::exercise(&context).await?;
             goals::exercise(&context).await?;
             outage::messages(&context).await?;
             return tui_recovery::exercise(&context).await;
@@ -201,6 +205,8 @@ pub(super) async fn run() -> ProbeResult<()> {
         reconnect::exercise(&context).await?;
         outage::exercise(&context).await?;
         restart::exercise(&context).await?;
+        frontend_recovery::exercise(&context).await?;
+        mcp_recovery::exercise(&context).await?;
         goals::exercise(&context).await?;
         tui_goal::exercise(&context).await?;
         tui::exercise(&context).await?;

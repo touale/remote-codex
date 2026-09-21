@@ -153,6 +153,11 @@ impl LocalRuntime {
                 .into());
             }
         }
+        let mcp = self.recipe.mcp.resolve(
+            &self.recipe.home,
+            &self.binding.environment_id,
+            self.recipe.mcp_source.as_deref(),
+        )?;
         self.remote.synchronize(&self.store).await?;
         let mut recipe = self.recipe.clone();
         recipe.revision = snapshot.revision.saved;
@@ -160,6 +165,7 @@ impl LocalRuntime {
             .open(
                 self.remote.clone(),
                 remote_codex_adapter::thread::OpenSource::Resume(&old.native.binding().session.id),
+                mcp,
                 self.recovery.clone(),
                 &|_| {},
                 Some(&old.skills),

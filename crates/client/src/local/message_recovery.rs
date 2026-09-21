@@ -19,8 +19,7 @@ impl LocalRuntime {
     /// Native TUI input waits for turn/start to return. Start recovery without
     /// holding that request or queuing a message behind the disconnected backend.
     pub(super) fn retry_for_message(&self) -> Result<()> {
-        if !matches!(&*self.recovery.state.borrow(), EnvironmentState::ActionRequired { code, .. } if code == "RECOVERY_RETRIES_EXHAUSTED")
-        {
+        if !can_retry(&self.recovery.state.borrow()) {
             return self.recovery.ready();
         }
         {
@@ -43,8 +42,7 @@ impl LocalRuntime {
 
     pub(super) async fn recover_for_message(&self) -> Result<Option<PendingMessage<'_>>> {
         let mut states = self.recovery.state.subscribe();
-        if !matches!(&*states.borrow(), EnvironmentState::ActionRequired { code, .. } if code == "RECOVERY_RETRIES_EXHAUSTED")
-        {
+        if !can_retry(&states.borrow()) {
             self.recovery.ready()?;
             return Ok(None);
         }
@@ -94,4 +92,9 @@ impl LocalRuntime {
             }
         }
     }
+}
+
+fn can_retry(state: &EnvironmentState) -> bool {
+    matches!(state, EnvironmentState::ActionRequired { code, .. } if matches!(code.as_str(),
+        "RECOVERY_RETRIES_EXHAUSTED" | "MCP_CONFIGURATION_INVALID" | "MCP_NAME_CONFLICT"))
 }

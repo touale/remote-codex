@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    extensions::{mcp::McpPlan, skills::SkillMap},
+    extensions::{
+        mcp::{McpPlan, ProjectMcp},
+        skills::SkillMap,
+    },
     progress::{PrepareEvent, PrepareStage},
     remote::bridge::Bridge,
 };
@@ -15,7 +18,8 @@ pub(super) struct Recipe {
     pub cwd: String,
     pub mode: String,
     pub revision: i64,
-    pub mcp: McpPlan,
+    pub mcp: ProjectMcp,
+    pub mcp_source: Option<String>,
     pub project: Value,
     pub config: crate::config::EffectiveConfig,
 }
@@ -41,12 +45,13 @@ impl Recipe {
         &self,
         remote: Arc<Remote>,
         source: OpenSource<'_>,
+        mcp: McpPlan,
         recovery: Arc<Recovery>,
         progress: &(dyn Fn(PrepareEvent) + Send + Sync),
         expected_skills: Option<&SkillMap>,
     ) -> Result<Generation> {
+        let environment = format!("rc_{}", remote.server.id.replace('-', ""));
         let program = remote_codex_adapter::program::inspect(&self.program).await?;
-        self.mcp.verify_local(&self.home)?;
         let runtime = crate::runtime::prepare(
             &remote.ssh,
             &remote.server.endpoint,
@@ -64,7 +69,7 @@ impl Recipe {
             remote.clone(),
             self.revision,
             runtime.reference(),
-            self.mcp.commands.clone(),
+            mcp.commands,
             approvals.clone(),
             permissions.clone(),
             recovery,
@@ -80,7 +85,6 @@ impl Recipe {
                 return Err(error.into());
             }
         };
-        let environment = format!("rc_{}", remote.server.id.replace('-', ""));
         let prepared = async {
             program.verify()?;
             codex
@@ -95,7 +99,7 @@ impl Recipe {
                     directory: &self.cwd,
                     execution_mode: &self.mode,
                     source,
-                    mcp: self.mcp.config.clone(),
+                    mcp: mcp.config,
                     instructions: skills.instructions(),
                 })
                 .await?;

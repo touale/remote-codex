@@ -51,6 +51,11 @@ impl LocalRuntime {
             source.native.binding(),
             source.permissions.full_access(),
         )?;
+        let mcp = self.recipe.mcp.resolve(
+            &self.recipe.home,
+            &self.binding.environment_id,
+            self.recipe.mcp_source.as_deref(),
+        )?;
         let workspace_lock = crate::workspace_lock::WorkspaceLock::acquire(
             &self.store.directory,
             &self.binding.server_id,
@@ -66,6 +71,7 @@ impl LocalRuntime {
             .open(
                 self.remote.clone(),
                 OpenSource::Frontend(&creation),
+                mcp,
                 recovery.clone(),
                 &|_| {},
                 Some(&source.skills),

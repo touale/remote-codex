@@ -50,3 +50,61 @@ fn local_mcp_is_pinned_locally_and_conflicts_require_source_choice() -> Result<(
     );
     Ok(())
 }
+
+#[test]
+fn recovery_resolves_current_local_mcp_without_changing_project_trust() -> Result<()> {
+    let home = tempfile::tempdir()?;
+    let config = home.path().join("config.toml");
+    let project = ProjectMcp {
+        path: "/workspace".into(),
+        names: vec!["remote".into()],
+        trusted: true,
+        digest: "reviewed-project".into(),
+        servers: BTreeMap::from([("remote".into(), json!({"command":"remote-command"}))]),
+    };
+    for (text, expected) in [
+        (
+            "[mcp_servers.local]\ncommand='before'\n",
+            Some(("before", true)),
+        ),
+        (
+            "[mcp_servers.local]\ncommand='after'\n",
+            Some(("after", true)),
+        ),
+        (
+            "[mcp_servers.local]\ncommand='after'\nenabled=false\n",
+            Some(("after", false)),
+        ),
+        ("", None),
+    ] {
+        std::fs::write(&config, text)?;
+        let resolved = project.resolve(home.path(), "rc_dev", None)?;
+        let actual = resolved.config.get("mcp_servers.local").map(|settings| {
+            (
+                settings["command"].as_str().unwrap_or_default(),
+                settings["enabled"] != false,
+            )
+        });
+        assert_eq!(actual, expected);
+        assert_eq!(resolved.commands.len(), 1);
+        assert_eq!(resolved.commands[0].argv, ["remote-command"]);
+        assert_eq!(
+            resolved.config["mcp_servers.remote"]["environment_id"],
+            "rc_dev"
+        );
+    }
+    for text in [
+        "[mcp_servers",
+        "mcp_servers=1",
+        "[mcp_servers.local]\ncommand='local-command'\nenvironment_id='another-server'\n",
+    ] {
+        std::fs::write(&config, text)?;
+        assert!(
+            project
+                .resolve(home.path(), "rc_dev", None)
+                .err()
+                .is_some_and(|error| error.code() == "MCP_CONFIGURATION_INVALID")
+        );
+    }
+    Ok(())
+}
