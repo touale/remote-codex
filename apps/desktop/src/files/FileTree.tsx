@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MoveDialog } from './MoveDialog';
 import { useFileMoveDrag } from './useFileMoveDrag';
-import type { Granted } from '../bridge/files';
+import type { Granted, WorkspaceTarget } from '../bridge/files';
 import { useFileDrop } from '../transfers/useFileDrop';
 
 import { ChevronDown, ChevronRight, File, FilePlus2, FolderPlus, RefreshCw } from 'lucide-react';
@@ -27,6 +27,7 @@ export function FileTree({
   cacheKey,
   onOpen,
   onWindow,
+  onNewSession,
   onCreate,
   onRename,
   onMove,
@@ -48,6 +49,7 @@ export function FileTree({
   cacheKey: string;
   onOpen: (path: string) => void;
   onWindow?: (path: string) => void;
+  onNewSession: (target: WorkspaceTarget) => void;
   onCreate: (directory: boolean, parent: string) => Promise<boolean>;
   onRename: (entry: Entry) => void;
   onMove: (entry: Entry, parent: string) => Promise<void>;
@@ -108,8 +110,11 @@ export function FileTree({
         )}
         {!pages[path] && state?.status !== 'failed' && <FileTreeSkeleton depth={depth} path={path} />}
         {rows(path, depth)}
+        {/* Parent text starts at 48px: row 8 + label 4 + chevron 12 + two gaps 10 + folder 14. */}
         {pages[path]?.entries.length === 0 && state?.status === 'ready' && (
-          <div className="tree-hint">This directory is empty.</div>
+          <div className="tree-hint" style={{ paddingLeft: depth ? 48 + (depth - 1) * 14 : 8 }}>
+            This directory is empty.
+          </div>
         )}
         {pages[path]?.truncated && (
           <div className="tree-hint">Directory listing is limited. Open a subfolder to see more.</div>
@@ -121,6 +126,17 @@ export function FileTree({
     pages[path]?.entries.map((entry) => {
       const parent = entry.directory ? entry.path : entry.path.split('/').slice(0, -1).join('/');
       const items: MenuItem[] = [
+        ...(entry.directory
+          ? [
+              {
+                label: 'New session',
+                disabled: !context || !server || !root,
+                action: () => {
+                  if (context && server && root) onNewSession({ server, path: remotePath(root, entry.path) });
+                },
+              },
+            ]
+          : []),
         ...(!entry.directory && onWindow ? [{ label: 'Open in New Window', action: () => onWindow(entry.path) }] : []),
         { label: 'Copy path', action: () => copyPath(entry.path, false), disabled: !root },
         { label: 'Copy relative path', action: () => copyPath(entry.path, true), disabled: !root },

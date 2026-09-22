@@ -10,6 +10,7 @@ declare global {
 export async function copyFilePaths() {
   await browser.setWindowSize(1440, 900);
   await browser.execute(() => {
+    localStorage.removeItem('file-tree:copy-path-fixture');
     const fetch = window.fetch;
     const descriptor = Object.getOwnPropertyDescriptor(navigator.clipboard, 'writeText');
     const state = (window.copyPathFixture = {
@@ -79,7 +80,7 @@ export async function copyFilePaths() {
     await expect($('#file-tree-error')).toHaveText('Fixture clipboard unavailable.');
     await $('button=Clear root').click();
     await contextAt(row('src'));
-    for (const label of ['Copy path', 'Copy relative path'])
+    for (const label of ['Copy path', 'Copy relative path', 'New session'])
       await expect($(`[role="menuitem"]=${label}`)).toHaveAttribute('data-disabled');
     await browser.keys('Escape');
   } finally {

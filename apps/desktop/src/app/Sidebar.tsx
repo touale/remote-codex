@@ -12,6 +12,7 @@ import { ConnectionTree } from '../navigation/ConnectionTree';
 import { CreateWorkspaceDialog } from '../navigation/CreateWorkspaceDialog';
 import type { TransferActions } from '../transfers/useTransfers';
 import { ResizeHandle } from '../ui/ResizeHandle';
+import { AppVersion } from './AppVersion';
 import styles from './Sidebar.module.css';
 import type { useApplication } from './useApplication';
 import type { useNavigation } from './useNavigation';
@@ -59,7 +60,7 @@ export function Sidebar({
   files: Pick<ReturnType<typeof useFiles>, 'open' | 'moveWindow'>;
   fileRevision: number;
   transfers: TransferActions;
-  onSettings: () => void;
+  onSettings: (tab?: 'General' | 'Updates') => void;
   onAddServer: () => void;
   onEditServer: (server: Server) => void;
   onAddWorkspace: (server: Server) => void;
@@ -139,6 +140,10 @@ export function Sidebar({
           )}
           <div className={styles.area}>
             <FileTree
+              onNewSession={({ server, path }) => {
+                app.changePreferences({ workspaces_collapsed: false });
+                nav.newSession(server, path);
+              }}
               onUpload={(parent, folder) => {
                 if (nav.fileContext) run(transfers.pick(nav.fileContext, parent, folder));
               }}
@@ -188,11 +193,11 @@ export function Sidebar({
           </div>
         </div>
         <div className={styles.footer}>
-          <button onClick={onSettings}>
+          <button onClick={() => onSettings()}>
             <Settings size={15} />
             Settings
           </button>
-          <small>Local Codex</small>
+          <AppVersion onOpen={() => onSettings('Updates')} />
         </div>
       </aside>
       {newFolder && (

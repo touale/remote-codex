@@ -9,6 +9,7 @@ import { activityTimes } from './activity';
 import { treeMenuHighlight } from './tree-menu';
 import { mathRendering } from './math';
 import { fileLinks } from './file-links';
+import { fileFolderSessions } from './file-session';
 import { copyFilePaths } from './file-tree';
 import { createWorkspaceFolder } from './workspace-create';
 import { filePreviews } from './preview';
@@ -55,6 +56,7 @@ describe('Shared controls in native WebKit', () => {
   it('renders formulas in both themes and completes streamed math', mathRendering);
   it('opens conversation links in the owning remote editor and preserves tabs across navigation', fileLinks);
   it('copies remote file and directory paths through both menus', copyFilePaths);
+  it('starts folder workspace drafts and aligns nested empty directories', fileFolderSessions);
   it('creates workspace folders at the menu target and retries opening without creating twice', createWorkspaceFolder);
   it('previews PDF, images and Markdown without losing edits or reading outside the workspace', filePreviews);
   it('shows transfer progress without opening the panel and fits beside connection progress', transferProgress);

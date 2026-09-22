@@ -74,7 +74,7 @@ function WorkspaceApp({
   const nav = useNavigation(app, chats, dialog, files);
   const [serverDialog, setServerDialog] = useState<Server | 'new' | null>(null);
   const [workspaceDialog, setWorkspaceDialog] = useState<Server | null>(null);
-  const [settings, setSettings] = useState(false);
+  const [settings, setSettings] = useState<'General' | 'Updates' | null>(null);
   const terminals = useTerminals({
     visible: app.preferences.terminal_visible,
     onVisibility: (terminal_visible) => app.changePreferences({ terminal_visible }),
@@ -110,7 +110,7 @@ function WorkspaceApp({
     else if (nav.serverHome) run(terminals.toggle({ server: nav.serverHome.name }));
     else setPicker('terminal');
   };
-  useWindowActions(app, nav, fileActions, files, newSession, toggleTerminal, setSettings);
+  useWindowActions(app, nav, fileActions, files, newSession, toggleTerminal, () => setSettings('General'));
   return (
     <Tooltip.Provider delayDuration={400}>
       <main className={styles.app}>
@@ -148,7 +148,7 @@ function WorkspaceApp({
               files={files}
               fileRevision={fileRevision}
               transfers={transfers}
-              onSettings={() => setSettings(true)}
+              onSettings={(tab = 'General') => setSettings(tab)}
               onAddServer={() => setServerDialog('new')}
               onEditServer={setServerDialog}
               onAddWorkspace={setWorkspaceDialog}
@@ -160,7 +160,7 @@ function WorkspaceApp({
               <div className={styles.errorBanner} role="alert">
                 <Cable size={16} />
                 <span>{app.error}</span>
-                <button onClick={() => setSettings(true)}>Settings</button>
+                <button onClick={() => setSettings('General')}>Settings</button>
                 <IconButton label="Dismiss error" onClick={() => app.setError('')}>
                   <X size={14} />
                 </IconButton>
@@ -263,12 +263,13 @@ function WorkspaceApp({
         )}
         {settings && (
           <SettingsDialog
+            initialTab={settings}
             preferences={prefs}
             catalog={app.catalog}
             workspace={nav.workspace}
             session={nav.selected}
             onPreferences={app.changePreferences}
-            onClose={() => setSettings(false)}
+            onClose={() => setSettings(null)}
           />
         )}
         {picker && (

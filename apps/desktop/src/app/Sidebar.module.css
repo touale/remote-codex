@@ -35,6 +35,16 @@
   border-radius: 6px;
 }
 .footer small {
-  margin-left: auto;
   font-size: 10px;
+}
+.version {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.version button {
+  padding: 4px;
 }

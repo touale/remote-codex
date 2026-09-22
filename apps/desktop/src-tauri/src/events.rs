@@ -58,6 +58,7 @@ pub(crate) enum Event {
         message: String,
     },
     CatalogChanged,
+    UpdatesChanged,
     OperationFinished {
         id: String,
     },

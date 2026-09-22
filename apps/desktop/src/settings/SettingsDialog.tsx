@@ -19,6 +19,7 @@ export function SettingsDialog({
   catalog,
   workspace,
   session,
+  initialTab = 'General',
 }: {
   preferences: Preferences;
   onPreferences: (value: Partial<Preferences>) => void;
@@ -26,8 +27,9 @@ export function SettingsDialog({
   catalog: Catalog;
   workspace: CurrentWorkspace | null;
   session: string | null;
+  initialTab?: 'General' | 'Updates';
 }) {
-  const [tab, setTab] = useState('General');
+  const [tab, setTab] = useState<string>(initialTab);
   const [bound, setBound] = useState(workspace);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);

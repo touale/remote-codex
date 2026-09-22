@@ -2,6 +2,7 @@ import { $, browser, expect } from '@wdio/globals';
 import path from 'node:path';
 import { contextAt } from './interaction-controls';
 import { sharedAppearanceAndUsage } from './settings-controls';
+import { appVersionIndicator } from './version-controls';
 import { fullscreenTitlebar } from './fullscreen';
 
 describe('Remote Codex desktop', () => {
@@ -32,6 +33,7 @@ describe('Remote Codex desktop', () => {
     await expect($('#update-mode')).toHaveText('Check automatically');
     await $('[role=dialog] button[aria-label=Close]').click();
   });
+  it('shows the app version and opens update settings from the sidebar', appVersionIndicator);
   it('opens a compact native window with both sidebar trees', async () => {
     await $('section[aria-label="Connections and sessions"]').waitForDisplayed();
     await expect($('section[aria-label="Remote files"]')).toBeDisplayed();

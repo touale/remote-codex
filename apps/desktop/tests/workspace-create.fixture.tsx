@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sidebar } from '../src/app/Sidebar';
 import type { useApplication } from '../src/app/useApplication';
 import { useNavigation } from '../src/app/useNavigation';
@@ -32,23 +32,23 @@ export function WorkspaceCreateFixture({ app }: { app: ReturnType<typeof useAppl
   const chats = useChats(report, dialog.ask);
   const files = useFiles();
   const nav = useNavigation(fixtureApp, chats, dialog, files);
-  const openWorkspace = async (server: string, path: string) => {
-    const workspace = await nav.openWorkspace(server, path);
+  useEffect(() => {
+    const workspace = nav.workspace;
+    if (!workspace) return;
     // Stand in for the native catalog_changed notification after workspace_open.
     setCatalog((previous) => ({
       ...previous,
       workspaces: [
-        ...previous.workspaces.filter((w) => w.server !== server || w.path !== workspace.path),
-        { server, server_id: server, path: workspace.path, used_at: 1 },
+        ...previous.workspaces.filter((w) => w.server !== workspace.server || w.path !== workspace.path),
+        { server: workspace.server, server_id: workspace.server, path: workspace.path, used_at: 1 },
       ],
     }));
-    return workspace;
-  };
+  }, [nav.workspace]);
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <Sidebar
         app={fixtureApp}
-        nav={{ ...nav, openWorkspace }}
+        nav={nav}
         files={files}
         chats={chats}
         fileActions={{ create: async () => false, change: done, move: done }}
@@ -62,8 +62,11 @@ export function WorkspaceCreateFixture({ app }: { app: ReturnType<typeof useAppl
         onTerminal={noop}
       />
       <div>
-        <button onClick={() => void openWorkspace('beta', '/workspace/a').catch(report)}>Open beta workspace</button>
+        <button onClick={() => void nav.openWorkspace('beta', '/workspace/a').catch(report)}>
+          Open beta workspace
+        </button>
         <output id="created-workspace">{nav.target ? `${nav.target.server} · ${nav.target.path}` : ''}</output>
+        <output id="workspace-draft">{nav.draftKey ?? ''}</output>
         <output id="workspace-create-error">{error}</output>
       </div>
     </div>

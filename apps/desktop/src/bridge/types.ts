@@ -183,7 +183,7 @@ export type AppEvent =
   | { kind: 'progress'; operation: string; event: Progress }
   | { kind: 'authentication'; id: string; prompt: AuthPrompt }
   | { kind: 'notice'; message: string }
-  | { kind: 'catalog_changed' | 'close_requested' }
+  | { kind: 'catalog_changed' | 'updates_changed' | 'close_requested' }
   | { kind: 'resync'; id: string };
 export interface Preferences {
   sidebar_width: number;

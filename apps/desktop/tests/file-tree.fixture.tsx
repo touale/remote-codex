@@ -11,6 +11,7 @@ export function FileTreeFixture() {
       <button onClick={() => setRoot(null)}>Clear root</button>
       <output id="file-tree-error">{error}</output>
       <FileTree
+        onNewSession={() => {}}
         context="fixture"
         server="fixture"
         root={root}

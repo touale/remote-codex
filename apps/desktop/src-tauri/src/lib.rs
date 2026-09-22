@@ -32,7 +32,7 @@ pub fn run() {
         .on_webview_event(transfer_grants::dropped)
         .setup(|app| {
             menu::install(app)?;
-            commands::updates::start();
+            commands::updates::start(app.handle().clone());
             Ok(())
         })
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {

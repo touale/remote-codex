@@ -12,7 +12,7 @@ export function useWindowActions(
   files: Pick<ReturnType<typeof useFiles>, 'tabs' | 'selected'>,
   newSession: () => void,
   toggleTerminal: () => void,
-  setSettings: (value: boolean) => void,
+  openSettings: () => void,
 ) {
   const prefs = app.preferences;
   const run = (promise: Promise<unknown>) => void promise.catch(app.report);
@@ -38,7 +38,7 @@ export function useWindowActions(
         if (event.action !== 'new_window' && document.querySelector('[role=dialog]')) return;
         if (event.action === 'new_window') run(call('new_window', { target: null }));
         if (event.action === 'new_session') newSession();
-        if (event.action === 'settings') setSettings(true);
+        if (event.action === 'settings') openSettings();
         if (event.action === 'terminal') toggleTerminal();
       }
     });
