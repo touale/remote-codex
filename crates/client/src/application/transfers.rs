@@ -33,6 +33,10 @@ impl TransferService {
     pub fn is_running(&self, id: &str) -> bool {
         self.client.0.transfers.owns(id)
     }
+    /// IDs of transfers currently owned by this client.
+    pub fn running_ids(&self) -> Result<Vec<String>> {
+        self.client.0.transfers.running_ids()
+    }
     pub async fn list(&self) -> Result<Vec<Transfer>> {
         let state = &self.client.0;
         let mut tasks = state.store.transfers().await?;

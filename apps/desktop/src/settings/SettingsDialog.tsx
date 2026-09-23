@@ -44,13 +44,14 @@ export function SettingsDialog({
         choices: ['Discard changes'],
       }),
     );
-  const close = () =>
+  const close = () => {
     void leave().then((ok) => {
       if (ok) onClose();
     });
+  };
   return (
     <>
-      <Modal title="Settings" className="settings-modal" onClose={close} wide>
+      <Modal title="Settings" className="settings-modal" onClose={close} closeDisabled={busy} wide>
         <div className="settings-layout">
           <nav className="settings-nav" aria-label="Settings sections">
             {['General', 'Codex', 'MCP', 'Sessions', 'Updates'].map((name) => (
@@ -75,7 +76,7 @@ export function SettingsDialog({
           </nav>
           <div className="settings-content">
             {tab === 'General' && <GeneralSettings report={(error) => setError(failure(error).message)} />}
-            {tab === 'Updates' && <UpdatesSettings />}
+            {tab === 'Updates' && <UpdatesSettings ask={dialog.ask} onBusy={setBusy} />}
             {tab === 'Codex' && <CodexSettings preferences={preferences} onPreferences={onPreferences} />}
             {tab === 'Sessions' && <ArchivedSessions />}
             {tab === 'MCP' && (

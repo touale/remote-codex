@@ -12,8 +12,8 @@ import type { useNavigation } from './useNavigation';
 
 export function useResourceActions(
   app: Pick<ReturnType<typeof useApplication>, 'preferences' | 'report'>,
-  nav: Pick<ReturnType<typeof useNavigation>, 'target' | 'workspace' | 'forgetWorkspace'>,
-  chats: Pick<ReturnType<typeof useChats>, 'chats' | 'close'>,
+  nav: Pick<ReturnType<typeof useNavigation>, 'target' | 'workspace' | 'forgetWorkspace' | 'drafts'>,
+  chats: Pick<ReturnType<typeof useChats>, 'chats' | 'close' | 'store'>,
   files: Pick<ReturnType<typeof useFiles>, 'all' | 'allTabs' | 'cancelTransfers'>,
   ask: Ask,
   terminals: Pick<ReturnType<typeof useTerminals>, 'tabs' | 'close'>,
@@ -74,6 +74,18 @@ export function useResourceActions(
     if (closing.current) return;
     closing.current = true;
     try {
+      if (
+        (nav.drafts.hasUnsentText() || Object.keys(chats.chats).some((id) => chats.store.get(id)?.draft.trim())) &&
+        !(await ask({
+          title: 'Discard unsent messages?',
+          message: 'Unsent messages in this window will be lost.',
+          choices: ['Discard and close'],
+          cancelLabel: 'Keep editing',
+        }))
+      ) {
+        await call('close_window', { cancel: true });
+        return;
+      }
       await files.cancelTransfers();
       const dirty = files.all().filter((buffer) => buffer.text !== buffer.original);
       if (dirty.length) {

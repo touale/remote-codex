@@ -80,6 +80,9 @@ pub(super) async fn open(
 }
 
 impl ShellHandle {
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(std::sync::atomic::Ordering::Acquire)
+    }
     pub fn initial_path(&self) -> &str {
         &self.path
     }

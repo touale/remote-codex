@@ -46,6 +46,12 @@ impl Runtime {
     pub(crate) fn owns(&self, id: &str) -> bool {
         self.active.lock().is_ok_and(|a| a.contains_key(id))
     }
+    pub(crate) fn running_ids(&self) -> Result<Vec<String>> {
+        self.active
+            .lock()
+            .map(|active| active.keys().cloned().collect())
+            .map_err(|_| ClientError::RemoteResponse)
+    }
     pub(crate) async fn pause(&self, id: &str) {
         loop {
             let changed = self.changed.notified();

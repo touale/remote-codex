@@ -45,6 +45,7 @@ pub fn run() {
             commands::updates::update_check,
             commands::updates::update_install,
             commands::updates::update_configure,
+            commands::restart::restart_app,
             commands::catalog::attach,
             commands::transfer_selection::transfer_pick,
             commands::transfer_selection::transfer_upload,
@@ -129,9 +130,6 @@ pub fn run() {
                     && !windows.is_empty()
                 {
                     api.prevent_exit();
-                    state
-                        .quitting
-                        .store(true, std::sync::atomic::Ordering::Release);
                     for window in windows.values() {
                         window.send(state::Event::CloseRequested);
                     }

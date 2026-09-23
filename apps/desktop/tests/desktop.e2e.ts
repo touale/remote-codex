@@ -3,6 +3,8 @@ import path from 'node:path';
 import { contextAt } from './interaction-controls';
 import { sharedAppearanceAndUsage } from './settings-controls';
 import { appVersionIndicator } from './version-controls';
+import { updateFlow } from './update-flow';
+import { restartCloseGuards } from './restart-close';
 import { fullscreenTitlebar } from './fullscreen';
 
 describe('Remote Codex desktop', () => {
@@ -34,6 +36,8 @@ describe('Remote Codex desktop', () => {
     await $('[role=dialog] button[aria-label=Close]').click();
   });
   it('shows the app version and opens update settings from the sidebar', appVersionIndicator);
+  it('asks before updating and restarting without interrupting work automatically', updateFlow);
+  it('cancels app restart across windows when edits or unsent messages are retained', restartCloseGuards);
   it('opens a compact native window with both sidebar trees', async () => {
     await $('section[aria-label="Connections and sessions"]').waitForDisplayed();
     await expect($('section[aria-label="Remote files"]')).toBeDisplayed();

@@ -119,7 +119,8 @@ export async function appVersionIndicator() {
       const settings = [...document.querySelectorAll('aside button')]
         .find((button) => button.textContent?.trim() === 'Settings')!
         .getBoundingClientRect();
-      return icon.right <= aside.right && version.left >= settings.right;
+      const status = document.querySelector('[aria-label="Workspace status"] span[title]')!.getBoundingClientRect();
+      return icon.right <= aside.right && version.left >= settings.right && Math.abs(version.top - status.top) < 1;
     });
     expect(fits).toBe(true);
     for (const theme of ['light', 'dark']) {

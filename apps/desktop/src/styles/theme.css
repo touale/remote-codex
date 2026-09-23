@@ -1,4 +1,5 @@
 :root {
+  --status-bar-height: 26px;
   color-scheme: light;
   --canvas: #fff;
   --sidebar: #f9f9f9;

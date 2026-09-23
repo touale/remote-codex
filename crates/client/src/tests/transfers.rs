@@ -3,8 +3,23 @@ use crate::{
     application::{Client, ClientOptions},
     connection::SshEndpoint,
     store::LocalStore,
-    transfers::{lease::Lease, model::Status},
+    transfers::{lease::Lease, model::Status, runtime::Runtime},
 };
+use std::sync::Arc;
+
+#[test]
+fn running_transfers_follow_registration_and_client_ownership() -> Result<()> {
+    let runtime = Arc::new(Runtime::default());
+    let other = Arc::new(Runtime::default());
+    let registration = runtime.register("owned")?;
+    let _other_registration = other.register("other-client")?;
+    assert_eq!(runtime.running_ids()?, vec!["owned"]);
+    drop(registration);
+    assert!(runtime.running_ids()?.is_empty());
+    assert_eq!(other.running_ids()?, vec!["other-client"]);
+    Ok(())
+}
+
 #[tokio::test]
 async fn restart_restores_only_paused_metadata_and_preserves_native_grants() -> Result<()> {
     let root = tempfile::tempdir()?;

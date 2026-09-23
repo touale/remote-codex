@@ -5,6 +5,7 @@ interface Prompt {
   message?: string;
   input?: { label: string; value?: string };
   choices: string[];
+  cancelLabel?: string;
 }
 export type Ask = (prompt: Prompt) => Promise<string | null>;
 export function useDialog() {
@@ -39,7 +40,7 @@ export function useDialog() {
         )}
         <div className="actions">
           <button type="button" onClick={() => finish(null)}>
-            Cancel
+            {prompt.cancelLabel ?? 'Cancel'}
           </button>
           {prompt.choices.map((choice, index) => (
             <button

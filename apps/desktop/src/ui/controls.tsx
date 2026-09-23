@@ -24,6 +24,7 @@ export function Modal({
   description,
   children,
   onClose,
+  closeDisabled = false,
   wide = false,
   className = '',
 }: {
@@ -31,6 +32,7 @@ export function Modal({
   description?: string;
   children: ReactNode;
   onClose: () => void;
+  closeDisabled?: boolean;
   wide?: boolean;
   className?: string;
 }) {
@@ -38,7 +40,7 @@ export function Modal({
     <Dialog.Root
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && !closeDisabled) onClose();
       }}
     >
       <Dialog.Portal>
@@ -50,7 +52,7 @@ export function Modal({
           <div className="modal-header">
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close asChild>
-              <button className="icon-button" aria-label="Close">
+              <button className="icon-button" aria-label="Close" disabled={closeDisabled}>
                 <X size={16} />
               </button>
             </Dialog.Close>

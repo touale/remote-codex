@@ -32,6 +32,7 @@ export class DraftStore {
   private values = new Map<string, Draft>();
   private listeners = new Map<string, Set<() => void>>();
   get = (key: string) => this.values.get(key);
+  hasUnsentText = () => [...this.values.values()].some((draft) => draft.text.trim());
   ensure(target: WorkspaceTarget, key = workspaceKey(target)) {
     if (!this.values.has(key))
       this.values.set(key, {

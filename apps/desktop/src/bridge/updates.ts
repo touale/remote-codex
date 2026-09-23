@@ -2,6 +2,8 @@ import { Channel } from '@tauri-apps/api/core';
 import { call } from './client';
 
 export type UpdateMode = 'notify' | 'auto' | 'manual';
+export type RestartResult =
+  { status: 'confirmation_required'; sessions: number; terminals: number; transfers: number } | { status: 'closing' };
 export interface UpdateSnapshot {
   mode: UpdateMode;
   last_checked: number | null;

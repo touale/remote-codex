@@ -28,7 +28,7 @@ import type {
 
 import type { AppPreferences, AppPreferencesPatch } from './preferences';
 import type { AccountUsage, SessionAction, Submission } from './session';
-import type { UpdateMode, UpdateProgress, UpdateSnapshot } from './updates';
+import type { RestartResult, UpdateMode, UpdateProgress, UpdateSnapshot } from './updates';
 
 type Command<Args, Result = void> = { args: Args; result: Result };
 type Operation = { operationId: string };
@@ -51,6 +51,7 @@ export interface Commands {
   update_check: Command<Record<string, never>, UpdateSnapshot>;
   update_install: Command<{ channel: Channel<UpdateProgress> }, UpdateSnapshot>;
   update_configure: Command<{ mode: UpdateMode }, UpdateSnapshot>;
+  restart_app: Command<{ force: boolean }, RestartResult>;
   attach: Command<{ channel: Channel<AppEvent> }, WindowTarget | null>;
   acknowledge: Command<Id>;
   catalog: Command<{ archived: boolean }, Catalog>;

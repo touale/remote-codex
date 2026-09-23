@@ -5,6 +5,7 @@ pub(crate) mod directories;
 pub(crate) mod file_contexts;
 pub(crate) mod files;
 pub(crate) mod native;
+pub(crate) mod restart;
 pub(crate) mod session;
 pub(crate) mod session_controls;
 pub(crate) mod terminals;

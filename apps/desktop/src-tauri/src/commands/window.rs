@@ -102,6 +102,9 @@ pub(crate) async fn new_window(
     target: Option<WindowTarget>,
 ) -> Result<String> {
     let gate = state.initialization.lock().await;
+    if state.restarting.load(Ordering::Acquire) {
+        return Err(Error::new("APP_RESTARTING", "The app is restarting."));
+    }
     let context = state.window(&window)?;
     let mut preferences = load_preferences(&window)?;
     preferences.selected_workspace = match &target {
@@ -202,7 +205,7 @@ pub(crate) async fn close_window(
     cancel: bool,
 ) -> Result<()> {
     if cancel {
-        state.quitting.store(false, Ordering::Release);
+        state.restarting.store(false, Ordering::Release);
         return Ok(());
     }
     let context = state.window(&window)?;
@@ -213,15 +216,19 @@ pub(crate) async fn close_window(
         .map_err(|_| unavailable())?
         .remove(window.label());
     context.close().await;
-    state
-        .windows
-        .lock()
-        .map_err(|_| unavailable())?
-        .remove(window.label());
+    // Only the window that removes the last entry may exit or restart the app.
+    let last_window = {
+        let mut windows = state.windows.lock().map_err(|_| unavailable())?;
+        windows.remove(window.label()).is_some() && windows.is_empty()
+    };
     window.destroy()?;
     state.changed();
-    if state.windows.lock().map_err(|_| unavailable())?.is_empty() {
-        window.app_handle().exit(0);
+    if last_window {
+        if state.restarting.swap(false, Ordering::AcqRel) {
+            window.app_handle().request_restart();
+        } else {
+            window.app_handle().exit(0);
+        }
     }
     Ok(())
 }
