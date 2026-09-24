@@ -21,26 +21,31 @@ fn bootstrap() -> Value {
 fn recovery_preserves_read_only_policy_and_rejects_unconfirmed_full_access() -> TestResult {
     let read_only = json!({"type":"readOnly", "networkAccess":false});
     let snapshot = json!({"model":"gpt-6-astra", "effort":"low", "serviceTier":null,
+        "disabledPluginIds":["fixture.plugin"],
         "sandboxPolicy":read_only, "approvalPolicy":"on-request", "approvalsReviewer":"user"});
     let restored = restore(&snapshot, &binding()?, false)?;
     assert_eq!(restored["sandboxPolicy"], read_only);
+    assert_eq!(restored["disabledPluginIds"], snapshot["disabledPluginIds"]);
     assert!(restored.get("permissions").is_none());
     assert!(restored.get("serviceTier").is_some_and(Value::is_null));
     let full = json!({"sandboxPolicy":{"type":"dangerFullAccess"}});
     assert!(restore(&full, &binding()?, false).is_err());
-    assert_eq!(
-        restore(&full, &binding()?, true)?["permissions"],
-        ":danger-full-access"
-    );
+    let restored = restore(&full, &binding()?, true)?;
+    assert_eq!(restored["permissions"], ":danger-full-access");
+    assert!(restored.get("disabledPluginIds").is_none());
     Ok(())
 }
 
 #[test]
 fn model_changes_preserve_native_fields_and_null_service_tier() -> TestResult {
-    let params = json!({"threadId":"thread", "model":"gpt-6-astra", "effort":"xhigh",
+    let mut params = json!({"threadId":"thread", "model":"gpt-6-astra", "effort":"xhigh",
+        "disabledPluginIds":null,
         "serviceTier":null, "collaborationMode":{"mode":"default", "settings":{
         "model":"gpt-6-astra", "reasoning_effort":"xhigh", "developer_instructions":null}}});
-    prepare_thread("thread/settings/update", &params, &binding()?)?;
+    for mode in ["plan", "default"] {
+        params["collaborationMode"]["mode"] = json!(mode);
+        prepare_thread("thread/settings/update", &params, &binding()?)?;
+    }
     assert!(params.get("serviceTier").is_some_and(Value::is_null));
     assert_eq!(
         params["collaborationMode"]["settings"]["reasoning_effort"],
@@ -146,8 +151,11 @@ fn single_writes_validate_file_and_value_type() -> TestResult {
 
 #[test]
 fn native_approve_for_me_preset_is_allowed_without_rebinding() -> TestResult {
-    let params = json!({"threadId":"thread", "permissions":":workspace", "sandboxPolicy":null,
-        "approvalPolicy":"on-request", "approvalsReviewer":"auto_review"});
+    // Native TUI sends unset fields too, including disabledPluginIds.
+    let params = json!({"threadId":"thread", "disabledPluginIds":null, "cwd":null,
+        "approvalPolicy":"on-request", "approvalsReviewer":"auto_review",
+        "sandboxPolicy":null, "permissions":":workspace", "model":null, "effort":null,
+        "summary":null, "collaborationMode":null, "multiAgentMode":null, "personality":null});
     prepare_thread("thread/settings/update", &params, &binding()?)?;
     let mut turn = params.clone();
     turn["cwd"] = json!("/local/incorrect");

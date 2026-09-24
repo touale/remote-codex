@@ -103,6 +103,7 @@ fn mismatched_setting(
         "serviceTier",
         "approvalPolicy",
         "approvalsReviewer",
+        "disabledPluginIds",
     ]
     .into_iter()
     .find(|key| {
@@ -138,7 +139,7 @@ mod tests {
         let sandbox =
             json!({"type":"workspaceWrite","writableRoots":["/workspace"],"networkAccess":false});
         let requested = json!({"model":"test-model","effort":"low","serviceTier":null,
-            "approvalPolicy":"on-request","approvalsReviewer":"user"});
+            "approvalPolicy":"on-request","approvalsReviewer":"user","disabledPluginIds":["fixture.plugin"]});
         let mut current = requested.clone();
         current["cwd"] = json!("/workspace");
         current["sandboxPolicy"] = sandbox.clone();
@@ -158,6 +159,7 @@ mod tests {
             ("serviceTier", json!("fast")),
             ("approvalPolicy", json!("never")),
             ("approvalsReviewer", json!("auto_review")),
+            ("disabledPluginIds", json!([])),
             ("sandboxPolicy", json!({"type":"dangerFullAccess"})),
             (
                 "sandboxPolicy",

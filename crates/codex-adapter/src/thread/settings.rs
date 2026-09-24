@@ -21,6 +21,7 @@ pub(crate) fn restore(
         "serviceTier",
         "personality",
         "collaborationMode",
+        "disabledPluginIds",
         "approvalPolicy",
         "approvalsReviewer",
     ] {
@@ -75,6 +76,7 @@ pub(crate) fn prepare_thread(
             "personality",
             "collaborationMode",
             "multiAgentMode",
+            "disabledPluginIds",
             "cwd",
             "permissions",
             "sandboxPolicy",

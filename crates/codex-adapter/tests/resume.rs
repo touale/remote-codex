@@ -47,7 +47,8 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
             &thread,
             "thread/settings/update",
             json!({"threadId":ID,
-            "model":"gpt-5.4-mini", "effort":"low", "approvalsReviewer":"user"}),
+            "model":"gpt-5.4-mini", "effort":"low", "approvalsReviewer":"user",
+            "disabledPluginIds":["fixture.plugin"]}),
         )
         .await?;
         call(
@@ -71,6 +72,7 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
         assert_eq!(resumed["model"], "gpt-5.4-mini");
         assert_eq!(resumed["reasoningEffort"], "low");
         assert_eq!(resumed["approvalsReviewer"], "user");
+        assert_eq!(resumed["disabledPluginIds"], json!(["fixture.plugin"]));
         assert_eq!(resumed["sandbox"], sandbox);
         assert_eq!(resumed["thread"]["status"]["type"], "idle");
         assert_eq!(resumed["thread"]["turns"], json!([]));
@@ -103,15 +105,23 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
         let mut full = settings.clone();
         full["model"] = json!("gpt-6-astra");
         full["effort"] = json!("medium");
+        full["collaborationMode"]["settings"]["model"] = full["model"].clone();
+        full["collaborationMode"]["settings"]["reasoning_effort"] = full["effort"].clone();
         full["sandboxPolicy"] = json!({"type":"dangerFullAccess"});
+        full["disabledPluginIds"] = json!([]);
         assert!(thread.restore_settings(&full, false).await.is_err());
         assert!(thread.restore_settings(&full, true).await?);
         assert!(thread.restore_settings(&full, true).await?);
         assert_eq!(thread.bootstrap()["model"], "gpt-6-astra");
         assert_eq!(thread.bootstrap()["reasoningEffort"], "medium");
+        assert_eq!(thread.bootstrap()["disabledPluginIds"], json!([]));
         assert!(!thread.restore_settings(&settings, true).await?);
         assert_eq!(thread.bootstrap()["model"], "gpt-5.4-mini");
         assert_eq!(thread.bootstrap()["sandbox"], sandbox);
+        assert_eq!(
+            thread.bootstrap()["disabledPluginIds"],
+            json!(["fixture.plugin"])
+        );
         assert_eq!(
             call(&thread, "thread/goal/get", json!({"threadId":ID})).await?,
             goal
