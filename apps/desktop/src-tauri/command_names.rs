@@ -49,6 +49,7 @@ pub(crate) const COMMANDS: &[&str] = &[
     "session_trust",
     "session_action",
     "session_history",
+    "session_tool_output",
     "session_revert",
     "session_close",
     "session_metadata",

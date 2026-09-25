@@ -9,6 +9,7 @@ pub struct SessionHandle {
     pub(super) runtime: Arc<LocalRuntime>,
     pub(super) program: remote_codex_adapter::program::Launch,
     pub(super) client: super::Client,
+    pub(super) outputs: Arc<tokio::sync::Mutex<super::output::OutputCache>>,
 }
 
 pub struct TerminalAttachment {
@@ -43,6 +44,7 @@ impl SessionHandle {
             runtime,
             program,
             client,
+            outputs: Arc::default(),
         }
     }
     pub fn session(&self) -> &Session {
@@ -77,7 +79,10 @@ impl SessionHandle {
     }
 
     pub async fn revert(&self, before_turn: &str) -> Result<super::RevertedSession> {
-        self.runtime.revert(before_turn).await
+        let mut outputs = self.outputs.lock().await;
+        let result = self.runtime.revert(before_turn).await;
+        outputs.clear();
+        result
     }
 
     pub async fn status(&self) -> Result<super::SessionSnapshot> {
@@ -97,6 +102,7 @@ impl SessionHandle {
     }
     pub async fn close(&self) {
         self.runtime.shutdown().await;
+        self.outputs.lock().await.clear();
     }
 
     pub async fn terminal(&self, arguments: &[OsString]) -> Result<TerminalAttachment> {

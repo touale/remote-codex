@@ -15,20 +15,32 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
   const historyEpoch = useRef(new Map<string, number>());
   const historyRequests = useRef(new Map<string, Promise<void>>());
   const loadHistory = useCallback(
-    (id: string, cursor: string | null = null) => {
-      const epoch = historyEpoch.current.get(id) ?? 0;
-      const key = JSON.stringify([id, cursor, epoch]);
-      const existing = historyRequests.current.get(key);
+    (id: string, cursor: string | null = null, active: () => boolean = () => true) => {
+      let epoch = historyEpoch.current.get(id) ?? 0;
+      const existing = historyRequests.current.get(JSON.stringify([id, cursor, epoch]));
       if (existing) return existing;
+      // A refreshed tail supersedes an older in-flight page and its cursor.
+      if (cursor === null) historyEpoch.current.set(id, ++epoch);
+      const key = JSON.stringify([id, cursor, epoch]);
+      update(id, (chat) => ({ ...chat, historyLoading: true, historyError: null }));
       const task = call('session_history', { id, cursor })
         .then((page) => {
-          if ((historyEpoch.current.get(id) ?? 0) === epoch)
+          if (active() && (historyEpoch.current.get(id) ?? 0) === epoch)
             update(id, (chat) => ({
-              ...mergeHistory(chat, page),
+              ...mergeHistory(chat, page, cursor !== null),
               historyReady: cursor === null || chat.historyReady,
             }));
         })
-        .finally(() => historyRequests.current.delete(key));
+        .catch((error) => {
+          if (!active()) return;
+          if (failure(error).code === 'OPERATION_CANCELLED') throw error;
+          if ((historyEpoch.current.get(id) ?? 0) === epoch)
+            update(id, (chat) => ({ ...chat, historyError: { message: failure(error).message, cursor } }));
+        })
+        .finally(() => {
+          historyRequests.current.delete(key);
+          if ((historyEpoch.current.get(id) ?? 0) === epoch) update(id, (chat) => ({ ...chat, historyLoading: false }));
+        });
       historyRequests.current.set(key, task);
       return task;
     },

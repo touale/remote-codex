@@ -37,12 +37,29 @@ pub struct ToolItem {
     pub kind: String,
     pub title: String,
     pub output: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_source: Option<ToolOutputSource>,
     pub status: String,
     pub changes: Vec<FileChange>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<ToolLink>,
+}
+
+/// Locates a persisted item within a bounded native history page.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolOutputSource {
+    pub session: String,
+    pub turn: String,
+    pub cursor: Option<String>,
+    pub item: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolOutputChunk {
+    pub text: String,
+    pub next_offset: Option<usize>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ToolLink {

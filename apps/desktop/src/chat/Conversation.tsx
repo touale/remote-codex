@@ -67,7 +67,11 @@ export const Conversation = memo(function Conversation({
                   key={message.id}
                   message={message}
                   editor={editing === message.id ? editor : undefined}
-                  onEdit={message === messages.find((m) => m.role === 'user') ? onEdit : undefined}
+                  onEdit={
+                    message.canEdit !== false && message === messages.find((m) => m.role === 'user')
+                      ? onEdit
+                      : undefined
+                  }
                   onAnswer={onAnswer}
                   questionReply={replies.get(questionReplyId(message.id))}
                   onDiff={onDiff}

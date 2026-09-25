@@ -1,3 +1,7 @@
+mod paging;
+use paging::page;
+pub use paging::read_output;
+
 use super::{Codex, binding};
 use remote_codex_core::session::{HistoryItem, HistoryPage, HistoryTurn, SessionBinding};
 use remote_codex_protocol::Fault;
@@ -52,62 +56,38 @@ pub async fn read(
     result
 }
 
-pub(super) async fn page(
-    codex: &Codex,
-    bound: &SessionBinding,
-    cursor: Option<&str>,
-) -> Result<HistoryPage, Fault> {
-    let summary = codex
-        .engine
-        .call(
-            "thread/read",
-            json!({"threadId":bound.session.id,"includeTurns":false}),
-        )
-        .await?;
-    let turns = codex
-        .engine
-        .call(
-            "thread/turns/list",
-            json!({"threadId":bound.session.id,"cursor":cursor,"itemsView":"full","limit":20}),
-        )
-        .await?;
-    let entries = turns["data"].as_array().ok_or_else(|| {
-        Fault::new(
-            "INVALID_NATIVE_HISTORY",
-            "native history did not contain turns",
-        )
-    })?;
-    Ok(HistoryPage {
-        session: binding::session(&summary["thread"], &bound.session.cwd)?,
-        turns: entries.iter().map(turn).collect(),
-        next_cursor: turns["nextCursor"].as_str().map(str::to_owned),
-    })
-}
-
 fn turn(value: &Value) -> HistoryTurn {
     HistoryTurn {
         id: text(value, "id"),
         status: text(value, "status"),
         timing: crate::status::timing(value),
+        items_before: false,
         items: value["items"]
             .as_array()
             .into_iter()
             .flatten()
-            .map(|item| HistoryItem {
-                id: text(item, "id"),
-                client_id: item["clientId"].as_str().map(str::to_owned),
-                sent_at: None,
-                phase: item["phase"].as_str().map(str::to_owned),
-                kind: text(item, "type"),
-                text: item_text(item),
-                delivery: item["delivery"].as_str().map(str::to_owned),
-                questions: questions(item),
-                tool: crate::desktop::tool(item).map(|mut tool| {
+            .map(|item| {
+                let tool = crate::desktop::tool(item).map(|mut tool| {
                     if tool.status.is_empty() && value["status"] == "completed" {
                         tool.status = "completed".into();
                     }
                     tool
-                }),
+                });
+                HistoryItem {
+                    id: text(item, "id"),
+                    client_id: item["clientId"].as_str().map(str::to_owned),
+                    sent_at: None,
+                    phase: item["phase"].as_str().map(str::to_owned),
+                    kind: text(item, "type"),
+                    text: if tool.is_some() {
+                        String::new()
+                    } else {
+                        item_text(item)
+                    },
+                    delivery: item["delivery"].as_str().map(str::to_owned),
+                    questions: questions(item),
+                    tool,
+                }
             })
             .collect(),
     }
@@ -116,13 +96,6 @@ fn turn(value: &Value) -> HistoryTurn {
 pub(crate) fn item_text(item: &Value) -> String {
     if let Some(value) = item["text"].as_str() {
         return value.into();
-    }
-    if item["type"] == "commandExecution" {
-        return format!(
-            "{}\n{}",
-            text(item, "command"),
-            text(item, "aggregatedOutput")
-        );
     }
     for field in ["content", "summary"] {
         if let Some(parts) = item[field].as_array() {

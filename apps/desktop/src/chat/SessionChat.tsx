@@ -47,9 +47,13 @@ export function SessionChat({
     },
     [id, action],
   );
-  const history = useCallback(() => {
-    if (id) void loadHistory(id, store.get(id)?.nextCursor).catch(report);
-  }, [id, store, loadHistory, report]);
+  const history = useCallback(
+    async (active?: () => boolean) => {
+      const current = id ? store.get(id) : undefined;
+      if (id) await loadHistory(id, current?.historyError ? current.historyError.cursor : current?.nextCursor, active);
+    },
+    [id, store, loadHistory],
+  );
   return (
     <Chat
       key={id ?? 'empty'}

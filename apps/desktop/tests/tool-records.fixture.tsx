@@ -10,6 +10,24 @@ const nav = { fileContext: context, workspace: null, target: null, serverHome: n
 
 const items: ToolItem[] = [
   {
+    id: 'history-reasoning',
+    kind: 'reasoning',
+    title: 'Historical reasoning',
+    status: 'completed',
+    output: '',
+    changes: [],
+    output_source: { session: 'fixture', turn: 'turn', cursor: null, item: 'history-reasoning' },
+  },
+  {
+    id: 'history-output',
+    kind: 'mcpToolCall',
+    title: 'Historical output',
+    status: 'completed',
+    output: '',
+    changes: [],
+    output_source: { session: 'fixture', turn: 'turn', cursor: null, item: 'history-output' },
+  },
+  {
     id: 'search',
     kind: 'webSearch',
     title: 'Search the web · Rust async cancellation',
@@ -74,6 +92,19 @@ export function ToolRecordsFixture({ app }: { app: ReturnType<typeof useApplicat
   const report = (error: unknown) => setError(String((error as { message: string }).message));
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <button
+        onClick={() =>
+          setTools((previous) =>
+            previous.map((tool) =>
+              tool.id === 'history-output' && tool.output_source
+                ? { ...tool, output_source: { ...tool.output_source, cursor: 'revised-page' } }
+                : tool,
+            ),
+          )
+        }
+      >
+        Repage tool output
+      </button>
       <button
         style={{ alignSelf: 'flex-start' }}
         onClick={() =>

@@ -86,10 +86,17 @@ export interface ToolItem {
   kind: string;
   title: string;
   output: string;
+  output_source?: ToolOutputSource;
   status: string;
   changes: { path: string; diff: string }[];
   input?: string;
   links?: { title: string; url: string; description?: string }[];
+}
+export interface ToolOutputSource {
+  session: string;
+  turn: string;
+  cursor: string | null;
+  item: string;
 }
 interface InputField {
   id: string;
@@ -213,6 +220,7 @@ export interface HistoryPage {
     id: string;
     status: string;
     timing: TurnTiming;
+    items_before?: boolean;
     items: {
       id: string;
       kind: string;

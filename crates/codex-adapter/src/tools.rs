@@ -9,6 +9,7 @@ pub fn project(value: &Value) -> Option<ToolItem> {
         kind: kind.into(),
         title: String::new(),
         output: String::new(),
+        output_source: None,
         status: text(value, "status").into(),
         changes: Vec::new(),
         input: None,

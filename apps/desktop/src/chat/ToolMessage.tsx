@@ -3,7 +3,7 @@ import { memo, useId, useState } from 'react';
 import { openLink } from '../bridge/client';
 import type { ToolItem } from '../bridge/types';
 import type { FileChange } from '../files/useFiles';
-import { MarkdownBody } from './MarkdownBody';
+import { ToolOutput } from './ToolOutput';
 import './ToolMessage.css';
 import { RowMenu } from '../ui/RowMenu';
 
@@ -42,7 +42,9 @@ export const ToolMessage = memo(function ToolMessage({
   const kind = kinds[tool.kind as keyof typeof kinds] ?? { icon: Wrench, title: 'Tool activity' };
   const title = tool.title.trim() && tool.title !== tool.kind ? tool.title : kind.title;
   const Icon = kind.icon;
-  const hasDetails = Boolean(tool.input?.trim() || tool.output.trim() || tool.changes.length || tool.links?.length);
+  const hasDetails = Boolean(
+    tool.input?.trim() || tool.output.trim() || tool.output_source || tool.changes.length || tool.links?.length,
+  );
   const heading = (
     <>
       <Icon size={14} aria-hidden="true" />
@@ -54,7 +56,13 @@ export const ToolMessage = memo(function ToolMessage({
     </>
   );
   return (
-    <div className="tool" data-tool-id={tool.id} data-kind={tool.kind} data-status={tool.status}>
+    <div
+      className="tool"
+      data-message-id={tool.id}
+      data-tool-id={tool.id}
+      data-kind={tool.kind}
+      data-status={tool.status}
+    >
       {hasDetails ? (
         <button
           type="button"
@@ -96,17 +104,16 @@ export const ToolMessage = memo(function ToolMessage({
               ))}
             </ul>
           )}
-          {tool.output &&
-            (tool.kind === 'reasoning' ? (
-              <div className="message-body tool-reasoning">
-                <MarkdownBody text={tool.output} report={report} onOpenFile={onOpenFile} />
-              </div>
-            ) : (
-              <section>
-                <h3>Output</h3>
-                <pre>{tool.output}</pre>
-              </section>
-            ))}
+          <ToolOutput
+            key={
+              tool.output_source
+                ? JSON.stringify([tool.output_source.session, tool.output_source.turn, tool.output_source.item])
+                : tool.id
+            }
+            tool={tool}
+            report={report}
+            onOpenFile={onOpenFile}
+          />
           {tool.changes.map((change) => (
             <RowMenu
               key={change.path}

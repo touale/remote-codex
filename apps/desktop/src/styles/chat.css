@@ -10,6 +10,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 .messages {
   padding: 12px 24px 20px;

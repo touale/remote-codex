@@ -18,6 +18,7 @@ export function mergeTool(previous: ToolItem | undefined, incoming: ToolItem): T
     ...current,
     status: current.status || other.status,
     output,
+    output_source: current.output_source ?? (!output ? other.output_source : undefined),
     input: current.input ?? other.input,
     links: current.links?.length ? current.links : other.links,
     changes: current.changes.length ? current.changes : other.changes,

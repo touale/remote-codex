@@ -14,6 +14,7 @@ import { copyFilePaths } from './file-tree';
 import { createWorkspaceFolder } from './workspace-create';
 import { filePreviews } from './preview';
 import { transferProgress } from './transfer-progress';
+import { historyLoading } from './history-loading';
 
 describe('Shared controls in native WebKit', () => {
   let main: string;
@@ -180,6 +181,7 @@ describe('Shared controls in native WebKit', () => {
   it('expands tool records with actual details and keeps them open during updates', async () => {
     await toolRecords((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });
+  it('automatically loads history while preserving reading position and retrying locally', historyLoading);
   it('shows compact activity times without clipping them in narrow session rows', async () => {
     await activityTimes((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });

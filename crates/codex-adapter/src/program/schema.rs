@@ -13,8 +13,14 @@ const REQUESTS: &[(&str, &[&str])] = &[
     ("thread/resume", &["threadId", "excludeTurns"]),
     ("thread/fork", &["threadId", "beforeTurnId", "excludeTurns"]),
     ("thread/settings/update", &["threadId"]),
-    ("thread/turns/list", &["threadId"]),
-    ("thread/items/list", &["threadId"]),
+    (
+        "thread/turns/list",
+        &["threadId", "itemsView", "cursor", "limit", "sortDirection"],
+    ),
+    (
+        "thread/items/list",
+        &["threadId", "turnId", "cursor", "limit", "sortDirection"],
+    ),
     (
         "turn/start",
         &["threadId", "input", "environments", "runtimeWorkspaceRoots"],
@@ -103,4 +109,59 @@ fn incompatible(detail: &str) -> Fault {
         "UNSUPPORTED_CODEX_PROTOCOL",
         &format!("local Codex is incompatible with this adapter: {detail}"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires REMOTE_CODEX_TEST_BINARY; inspects an isolated native schema"]
+    async fn native_schema_requires_pagination_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let program = super::super::Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
+        let home = tempfile::tempdir()?;
+        inspect(&program, home.path()).await?;
+        let mut schema: Value = serde_json::from_slice(&std::fs::read(
+            home.path().join("schema/ClientRequest.json"),
+        )?)?;
+        for (method, fields) in [
+            (
+                "thread/turns/list",
+                &["itemsView", "cursor", "limit", "sortDirection"][..],
+            ),
+            (
+                "thread/items/list",
+                &["turnId", "cursor", "limit", "sortDirection"][..],
+            ),
+        ] {
+            let reference = schema["oneOf"]
+                .as_array()
+                .ok_or("missing requests")?
+                .iter()
+                .find(|request| request["properties"]["method"]["enum"][0] == method)
+                .and_then(|request| request["properties"]["params"]["$ref"].as_str())
+                .and_then(|reference| reference.strip_prefix('#'))
+                .ok_or("missing parameter reference")?
+                .to_owned();
+            let properties = format!("{reference}/properties");
+            for field in fields {
+                let definition = schema
+                    .pointer_mut(&properties)
+                    .and_then(Value::as_object_mut)
+                    .and_then(|values| values.remove(*field))
+                    .ok_or("missing field")?;
+                let fault = validate(&schema)
+                    .err()
+                    .ok_or("missing pagination capability must be rejected")?;
+                assert_eq!(fault.code, "UNSUPPORTED_CODEX_PROTOCOL");
+                assert!(fault.message.contains(&format!("{method}.{field}")));
+                schema
+                    .pointer_mut(&properties)
+                    .and_then(Value::as_object_mut)
+                    .ok_or("missing properties")?
+                    .insert((*field).into(), definition);
+            }
+        }
+        Ok(())
+    }
 }

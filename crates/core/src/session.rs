@@ -185,6 +185,8 @@ pub struct HistoryTurn {
     #[serde(default)]
     pub timing: crate::status::TurnTiming,
     pub items: Vec<HistoryItem>,
+    #[serde(default)]
+    pub items_before: bool,
 }
 
 /// A display projection; the native Codex history remains the source of truth.

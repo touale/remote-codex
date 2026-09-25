@@ -40,7 +40,7 @@ export const MessageView = memo(function MessageView({
   if (message.delivery === 'async' && message.questions?.length)
     return <AsyncQuestions message={message} reply={questionReply} onAnswer={onAnswer} />;
   return (
-    <article className={`message ${message.role} ${message.plan ? 'plan-card' : ''}`}>
+    <article data-message-id={message.id} className={`message ${message.role} ${message.plan ? 'plan-card' : ''}`}>
       <div className="message-body">
         <MarkdownBody text={message.text} report={report} onOpenFile={onOpenFile} />
       </div>

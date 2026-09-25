@@ -33,6 +33,7 @@ export interface Message {
   tool?: ToolItem;
   plan?: boolean;
   complete?: boolean;
+  canEdit?: boolean;
 }
 export type ChatUpdate = (change: Partial<ChatState> | ((chat: ChatState) => ChatState)) => void;
 export interface Question {
@@ -73,6 +74,8 @@ export interface ChatState {
   nextCursor: string | null;
   // Native ownership can be established before the first history read succeeds.
   historyReady: boolean;
+  historyLoading: boolean;
+  historyError: { message: string; cursor: string | null } | null;
   discardedTurns: string[];
 }
 export function initialChat(session: Session, server: string, settings: Settings, models: Model[]): ChatState {
@@ -96,6 +99,8 @@ export function initialChat(session: Session, server: string, settings: Settings
     warning: null,
     nextCursor: null,
     historyReady: true,
+    historyLoading: false,
+    historyError: null,
     discardedTurns: [],
   };
 }

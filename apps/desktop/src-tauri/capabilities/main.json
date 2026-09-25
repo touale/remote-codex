@@ -43,6 +43,7 @@
     "allow-session-trust",
     "allow-session-action",
     "allow-session-history",
+    "allow-session-tool-output",
     "allow-session-revert",
     "allow-session-close",
     "allow-session-metadata",

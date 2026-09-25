@@ -1,5 +1,5 @@
 import { Activity, RotateCcw } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { SessionAction } from '../bridge/session';
 import type { FileChange } from '../files/useFiles';
 import { Empty, ErrorText, IconButton } from '../ui/controls';
@@ -13,6 +13,7 @@ import { questionReplyId } from './AsyncQuestions';
 import { SessionStatus } from './SessionStatus';
 import type { PlanChoice } from './MessageView';
 import type { ChatState, ChatUpdate, Message } from './state';
+import { useConversationScroll } from './useConversationScroll';
 export function Chat({
   chat,
   update,
@@ -31,28 +32,14 @@ export function Chat({
   onAction: (action: SessionAction) => Promise<void>;
   onResume: () => void;
   onFreshPlan: (chat: ChatState, plan: Message) => Promise<void>;
-  onHistory: () => void;
+  onHistory: (active?: () => boolean) => Promise<void>;
   onRevert: (turn: string) => Promise<void>;
   onReloadEdit: () => Promise<void>;
   onDiff: (change: FileChange, newWindow?: boolean) => void;
   onOpenFile?: (href: string) => Promise<void>;
   report: (error: unknown) => void;
 }) {
-  const scroll = useRef<HTMLDivElement>(null);
-  const messages = useRef<HTMLDivElement>(null);
-  const nearBottom = useRef(true);
-  const previousTop = useRef(0);
-  const following = useRef<number | null>(null);
-  const follow = useCallback(() => {
-    if (following.current !== null) return;
-    following.current = requestAnimationFrame(() => {
-      following.current = null;
-      if (nearBottom.current && scroll.current) {
-        scroll.current.scrollTop = scroll.current.scrollHeight;
-        previousTop.current = scroll.current.scrollTop;
-      }
-    });
-  }, []);
+  const { scroll, messages, onScroll, followLatest } = useConversationScroll(chat, update, onHistory, report);
   const latest = useRef(chat);
   latest.current = chat;
   // Reject a second click before React renders the disabled controls.
@@ -60,24 +47,6 @@ export function Chat({
   const [choosingPlan, setChoosingPlan] = useState(false);
   const [revisingPlan, setRevisingPlan] = useState<string | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
-  useLayoutEffect(() => {
-    const element = scroll.current;
-    const observer = new ResizeObserver(follow);
-    if (element) {
-      element.scrollTop = chat?.scroll ?? element.scrollHeight;
-      previousTop.current = element.scrollTop;
-      observer.observe(element);
-      if (messages.current) observer.observe(messages.current);
-      nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-    }
-    return () => {
-      observer.disconnect();
-      if (following.current !== null) cancelAnimationFrame(following.current);
-      following.current = null;
-      if (element) update({ scroll: element.scrollTop });
-    };
-  }, [chat?.session.id, update, follow]);
-  useEffect(follow, [chat?.messages, chat?.questions, chat?.turns, follow]);
   const choosePlan = useCallback(
     async (message: Message, choice: PlanChoice) => {
       const current = latest.current;
@@ -96,7 +65,7 @@ export function Chat({
         if (choice === 'revise') {
           setRevisingPlan(message.id);
         } else {
-          nearBottom.current = true;
+          followLatest();
           await onAction({ action: 'submit', text: 'Implement the plan.' });
         }
       } catch (error) {
@@ -106,7 +75,7 @@ export function Chat({
         setChoosingPlan(false);
       }
     },
-    [onAction, onFreshPlan, update, report],
+    [onAction, onFreshPlan, update, report, followLatest],
   );
   const execute = useCallback(
     async (action: SessionAction) => {
@@ -115,10 +84,10 @@ export function Chat({
         action.action === 'steer' ||
         (action.action === 'goal' && action.goal.action === 'set')
       )
-        nearBottom.current = true;
+        followLatest();
       await onAction(action);
     },
-    [onAction],
+    [onAction, followLatest],
   );
   const showStatus = useCallback(() => setStatusOpen(true), []);
   if (!chat) return null;
@@ -140,25 +109,24 @@ export function Chat({
   );
   return (
     <section className="chat" aria-label="Conversation">
-      <div
-        className="chat-scroll"
-        ref={scroll}
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-          // Content growth can emit a scroll event before the next follow frame.
-          // Only an upward move leaves follow mode; returning to the bottom restores it.
-          if (atBottom || element.scrollTop < previousTop.current) nearBottom.current = atBottom;
-          previousTop.current = element.scrollTop;
-        }}
-      >
+      <div className="chat-scroll" ref={scroll} onScroll={onScroll}>
         <div className="messages" ref={messages}>
-          {chat.nextCursor && (
-            <button className="subtle load-history" disabled={!!chat.edit} onClick={onHistory}>
-              Load earlier messages
+          {chat.historyLoading && (
+            <small className="load-history" role="status">
+              Loading history…
+            </small>
+          )}
+          {chat.historyError && (
+            <button
+              className="subtle load-history"
+              disabled={!!chat.edit || chat.historyLoading}
+              onClick={() => void onHistory().catch(report)}
+            >
+              Retry loading history
             </button>
           )}
-          {chat.messages.length === 0 && !chat.turn && (
+          <ErrorText message={chat.historyError?.message} />
+          {chat.historyReady && chat.messages.length === 0 && Object.keys(chat.turns).length === 0 && !chat.turn && (
             <Empty title="What would you like to work on?" detail={`${chat.server} · ${chat.session.cwd}`} />
           )}
           <Conversation

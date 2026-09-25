@@ -6,6 +6,7 @@ mod files;
 mod handle;
 mod native;
 mod notice;
+mod output;
 mod project_mcp;
 mod server;
 mod session;

@@ -103,6 +103,21 @@ pub(crate) async fn session_history(
         .await?)
 }
 #[tauri::command]
+pub(crate) async fn session_tool_output(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    id: String,
+    source: ToolOutputSource,
+    offset: usize,
+) -> Result<ToolOutputChunk> {
+    Ok(state
+        .window(&window)?
+        .session(&id)?
+        .tool_output(source, offset)
+        .await?)
+}
+
+#[tauri::command]
 pub(crate) async fn session_close(
     window: WebviewWindow,
     state: State<'_, AppState>,

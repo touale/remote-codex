@@ -23,6 +23,7 @@ import type {
   SessionOpened,
   SessionSnapshot,
   TextFile,
+  ToolOutputSource,
   WindowTarget,
 } from './types';
 
@@ -113,6 +114,10 @@ export interface Commands {
   session_action: Command<Id & { action: NativeAction }, Submission | null>;
   session_revert: Command<Id & { beforeTurnId: string }, { history: HistoryPage; snapshot: SessionSnapshot }>;
   session_history: Command<Id & { cursor: string | null }, HistoryPage>;
+  session_tool_output: Command<
+    Id & { source: ToolOutputSource; offset: number },
+    { text: string; next_offset: number | null }
+  >;
   session_close: Command<Id>;
   session_metadata: Command<Id & { name: string | null; archived: boolean | null }>;
   session_mcp: Command<Id, McpStatus[]>;

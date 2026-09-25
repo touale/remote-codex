@@ -91,6 +91,7 @@ pub fn run() {
             commands::session::session_trust,
             commands::session_controls::session_action,
             commands::session_controls::session_history,
+            commands::session_controls::session_tool_output,
             commands::session_controls::session_close,
             commands::session_controls::session_metadata,
             commands::session_controls::session_revert,

@@ -132,10 +132,11 @@ export async function conversationLoading(session: string) {
     await waitFor('history');
     await settle('history', 'HISTORY_UNAVAILABLE');
     await expect($('[aria-label="Conversation"] [role="alert"]')).toHaveText(
-      expect.stringContaining('Couldn’t open this conversation'),
+      'History read interrupted. Please try again.',
     );
     await expect($(loading)).not.toExist();
-    await $('button=Back').click();
+    await expect($(input)).toBeDisplayed();
+    await newSession();
     await expect($(input)).toHaveValue('Preserve this unsent draft.');
 
     await $(row).click();
@@ -147,9 +148,10 @@ export async function conversationLoading(session: string) {
     await $(row).click();
     await waitFor('history');
     await settle('history', 'HISTORY_UNAVAILABLE');
-    await $('button=Retry').waitForDisplayed();
-    await $('button=Retry').click();
-    await waitFor('history');
+    await $('button=Retry loading history').waitForDisplayed();
+    await $('button=Retry loading history').click();
+    await browser.waitUntil(() => browser.execute(() => Boolean(window.conversationLoadingGate.pending.history)));
+    await expect($(input)).toBeDisplayed();
     // A successful late response must not take over the selected server home.
     await activateTree('.server-row .tree-label');
     await settle('history');
