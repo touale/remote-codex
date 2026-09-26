@@ -2,6 +2,7 @@ use super::SessionHandle;
 use crate::ClientError;
 use remote_codex_adapter::gateway::Backend;
 use remote_codex_protocol::Fault;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, watch};
@@ -74,12 +75,44 @@ impl TerminalSessions {
         self.current.send_replace(next);
         Ok(response)
     }
+
+    async fn revert(&self, params: Value) -> Result<Value, Fault> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Params {
+            thread_id: String,
+            before_turn_id: String,
+        }
+        let params: Params = serde_json::from_value(params)
+            .map_err(|_| Fault::new("INVALID_REVERT", "Select a thread and a message to edit."))?;
+        let _creation = self.creation.lock().await;
+        if self.closed.borrow().is_some() || *self.revoked.borrow() {
+            return Err(Fault::new(
+                "SESSION_CLOSED",
+                "terminal control is no longer available",
+            ));
+        }
+        let current = self.current.borrow().clone();
+        if params.thread_id != current.session().id {
+            return Err(Fault::new(
+                "SESSION_MISMATCH",
+                "only the current terminal thread can be reverted",
+            ));
+        }
+        let mut outputs = current.outputs.lock().await;
+        let result = current.runtime.revert_native(&params.before_turn_id).await;
+        outputs.clear();
+        result.map_err(ClientError::into_fault)
+    }
 }
 
 impl Backend for TerminalSessions {
     async fn request(&self, method: &str, params: Value) -> Result<Value, Fault> {
         if matches!(method, "thread/start" | "thread/fork") {
             return self.create(method, &params).await;
+        }
+        if method == "thread/revert" {
+            return self.revert(params).await;
         }
         let current = self.current.borrow().clone();
         if let Some(id) = params["threadId"].as_str()

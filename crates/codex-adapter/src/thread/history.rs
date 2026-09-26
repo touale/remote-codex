@@ -138,7 +138,7 @@ impl super::Thread {
         page(&self.codex, &self.binding, None).await
     }
 
-    pub async fn revert(&self, before_turn: &str) -> Result<(), Fault> {
+    pub async fn revert(&self, before_turn: &str) -> Result<Value, Fault> {
         self.codex
             .engine
             .call(
@@ -147,8 +147,7 @@ impl super::Thread {
                     "threadId": self.binding.session.id, "beforeTurnId": before_turn
                 }),
             )
-            .await?;
-        Ok(())
+            .await
     }
 }
 

@@ -25,7 +25,7 @@ impl LocalRuntime {
             })
             .await?;
         if project != self.recipe.project {
-            return Err(Fault::new("PROJECT_CHANGED", "project configuration changed; review it and resume this session before editing a prompt").into());
+            return Err(Fault::new("PROJECT_CHANGED", "project configuration changed; review it and resume this session before starting or forking a session").into());
         }
         let busy = {
             let intent = self
@@ -41,7 +41,7 @@ impl LocalRuntime {
         if busy {
             return Err(Fault::new(
                 "TURN_ACTIVE",
-                "Stop the current turn and pause its goal before editing a prompt.",
+                "Stop the current turn and pause its goal before starting or forking a session.",
             )
             .into());
         }

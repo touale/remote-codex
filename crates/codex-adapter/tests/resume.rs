@@ -10,7 +10,7 @@ const ID: &str = "01990000-0000-7000-8000-000000000001";
 
 #[tokio::test]
 #[ignore = "requires REMOTE_CODEX_TEST_BINARY; isolated history, no model requests"]
-async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestResult {
+async fn resume_fork_and_revert_preserve_paginated_history_and_paused_goal() -> TestResult {
     let program = Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
     let home = tempfile::tempdir()?;
     let cwd = home.path().to_str().ok_or("invalid temporary path")?;
@@ -37,7 +37,7 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
             remote_identity: "test".into(),
             environment_id: "local".into(),
             codex_home: cwd.into(),
-            codex_version: "0.153.4".into(),
+            codex_version: "fixture".into(),
             execution_mode: "sandboxed".into(),
             revision: 1,
         };
@@ -132,6 +132,31 @@ async fn resume_and_fork_preserve_paginated_history_and_paused_goal() -> TestRes
             assert_ne!(event["method"], "turn/started");
         }
         fork_paused_goal(&thread, &program, home.path(), &goal).await?;
+        let reverted = thread
+            .revert("01990000-0000-7000-8000-000000000002")
+            .await?;
+        assert_eq!(reverted["thread"]["id"], ID);
+        assert_eq!(reverted["thread"]["turns"], json!([]));
+        assert!(reverted["turnsBackwardsCursor"].is_string());
+        assert!(reverted.get("itemsBackwardsCursor").is_some());
+        let retained = call(
+            &thread,
+            "thread/turns/list",
+            json!({"threadId":ID, "cursor":reverted["turnsBackwardsCursor"],
+                "limit":10, "itemsView":"full", "sortDirection":"desc"}),
+        )
+        .await?;
+        assert_eq!(retained["data"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            retained["data"][0]["id"],
+            "01990000-0000-7000-8000-000000000001"
+        );
+        assert_eq!(
+            call(&thread, "thread/goal/get", json!({"threadId":ID})).await?,
+            goal
+        );
+        assert!(thread.revert("missing-turn").await.is_err());
+        assert_eq!(thread.history().await?.turns.len(), 1);
         Ok(())
     }
     .await;
@@ -209,7 +234,7 @@ fn history(home: &Path) -> TestResult {
     std::fs::create_dir_all(&directory)?;
     let mut rows = vec![json!({"type":"session_meta","payload":{
         "id":ID,"timestamp":"2026-09-11T00:00:00Z","cwd":home,
-        "originator":"codex_cli_rs","cli_version":"0.153.4","source":"cli",
+        "originator":"codex_cli_rs","cli_version":"fixture","source":"cli",
         "model_provider":"offline","history_mode":"paginated",
         "base_instructions":{"text":"Synthetic resume regression"}
     }})];

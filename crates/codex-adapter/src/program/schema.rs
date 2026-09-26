@@ -12,6 +12,7 @@ const REQUESTS: &[(&str, &[&str])] = &[
     ),
     ("thread/resume", &["threadId", "excludeTurns"]),
     ("thread/fork", &["threadId", "beforeTurnId", "excludeTurns"]),
+    ("thread/revert", &["threadId", "beforeTurnId"]),
     ("thread/settings/update", &["threadId"]),
     (
         "thread/turns/list",
@@ -117,7 +118,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires REMOTE_CODEX_TEST_BINARY; inspects an isolated native schema"]
-    async fn native_schema_requires_pagination_fields() -> Result<(), Box<dyn std::error::Error>> {
+    async fn native_schema_requires_history_fields() -> Result<(), Box<dyn std::error::Error>> {
         let program = super::super::Launch::new(std::env::var("REMOTE_CODEX_TEST_BINARY")?);
         let home = tempfile::tempdir()?;
         inspect(&program, home.path()).await?;
@@ -125,6 +126,7 @@ mod tests {
             home.path().join("schema/ClientRequest.json"),
         )?)?;
         for (method, fields) in [
+            ("thread/revert", &["threadId", "beforeTurnId"][..]),
             (
                 "thread/turns/list",
                 &["itemsView", "cursor", "limit", "sortDirection"][..],
@@ -152,7 +154,7 @@ mod tests {
                     .ok_or("missing field")?;
                 let fault = validate(&schema)
                     .err()
-                    .ok_or("missing pagination capability must be rejected")?;
+                    .ok_or("missing history capability must be rejected")?;
                 assert_eq!(fault.code, "UNSUPPORTED_CODEX_PROTOCOL");
                 assert!(fault.message.contains(&format!("{method}.{field}")));
                 schema
