@@ -39,7 +39,12 @@ export function Chat({
   onOpenFile?: (href: string) => Promise<void>;
   report: (error: unknown) => void;
 }) {
-  const { scroll, messages, onScroll, followLatest } = useConversationScroll(chat, update, onHistory, report);
+  const { scroll, messages, onScroll, pauseFollow, followLatest } = useConversationScroll(
+    chat,
+    update,
+    onHistory,
+    report,
+  );
   const latest = useRef(chat);
   latest.current = chat;
   // Reject a second click before React renders the disabled controls.
@@ -109,7 +114,15 @@ export function Chat({
   );
   return (
     <section className="chat" aria-label="Conversation">
-      <div className="chat-scroll" ref={scroll} onScroll={onScroll}>
+      <div
+        className="chat-scroll"
+        ref={scroll}
+        onScroll={onScroll}
+        onWheelCapture={(event) => {
+          if (event.deltaY) pauseFollow();
+        }}
+        onTouchMoveCapture={pauseFollow}
+      >
         <div className="messages" ref={messages}>
           {chat.historyLoading && (
             <small className="load-history" role="status">
