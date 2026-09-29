@@ -47,80 +47,20 @@ export function useConversationScroll(
     previousTop.current = view.scrollTop;
     return movement !== 0;
   }, []);
-  const schedule = useCallback(
-    function schedule() {
-      if (frame.current !== null || !lifetime.current.active) return;
-      frame.current = requestAnimationFrame(() => {
-        frame.current = null;
-        const view = scroll.current;
-        const { chat, load, report } = latest.current;
-        if (!view || !view.clientHeight) return;
-        // Native scrolling can precede its scroll event. Observe it before a queued follow.
-        if (trackScroll()) remember();
-        if (following.current && view.scrollHeight - view.clientHeight - view.scrollTop > BOTTOM_THRESHOLD) {
-          view.scrollTop = view.scrollHeight - view.clientHeight;
-          previousTop.current = view.scrollTop;
-        }
-        if (
-          !chat?.historyReady ||
-          !chat.nextCursor ||
-          chat.historyLoading ||
-          chat.historyError ||
-          chat.edit ||
-          chat.closed ||
-          pending.current
-        )
-          return;
-        if (!remaining.current && view.scrollTop < view.clientHeight) remaining.current = SCROLL_PREFETCH_PAGES;
-        if (!remaining.current) return;
-        remaining.current--;
-        pending.current = true;
-        const current = lifetime.current;
-        void load(() => current.active)
-          .catch((error) => {
-            if (current.active) report(error);
-          })
-          .finally(() => {
-            pending.current = false;
-            schedule();
-          });
-      });
-    },
-    [trackScroll, remember],
-  );
-  useLayoutEffect(() => {
-    const current = { active: true };
-    lifetime.current = current;
-    return () => {
-      current.active = false;
-    };
-  }, [chat?.session.id, !!chat?.edit, chat?.closed]);
-  useLayoutEffect(() => {
+  // Correct layout before paint so history never flashes at the previous offset.
+  const syncPosition = useCallback(() => {
     const view = scroll.current;
-    if (!view) return;
-    const saved = latest.current.chat?.scroll;
-    remaining.current = saved == null ? INITIAL_PREFETCH_PAGES : 0;
-    view.scrollTop = saved ?? view.scrollHeight;
-    previousTop.current = view.scrollTop;
-    following.current = view.scrollHeight - view.scrollTop - view.clientHeight <= BOTTOM_THRESHOLD;
-    remember();
-    const observer = new ResizeObserver(schedule);
-    observer.observe(view);
-    if (messages.current) observer.observe(messages.current);
-    schedule();
-    return () => {
-      observer.disconnect();
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-      frame.current = null;
-      update({ scroll: view.scrollTop });
-    };
-  }, [chat?.session.id, update, remember, schedule]);
-  useLayoutEffect(() => {
+    if (!view || !view.clientHeight) return;
+    // Native scrolling can precede its scroll event. Observe it before correcting layout.
     trackScroll();
-    const view = scroll.current;
     const saved = anchor.current;
     let clamped = false;
-    if (view && saved && !following.current && !chat?.edit) {
+    if (following.current) {
+      if (view.scrollHeight - view.clientHeight - view.scrollTop > BOTTOM_THRESHOLD) {
+        view.scrollTop = view.scrollHeight - view.clientHeight;
+        previousTop.current = view.scrollTop;
+      }
+    } else if (saved && !latest.current.chat?.edit) {
       const item = view.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(saved.id)}"]`);
       if (item) {
         // Content coordinates exclude the user's own movement between scroll events.
@@ -139,6 +79,71 @@ export function useConversationScroll(
       }
     }
     if (!clamped) remember();
+  }, [remember, trackScroll]);
+  const schedule = useCallback(function schedule() {
+    if (frame.current !== null || !lifetime.current.active) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      const view = scroll.current;
+      const { chat, load, report } = latest.current;
+      if (!view || !view.clientHeight) return;
+      if (
+        !chat?.historyReady ||
+        !chat.nextCursor ||
+        chat.historyLoading ||
+        chat.historyError ||
+        chat.edit ||
+        chat.closed ||
+        pending.current
+      )
+        return;
+      if (!remaining.current && view.scrollTop < view.clientHeight) remaining.current = SCROLL_PREFETCH_PAGES;
+      if (!remaining.current) return;
+      remaining.current--;
+      pending.current = true;
+      const current = lifetime.current;
+      void load(() => current.active)
+        .catch((error) => {
+          if (current.active) report(error);
+        })
+        .finally(() => {
+          pending.current = false;
+          schedule();
+        });
+    });
+  }, []);
+  useLayoutEffect(() => {
+    const current = { active: true };
+    lifetime.current = current;
+    return () => {
+      current.active = false;
+    };
+  }, [chat?.session.id, !!chat?.edit, chat?.closed]);
+  useLayoutEffect(() => {
+    const view = scroll.current;
+    if (!view) return;
+    const saved = latest.current.chat?.scroll;
+    remaining.current = saved == null ? INITIAL_PREFETCH_PAGES : 0;
+    view.scrollTop = saved ?? view.scrollHeight;
+    previousTop.current = view.scrollTop;
+    following.current = view.scrollHeight - view.scrollTop - view.clientHeight <= BOTTOM_THRESHOLD;
+    remember();
+    const observer = new ResizeObserver(() => {
+      syncPosition();
+      schedule();
+    });
+    observer.observe(view);
+    if (messages.current) observer.observe(messages.current);
+    schedule();
+    return () => {
+      observer.disconnect();
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
+      update({ scroll: view.scrollTop });
+    };
+  }, [chat?.session.id, update, remember, schedule, syncPosition]);
+  useLayoutEffect(() => {
+    syncPosition();
     schedule();
   }, [
     chat?.messages,
@@ -150,9 +155,8 @@ export function useConversationScroll(
     chat?.nextCursor,
     !!chat?.edit,
     chat?.closed,
-    remember,
     schedule,
-    trackScroll,
+    syncPosition,
   ]);
   const onScroll = useCallback(() => {
     if (trackScroll()) remember();
@@ -166,7 +170,8 @@ export function useConversationScroll(
     following.current = true;
     if (scroll.current) previousTop.current = scroll.current.scrollTop;
     anchor.current = null;
+    syncPosition();
     schedule();
-  }, [schedule]);
+  }, [schedule, syncPosition]);
   return { scroll, messages, onScroll, pauseFollow, followLatest };
 }

@@ -6,12 +6,17 @@ export async function historyLoading() {
   await browser.execute(() => {
     const original = window.fetch;
     const requests: (string | null)[] = [];
+    const layout = { samples: 0, maxDistance: 0 };
+    let observer: ResizeObserver | undefined;
     let fail = true;
     Object.assign(window, {
       historyRequests: requests,
+      historyLayout: layout,
+      stopHistoryLayout: () => observer?.disconnect(),
       holdHistory: false,
       releaseHistory: () => {},
       restoreHistory: () => {
+        observer?.disconnect();
         window.fetch = original;
       },
     });
@@ -23,6 +28,17 @@ export async function historyLoading() {
       if (url.protocol !== 'ipc:' || url.pathname !== '/session_history') return original.call(window, input, init);
       const { cursor } = JSON.parse(init!.body as string);
       requests.push(cursor);
+      if (cursor === '1') {
+        const view = document.querySelector<HTMLElement>('.chat-scroll')!;
+        // Observe the layout before paint, not just the position after loading settles.
+        observer = new ResizeObserver(() => {
+          layout.samples++;
+          layout.maxDistance = Math.max(layout.maxDistance, view.scrollHeight - view.clientHeight - view.scrollTop);
+        });
+        observer.observe(view.querySelector('.messages')!);
+      }
+      if (cursor && Number(cursor) <= 3)
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const state = window as typeof window & { holdHistory: boolean; releaseHistory: () => void };
       const held = state.holdHistory;
       if (held) {
@@ -76,10 +92,10 @@ export async function historyLoading() {
   });
   const requests = () =>
     browser.execute(() => (window as typeof window & { historyRequests: (string | null)[] }).historyRequests);
-  const scrollTop = async () =>
-    browser.execute(() => {
+  const scrollTop = async (top = 50) =>
+    browser.execute((top) => {
       const view = document.querySelector<HTMLElement>('.chat-scroll')!;
-      view.scrollTop = 50;
+      view.scrollTop = top;
       view.dispatchEvent(new Event('scroll'));
       const first = [...view.querySelectorAll<HTMLElement>('[data-message-id]')].find(
         (item) => item.getBoundingClientRect().bottom > view.getBoundingClientRect().top,
@@ -88,11 +104,28 @@ export async function historyLoading() {
         id: first.dataset.messageId!,
         top: first.getBoundingClientRect().top - view.getBoundingClientRect().top,
       };
-    });
+    }, top);
+  const offset = (id: string) =>
+    browser.execute((id) => {
+      const view = document.querySelector('.chat-scroll')!;
+      return (
+        view.querySelector(`[data-message-id="${id}"]`)!.getBoundingClientRect().top - view.getBoundingClientRect().top
+      );
+    }, id);
   try {
     await $('button=Fixture history').click();
     await browser.waitUntil(async () => (await $$('[data-message-id]').length) === 64);
     expect(await requests()).toEqual([null, '1', '2', '3']);
+    const layout = await browser.execute(() => {
+      const fixture = window as typeof window & {
+        historyLayout: { samples: number; maxDistance: number };
+        stopHistoryLayout: () => void;
+      };
+      fixture.stopHistoryLayout();
+      return fixture.historyLayout;
+    });
+    expect(layout.samples).toBeGreaterThan(0);
+    expect(layout.maxDistance).toBeLessThanOrEqual(2);
     await $('button=Toggle conversation').click();
     await $('button=Toggle conversation').click();
     await expect($('[data-message-id="message-64"]')).toExist();
@@ -107,23 +140,21 @@ export async function historyLoading() {
     // Avoid WebDriver scrolling the partially clipped button into view first.
     await browser.execute(() => document.querySelector<HTMLButtonElement>('button.load-history')!.click());
     await browser.waitUntil(async () => (await $$('[data-message-id]').length) === 96);
-    const top = await browser.execute((id) => {
-      const view = document.querySelector('.chat-scroll')!;
-      return (
-        view.querySelector(`[data-message-id="${id}"]`)!.getBoundingClientRect().top - view.getBoundingClientRect().top
-      );
-    }, anchor.id);
-    expect(Math.abs(top - anchor.top)).toBeLessThan(2);
+    expect(Math.abs((await offset(anchor.id)) - anchor.top)).toBeLessThan(2);
     await browser.execute(() => {
       (window as typeof window & { holdHistory: boolean }).holdHistory = true;
     });
     await scrollTop();
     await browser.waitUntil(async () => (await requests()).at(-1) === '6');
+    // Move while a page is pending, then restore the cached view before it returns.
+    const reading = await scrollTop(150);
     await $('button=Toggle conversation').click();
     await $('button=Toggle conversation').click();
+    expect(Math.abs((await offset(reading.id)) - reading.top)).toBeLessThan(2);
     await browser.execute(() => (window as typeof window & { releaseHistory: () => void }).releaseHistory());
     await browser.waitUntil(async () => (await $$('[data-message-id]').length) === 128);
     await expect($('[data-message-id^="stale-"]')).not.toExist();
+    expect(Math.abs((await offset(reading.id)) - reading.top)).toBeLessThan(2);
     await scrollTop();
     expect(await requests()).toEqual([null, '1', '2', '3', '4', '4', '5', '6', '6', '7']);
   } finally {
