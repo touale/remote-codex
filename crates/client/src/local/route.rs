@@ -36,12 +36,19 @@ pub(super) async fn request(
         runtime.has_history.load(Ordering::Acquire),
         generation.skills.mappings(),
     )?;
+    // Serialize explicit goal controls with automatic suspension and recovery.
+    let goal_change = matches!(method, "thread/goal/set" | "thread/goal/clear");
+    let _goal = if goal_change {
+        Some(runtime.goal_gate.lock().await)
+    } else {
+        None
+    };
     if method == "turn/start" {
         runtime
             .retry_for_message()
             .map_err(ClientError::into_fault)?;
     }
-    if matches!(method, "thread/goal/set" | "thread/goal/clear")
+    if goal_change
         && matches!(&prepared, Prepared::Operation(operation) if operation.kind == OperationKind::GoalControl)
     {
         runtime
@@ -69,7 +76,15 @@ pub(super) async fn request(
             .await
             .map_err(ClientError::into_fault)?;
     }
-    execute(runtime, &generation, prepared).await
+    let result = execute(runtime, &generation, prepared).await;
+    if goal_change && result.is_ok() {
+        runtime
+            .intent
+            .lock()
+            .map_err(|_| Fault::new("SESSION_STATE", "Session state unavailable"))?
+            .resume_goal = None;
+    }
+    result
 }
 
 pub(super) async fn execute(
@@ -223,18 +238,6 @@ async fn dispatch(
             "MESSAGE_CANCELLED",
             "Message cancelled before submission.",
         ));
-    }
-    // An activation rejected during recovery must not cancel the paused goal's
-    // automatic continuation. Explicit pause/clear is handled before dispatch.
-    if matches!(
-        operation.kind,
-        OperationKind::GoalStart | OperationKind::GoalDefine
-    ) {
-        runtime
-            .intent
-            .lock()
-            .map_err(|_| Fault::new("SESSION_STATE", "Session state unavailable"))?
-            .resume_goal = None;
     }
     let result = generation.native.execute(operation).await;
     if let Some(ticket) = ticket {

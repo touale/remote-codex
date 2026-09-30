@@ -8,6 +8,13 @@ use serde_json::json;
 use std::time::Duration;
 
 pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
+    for restart in [false, true] {
+        recover(context, restart).await?;
+    }
+    Ok(())
+}
+
+async fn recover(context: &Context, restart: bool) -> ProbeResult<()> {
     let session = headless::open(context, None, false).await?;
     session
         .settings(SessionSettings {
@@ -15,8 +22,12 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
             ..Default::default()
         })
         .await?;
-    context.model.script([function("exec_command",json!({"cmd":"printf once >> goal-restart-count; sleep 20","workdir":context.environment.workspace,"yield_time_ms":10000}),None)])?;
-    let mut events = session.events();
+    let marker = if restart {
+        "goal-restart-count"
+    } else {
+        "goal-reconnect-count"
+    };
+    context.model.script([function("exec_command",json!({"cmd":format!("printf once >> {marker}; sleep 20"),"workdir":context.environment.workspace,"yield_time_ms":10000}),None)])?;
     session
         .goal(GoalAction::Set {
             objective: "Run the isolated restart marker once and verify it after recovery.".into(),
@@ -24,13 +35,27 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
         })
         .await?;
     tokio::time::timeout(Duration::from_secs(20), async {
-        while context.environment.absent("goal-restart-count").await? {
+        while context.environment.absent(marker).await? {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     })
     .await??;
-    context.environment.stop_service().await?;
+    let running = session
+        .snapshot()?
+        .turn
+        .ok_or("goal turn was not running")?;
+    session.goal(GoalAction::Pause).await?;
+    session.goal(GoalAction::Resume).await?;
+    if session.snapshot()?.turn.as_ref() != Some(&running) {
+        return Err("manual goal resume replaced the running turn".into());
+    }
+    let mut events = session.events();
+    if restart {
+        context.environment.stop_service().await?;
+    } else {
+        super::ssh::interrupt_master(std::process::id()).await?;
+    }
     let mut suspended = false;
     let mut resumed = false;
     let mut rejected_resume = false;
@@ -48,7 +73,12 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
                 } => return Err(format!("goal recovery requires action: {code}: {message}").into()),
                 SessionEvent::EnvironmentChanged {
                     state: EnvironmentState::Reconnecting { .. },
-                } if !rejected_resume && session.snapshot()?.turn.is_none() => {
+                } if !rejected_resume
+                    && matches!(
+                        session.snapshot()?.environment,
+                        EnvironmentState::Reconnecting { .. }
+                    ) =>
+                {
                     let error = session
                         .goal(GoalAction::Resume)
                         .await
@@ -71,7 +101,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     if !rejected_resume {
         return Err("goal recovery did not exercise a rejected resume".into());
     }
-    if context.environment.read("goal-restart-count").await? != "once" {
+    if context.environment.read(marker).await? != "once" {
         return Err("goal recovery duplicated remote execution".into());
     }
     if session
@@ -84,7 +114,7 @@ pub(super) async fn exercise(context: &Context) -> ProbeResult<()> {
     }
     session.close().await;
     eprintln!(
-        "goal recovery: native goal paused across supervisor restart, resumed after recovery, stopped at budget; remote command ran once"
+        "goal recovery (restart={restart}): manual resume kept the active turn; interrupted goal resumed and stopped at budget; command ran once"
     );
     Ok(())
 }

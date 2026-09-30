@@ -58,6 +58,9 @@ pub(super) struct Arguments {
     /// Run CLI and App recovery checks without repeating the full acceptance suite.
     #[arg(long)]
     recovery_only: bool,
+    /// Verify goal continuation after transport loss and service restart.
+    #[arg(long)]
+    goals_only: bool,
     /// Verify native prompt editing and the resulting remote session bindings.
     #[arg(long)]
     editing_only: bool,
@@ -188,6 +191,9 @@ pub(super) async fn run() -> ProbeResult<()> {
             );
         }
         retried.close().await;
+        if context.environment.args.goals_only {
+            return goals::exercise(&context).await;
+        }
         if context.environment.args.editing_only {
             return tui_edit::exercise(&context).await;
         }
@@ -228,8 +234,9 @@ pub(super) async fn run() -> ProbeResult<()> {
         context.environment.args.output.join("report.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "passed":result.is_ok() && cleanup.is_ok(),"transport":if context.environment.args.control.is_some() {"OpenSSH with reused authentication; local readiness socket fixture"} else {"OpenSSH with identity file"},"native_version":remote_codex_adapter::program::inspect(&remote_codex_adapter::program::discover().await?).await?.version,
-        "headless_and_tui":!context.environment.args.credentials_only && !context.environment.args.recovery_only && !context.environment.args.editing_only,
+        "headless_and_tui":!context.environment.args.credentials_only && !context.environment.args.recovery_only && !context.environment.args.editing_only && !context.environment.args.goals_only,
         "recovery_only":context.environment.args.recovery_only,
+        "goals_only":context.environment.args.goals_only,
         "editing_only":context.environment.args.editing_only,
         "password_recovery":context.environment.args.password_recovery && !context.environment.args.credentials_only,
         "saved_password":context.environment.args.password_recovery || context.environment.args.credentials_only,

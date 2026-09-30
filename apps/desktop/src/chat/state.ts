@@ -1,11 +1,4 @@
-import {
-  emptyStatus,
-  emptyTiming,
-  restoredMode,
-  type ComposerMode,
-  type SessionStatus,
-  type TurnState,
-} from '../bridge/session';
+import { emptyStatus, emptyTiming, type ComposerMode, type SessionStatus, type TurnState } from '../bridge/session';
 import { mergeTool } from './toolState';
 import type {
   AsyncQuestion,
@@ -91,7 +84,7 @@ export function initialChat(session: Session, server: string, settings: Settings
     turn: null,
     turns: {},
     status: emptyStatus(),
-    composerMode: restoredMode(settings, null),
+    composerMode: settings.mode === 'plan' ? 'plan' : 'code',
     environment: { status: 'ready' },
     draft: '',
     scroll: null,
@@ -154,11 +147,7 @@ export function reduceEvent(state: ChatState, event: SessionEvent): ChatState {
         status: { ...state.status, limits: event.limits, limits_error: null, limits_updated_at: Date.now() / 1000 },
       };
     case 'goal_changed':
-      return {
-        ...state,
-        goal: event.goal,
-        composerMode: event.goal?.status === 'active' ? 'goal' : state.composerMode,
-      };
+      return { ...state, goal: event.goal };
     case 'plan_changed':
       return { ...state, plan: event.plan };
     case 'user_message': {

@@ -15,6 +15,7 @@ import { createWorkspaceFolder } from './workspace-create';
 import { filePreviews } from './preview';
 import { transferProgress } from './transfer-progress';
 import { historyLoading } from './history-loading';
+import { goalControls } from './goals';
 
 describe('Shared controls in native WebKit', () => {
   let main: string;
@@ -182,6 +183,7 @@ describe('Shared controls in native WebKit', () => {
     await toolRecords((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });
   it('automatically loads history while preserving reading position and retrying locally', historyLoading);
+  it('resumes goals after reconnect and keeps subsequent messages out of goal entry mode', goalControls);
   it('shows compact activity times without clipping them in narrow session rows', async () => {
     await activityTimes((theme) => invokeWindow(label, 'app_preferences', { patch: { theme } }));
   });

@@ -21,6 +21,7 @@ import { PreviewFixture } from './preview.fixture';
 import { TransferProgressFixture } from './transfer-progress.fixture';
 import { RestartFixture } from './restart.fixture';
 import { HistoryFixture } from './history.fixture';
+import { GoalsFixture } from './goals.fixture';
 const Editor = lazy(() => import('../src/files/Editor'));
 const choices = Array.from({ length: 35 }, (_, i) => ({
   value: String(i),
@@ -68,6 +69,7 @@ function Fixture() {
   const [transferProgress, setTransferProgress] = useState(false);
   const [restart, setRestart] = useState(false);
   const [history, setHistory] = useState(false);
+  const [goals, setGoals] = useState(false);
   return (
     <Tooltip.Provider>
       <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -87,8 +89,11 @@ function Fixture() {
           <button onClick={() => setTransferProgress(!transferProgress)}>Fixture transfer progress</button>
           <button onClick={() => setRestart(!restart)}>Fixture restart</button>
           <button onClick={() => setHistory(!history)}>Fixture history</button>
+          <button onClick={() => setGoals(!goals)}>Fixture goals</button>
         </div>
-        {history ? (
+        {goals ? (
+          <GoalsFixture />
+        ) : history ? (
           <HistoryFixture />
         ) : restart ? (
           <RestartFixture app={app} />

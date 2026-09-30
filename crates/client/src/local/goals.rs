@@ -26,7 +26,12 @@ impl LocalRuntime {
             intent.goal = goal;
             intent.goal_revision = intent.goal_revision.wrapping_add(1);
         }
-        Ok(intent.goal.clone())
+        let goal = intent.goal.clone();
+        drop(intent);
+        let _ = self
+            .events
+            .send(SessionEvent::GoalChanged { goal: goal.clone() });
+        Ok(goal)
     }
     fn idle(&self) -> Result<()> {
         if self
@@ -53,15 +58,11 @@ impl LocalRuntime {
             generation.skills.mappings(),
         )?;
         route::execute(self, &generation, prepared).await?;
-        let goal = self.load_goal().await?;
-        let _ = self
-            .events
-            .send(SessionEvent::GoalChanged { goal: goal.clone() });
-        Ok(goal)
+        self.load_goal().await
     }
     pub(crate) async fn goal(&self, action: GoalAction) -> Result<Option<Goal>> {
         let _gate = self.goal_gate.lock().await;
-        if matches!(action, GoalAction::Set { .. } | GoalAction::Resume) {
+        if matches!(action, GoalAction::Set { .. }) {
             self.idle()?;
         }
         if matches!(action, GoalAction::Pause | GoalAction::Clear) {
@@ -80,6 +81,7 @@ impl LocalRuntime {
             .await?;
         }
         let set = matches!(action, GoalAction::Set { .. });
+        let replaces_goal = set || matches!(action, GoalAction::Resume);
         let (method, mut params) = goals::params(&self.binding.session.id, action)?;
         if set
             && (self.current_settings()?.mode == CollaborationMode::Plan
@@ -95,7 +97,14 @@ impl LocalRuntime {
         {
             params["status"] = json!("paused");
         }
-        self.goal_request(method, params).await
+        let goal = self.goal_request(method, params).await?;
+        if replaces_goal {
+            self.intent
+                .lock()
+                .map_err(|_| ClientError::RemoteResponse)?
+                .resume_goal = None;
+        }
+        Ok(goal)
     }
     async fn pause_goal_locked(&self) -> Result<()> {
         let active = self
@@ -143,27 +152,61 @@ impl LocalRuntime {
         if self.recovery.ready().is_err() {
             return Ok(());
         }
-        let resume = {
+        let objective = {
+            let intent = self
+                .intent
+                .lock()
+                .map_err(|_| ClientError::RemoteResponse)?;
+            if intent.interrupted.is_some()
+                || intent.episode.is_some()
+                || intent.pending_message.is_some()
+            {
+                return Ok(());
+            }
+            let Some(objective) = intent.resume_goal.clone() else {
+                return Ok(());
+            };
+            objective
+        };
+        let paused = |goal: &Option<Goal>| {
+            goal.as_ref()
+                .is_some_and(|g| g.objective == objective && g.status == GoalStatus::Paused)
+        };
+        // A previous activation may have succeeded without its acknowledgement.
+        let goal = self.load_goal().await?;
+        {
             let mut intent = self
                 .intent
                 .lock()
                 .map_err(|_| ClientError::RemoteResponse)?;
-            if intent.active.is_some()
+            if intent.resume_goal.as_ref() != Some(&objective)
                 || intent.interrupted.is_some()
                 || intent.episode.is_some()
                 || intent.pending_message.is_some()
             {
                 return Ok(());
             }
-            let objective = intent.resume_goal.take();
-            objective.is_some()
-                && intent.goal.as_ref().is_some_and(|g| {
-                    Some(&g.objective) == objective.as_ref() && g.status == GoalStatus::Paused
-                })
-        };
-        if resume {
-            let (method, params) = goals::params(&self.binding.session.id, GoalAction::Resume)?;
-            self.goal_request(method, params).await?;
+            if !paused(&goal) {
+                intent.resume_goal = None;
+                return Ok(());
+            }
+        }
+        let (method, params) = goals::params(&self.binding.session.id, GoalAction::Resume)?;
+        if let Err(error) = self.goal_request(method, params).await {
+            if !error.outcome_is_unknown() || self.recovery.ready().is_err() {
+                return Err(error);
+            }
+            match self.load_goal().await {
+                Ok(goal) if !paused(&goal) => {}
+                _ => return Err(error),
+            }
+        }
+        let mut intent = self
+            .intent
+            .lock()
+            .map_err(|_| ClientError::RemoteResponse)?;
+        if intent.resume_goal.as_ref() == Some(&objective) {
+            intent.resume_goal = None;
         }
         Ok(())
     }

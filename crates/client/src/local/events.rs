@@ -96,9 +96,7 @@ async fn status(
                         "Execution connection restored."
                     });
                     let _ = runtime.continue_interrupted(false).await;
-                    if let Err(error) = runtime.restore_goal().await {
-                        runtime.announce(&format!("Goal remains paused: {error}"));
-                    }
+                    restore_goal(&runtime).await;
                 }
             }
             EnvironmentState::ActionRequired { message, .. } if !failure_shown => {
@@ -237,9 +235,19 @@ async fn process(
     }
     if completed && runtime.recovery.ready().is_ok() {
         runtime.continue_interrupted(false).await?;
-        runtime.restore_goal().await?;
+        restore_goal(runtime).await;
     }
     Ok(true)
+}
+
+async fn restore_goal(runtime: &LocalRuntime) {
+    if let Err(error) = runtime.restore_goal().await {
+        let message = format!(
+            "Goal recovery was not confirmed: {error}. Check the goal status before resuming."
+        );
+        runtime.announce(&message);
+        let _ = runtime.events.send(SessionEvent::Warning { message });
+    }
 }
 
 impl LocalRuntime {

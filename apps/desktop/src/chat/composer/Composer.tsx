@@ -121,6 +121,7 @@ export function Composer({
         <GoalProgress
           goal={chat.goal}
           running={Boolean(chat.turn)}
+          planning={chat.settings.mode === 'plan'}
           busy={busy}
           ready={ready}
           perform={perform}

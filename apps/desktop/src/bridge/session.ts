@@ -1,4 +1,4 @@
-import type { Goal, Settings } from './types';
+import type { Settings } from './types';
 
 export interface Submission {
   turn_id: string;
@@ -74,9 +74,6 @@ export type SessionAction =
     }
   | { action: 'retry' };
 export type ComposerMode = 'code' | 'plan' | 'goal';
-export function restoredMode(settings: Settings, goal: Goal | null): ComposerMode {
-  return settings.mode === 'plan' ? 'plan' : goal?.status === 'active' ? 'goal' : 'code';
-}
 export function emptyStatus(): SessionStatus {
   return {
     provider: null,

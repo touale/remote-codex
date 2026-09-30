@@ -16,6 +16,7 @@ export const goalLabels: Record<Goal['status'], string> = {
 export function GoalProgress({
   goal,
   running,
+  planning,
   busy,
   ready,
   perform,
@@ -23,6 +24,7 @@ export function GoalProgress({
 }: {
   goal: Goal;
   running: boolean;
+  planning: boolean;
   busy: boolean;
   ready: boolean;
   perform: (action: SessionAction) => Promise<void>;
@@ -60,7 +62,11 @@ export function GoalProgress({
         </IconButton>
       ) : (
         goal.status !== 'complete' && (
-          <IconButton label="Resume goal" disabled={busy || running || !ready} onClick={() => control('resume')}>
+          <IconButton
+            label="Resume goal"
+            disabled={busy || (running && planning) || !ready}
+            onClick={() => control('resume')}
+          >
             <Play size={14} />
           </IconButton>
         )

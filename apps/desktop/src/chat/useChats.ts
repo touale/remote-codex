@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { call, failure, listen } from '../bridge/client';
-import { restoredMode, type SessionAction } from '../bridge/session';
+import type { SessionAction } from '../bridge/session';
 import type { SessionEvent, SessionOpened } from '../bridge/types';
 import type { Ask } from '../ui/useDialog';
 import { mergeHistory, replaceHistory } from './history';
@@ -73,7 +73,6 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
         return store.set(id, { ...previous, settings: opened.settings, models: opened.models });
       let chat = applySnapshot(initialChat(opened.session, server, opened.settings, opened.models), opened.snapshot);
       chat.historyReady = !resumed;
-      chat.composerMode = restoredMode(opened.settings, opened.snapshot.goal);
       if (previous)
         chat = {
           ...chat,
@@ -120,6 +119,11 @@ export function useChats(report: (error: unknown) => void, ask: Ask) {
         const wireAction =
           action.action === 'submit' || action.action === 'steer' ? { ...action, client_id: clientId! } : action;
         const receipt = await call('session_action', { id, action: wireAction });
+        if (action.action === 'goal' && action.goal.action === 'set')
+          update(id, (chat) => ({
+            ...chat,
+            composerMode: chat.composerMode === 'goal' ? 'code' : chat.composerMode,
+          }));
         if (message && clientId)
           update(id, (chat) => ({
             ...chat,
