@@ -1,4 +1,4 @@
-import { Cable, PanelLeft, PanelRight, Terminal as TerminalIcon, X } from 'lucide-react';
+import { Cable, ChevronDown, PanelLeft, PanelRight, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Tooltip } from 'radix-ui';
 import { useState } from 'react';
 import type { Server } from '../bridge/types';
@@ -93,6 +93,7 @@ function WorkspaceApp({
   const prefs = app.preferences;
   const conversationTarget = nav.opening?.target ?? nav.target;
   const conversationTitle = nav.opening?.title ?? selected?.session.title ?? 'New conversation';
+  const headingLabel = prefs.conversation_header_collapsed ? 'Show conversation title' : 'Hide conversation title';
   app.closeHandler.current = () => {
     void resources.closeWindow();
   };
@@ -169,17 +170,40 @@ function WorkspaceApp({
             <div className={styles.content}>
               <div className={styles.chatColumn}>
                 {(nav.opening || nav.selected || nav.draftKey) && (
-                  <header className={styles.workspaceToolbar} aria-label="Conversation heading">
-                    <div className={styles.context}>
-                      <span title={conversationTitle}>{conversationTitle}</span>
-                      <small
-                        title={conversationTarget ? `${conversationTarget.server} · ${conversationTarget.path}` : ''}
-                      >
-                        {conversationTarget
-                          ? `${conversationTarget.server} / ${conversationTarget.path.split('/').filter(Boolean).at(-1) ?? '/'}`
-                          : 'Choose a workspace'}
-                      </small>
-                    </div>
+                  <header
+                    className={styles.workspaceToolbar}
+                    aria-label="Conversation heading"
+                    data-collapsed={prefs.conversation_header_collapsed}
+                  >
+                    <button
+                      type="button"
+                      className={styles.headingToggle}
+                      aria-expanded={!prefs.conversation_header_collapsed}
+                      aria-label={headingLabel}
+                      title={headingLabel}
+                      onClick={() =>
+                        app.changePreferences((previous) => ({
+                          conversation_header_collapsed: !previous.conversation_header_collapsed,
+                        }))
+                      }
+                    >
+                      {prefs.conversation_header_collapsed ? (
+                        <ChevronDown size={12} aria-hidden="true" />
+                      ) : (
+                        <span className={styles.context}>
+                          <span title={conversationTitle}>{conversationTitle}</span>
+                          <small
+                            title={
+                              conversationTarget ? `${conversationTarget.server} · ${conversationTarget.path}` : ''
+                            }
+                          >
+                            {conversationTarget
+                              ? `${conversationTarget.server} / ${conversationTarget.path.split('/').filter(Boolean).at(-1) ?? '/'}`
+                              : 'Choose a workspace'}
+                          </small>
+                        </span>
+                      )}
+                    </button>
                   </header>
                 )}
                 {nav.opening ? (

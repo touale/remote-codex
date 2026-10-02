@@ -6,8 +6,13 @@ import { appVersionIndicator } from './version-controls';
 import { updateFlow } from './update-flow';
 import { restartCloseGuards } from './restart-close';
 import { fullscreenTitlebar } from './fullscreen';
+import { conversationHeading } from './conversation-heading';
 
 describe('Remote Codex desktop', () => {
+  it(
+    'collapses the conversation heading without losing reading position and remembers the window layout',
+    conversationHeading,
+  );
   it('removes traffic light spacing only while each native window is fullscreen', fullscreenTitlebar);
   it('offers Remote Codex update settings without connecting a server', async () => {
     await $('button=Settings').waitForDisplayed();

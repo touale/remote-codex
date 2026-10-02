@@ -202,6 +202,7 @@ export interface Preferences {
   sidebar_visible: boolean;
   editor_visible: boolean;
   terminal_visible: boolean;
+  conversation_header_collapsed: boolean;
   workspaces_collapsed: boolean;
   files_collapsed: boolean;
   collapsed_nodes: string[];

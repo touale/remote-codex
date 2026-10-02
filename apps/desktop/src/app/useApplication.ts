@@ -14,6 +14,7 @@ const defaults: Preferences = {
   sidebar_visible: true,
   editor_visible: false,
   terminal_visible: false,
+  conversation_header_collapsed: false,
   workspaces_collapsed: false,
   files_collapsed: false,
   collapsed_nodes: [],

@@ -15,6 +15,7 @@ pub(crate) struct Preferences {
     pub sidebar_visible: bool,
     pub editor_visible: bool,
     pub terminal_visible: bool,
+    pub conversation_header_collapsed: bool,
     pub workspaces_collapsed: bool,
     pub files_collapsed: bool,
     pub collapsed_nodes: Vec<String>,
@@ -31,6 +32,7 @@ impl Default for Preferences {
             sidebar_visible: true,
             editor_visible: false,
             terminal_visible: false,
+            conversation_header_collapsed: false,
             workspaces_collapsed: false,
             files_collapsed: false,
             collapsed_nodes: Vec::new(),
@@ -67,4 +69,16 @@ pub(super) fn validate(p: &Preferences) -> Result<()> {
         return Err(Error::new("INVALID_PREFERENCES", "Invalid window layout."));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Preferences;
+
+    #[test]
+    fn conversation_heading_defaults_open_in_older_preferences() -> serde_json::Result<()> {
+        let value: Preferences = serde_json::from_str(r#"{"sidebar_width":280}"#)?;
+        assert!(!value.conversation_header_collapsed);
+        Ok(())
+    }
 }
