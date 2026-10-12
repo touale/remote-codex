@@ -87,6 +87,24 @@ pub fn notice(event: &mut Value, restrict_commands: bool) -> Result<Notice, Faul
     }
 }
 
+pub fn thread_id(event: &Value) -> Option<&str> {
+    event
+        .pointer("/params/threadId")
+        .or_else(|| event.pointer("/params/thread/id"))
+        .and_then(Value::as_str)
+}
+
+/// Child requests are shared with the frontend; child lifecycle and settings are not.
+pub fn session_event(event: &Value, thread: &str) -> Option<SessionEvent> {
+    if thread_id(event).is_some_and(|id| id != thread)
+        && event.get("id").is_none()
+        && event["method"] != "serverRequest/resolved"
+    {
+        return None;
+    }
+    public_event(event)
+}
+
 pub fn public_event(event: &Value) -> Option<SessionEvent> {
     let text = |pointer| {
         event

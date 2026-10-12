@@ -47,7 +47,7 @@ impl Environment {
 
     pub(super) async fn configure(&self, base_url: &str) -> ProbeResult<()> {
         let config = format!(
-            "developer_instructions=\"LOCAL_INSTRUCTIONS_MARKER\"\nmodel=\"fixture-model\"\nmodel_provider=\"fixture\"\n[model_providers.fixture]\nname=\"Isolated Responses\"\nbase_url={}\nwire_api=\"responses\"\nrequires_openai_auth=false\n[analytics]\nenabled=false\n[projects.{}]\ntrust_level=\"trusted\"\n",
+            "developer_instructions=\"LOCAL_INSTRUCTIONS_MARKER\"\nmodel=\"fixture-model\"\nmodel_provider=\"fixture\"\n[features]\nmulti_agent=true\n[model_providers.fixture]\nname=\"Isolated Responses\"\nbase_url={}\nwire_api=\"responses\"\nrequires_openai_auth=false\n[analytics]\nenabled=false\n[projects.{}]\ntrust_level=\"trusted\"\n",
             serde_json::to_string(base_url)?,
             serde_json::to_string(&self.workspace)?
         );

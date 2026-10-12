@@ -169,16 +169,49 @@ async fn process(
         generation.native.send(reply)?;
         return Ok(true);
     }
+    if let Some(id) = event.get("id")
+        && let Some(thread) = events::thread_id(&event)
+    {
+        let scope = generation
+            .permissions
+            .contains(thread)
+            .await
+            .and_then(|allowed| {
+                if allowed {
+                    Ok(())
+                } else {
+                    Err(Fault::new(
+                        "INVALID_SESSION_THREAD",
+                        "this request does not belong to the bound session",
+                    ))
+                }
+            });
+        if let Err(error) = scope {
+            generation
+                .native
+                .send(remote_codex_adapter::thread::response(
+                    id.clone(),
+                    Err(error),
+                ))?;
+            return Ok(true);
+        }
+    }
     let notice = events::notice(&mut event, runtime.binding.execution_mode == "sandboxed")?;
     generation
         .approvals
-        .observe(&notice, &runtime.binding, &generation.bridge.channel)?;
+        .observe(
+            &notice,
+            &runtime.binding,
+            &generation.bridge.channel,
+            &generation.permissions,
+        )
+        .await?;
     let command_approval = matches!(notice, Notice::Approval(_));
     match notice {
         Notice::Permissions {
             thread,
             full_access,
-        } => {
+        } if thread == runtime.binding.session.id => {
             generation.permissions.observe(&thread, full_access)?;
             runtime
                 .intent
@@ -214,8 +247,9 @@ async fn process(
             .map_err(|_| ClientError::RemoteResponse)?
             .remove(&id);
     }
-    let completed = event["method"] == "turn/completed";
-    if let Some(public) = events::public_event(&event) {
+    let owns_thread = events::thread_id(&event) == Some(&runtime.binding.session.id);
+    let completed = owns_thread && event["method"] == "turn/completed";
+    if let Some(public) = events::session_event(&event, &runtime.binding.session.id) {
         {
             let mut intent = runtime
                 .intent
@@ -225,7 +259,7 @@ async fn process(
         }
         let _ = runtime.events.send(public);
     }
-    let summary_needed = completed || event_summary_needed(&event);
+    let summary_needed = owns_thread && (completed || event_summary_needed(&event));
     let _ = runtime.native_events.send(event);
     if summary_needed
         && runtime.recovery.ready().is_ok()

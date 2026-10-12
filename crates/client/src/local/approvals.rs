@@ -21,13 +21,20 @@ struct State {
 }
 
 impl Approvals {
-    pub(crate) fn observe(
+    pub(crate) async fn observe(
         &self,
         notice: &remote_codex_adapter::events::Notice,
         binding: &SessionBinding,
         channel: &str,
+        permissions: &super::permissions::Permissions,
     ) -> Result<(), Fault> {
         use remote_codex_adapter::events::Notice;
+        if let Notice::Approval(approval) = notice
+            && (approval.environment != binding.environment_id
+                || !permissions.contains(&approval.thread).await?)
+        {
+            return Err(invalid());
+        }
         let mut state = self.0.lock().map_err(|_| invalid())?;
         match notice {
             Notice::Completed { item, turn } => {
@@ -39,11 +46,6 @@ impl Approvals {
                 });
             }
             Notice::Approval(approval) => {
-                if approval.thread != binding.session.id
-                    || approval.environment != binding.environment_id
-                {
-                    return Err(invalid());
-                }
                 if state.pending.len() + state.accepted.len() >= 64 {
                     return Err(invalid());
                 }

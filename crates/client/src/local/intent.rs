@@ -114,9 +114,6 @@ impl Intent {
         if self.interrupted.as_deref() == Some(turn) {
             self.interrupted = None;
         }
-        if self.active.as_deref() == Some(turn) {
-            self.active = None;
-        }
     }
 
     pub(super) fn is_cancelled(&self, turn: &str) -> bool {
@@ -158,6 +155,7 @@ mod tests {
         intent.active = Some("cancelled".into());
         intent.disconnect();
         intent.cancel("cancelled");
+        assert_eq!(intent.active.as_deref(), Some("cancelled"));
         assert!(intent.continuation(true).is_none());
         // A late native started notification cannot resurrect cancellation.
         intent.active = Some("cancelled".into());

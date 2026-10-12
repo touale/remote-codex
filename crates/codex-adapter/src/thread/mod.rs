@@ -60,6 +60,29 @@ pub struct Thread {
 }
 
 impl Codex {
+    /// Read ancestry without loading turns or changing a child thread's settings.
+    pub async fn parent_thread(&self, thread: &str) -> Result<Option<String>, Fault> {
+        let response = self
+            .engine
+            .call(
+                "thread/read",
+                json!({"threadId": thread, "includeTurns": false}),
+            )
+            .await?;
+        let metadata = &response["thread"];
+        if metadata["id"] != thread {
+            return Err(Fault::new(
+                "INVALID_THREAD_METADATA",
+                "Codex returned metadata for a different thread",
+            ));
+        }
+        Ok(metadata
+            .pointer("/source/subAgent/thread_spawn/parent_thread_id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned))
+    }
+
     pub async fn start(program: &crate::program::Launch, home: &Path) -> Result<Self, Fault> {
         let (engine, initialized) = Engine::local(program, home).await?;
         Ok(Self {

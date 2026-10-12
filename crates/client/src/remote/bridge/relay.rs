@@ -34,7 +34,16 @@ pub(super) async fn run(
                         continue;
                     }
                     let approval = approvals.take(&message)?.map(Box::new);
-                    let permissions = if approval.is_none() { permissions.authorization(&message)?.map(Box::new) } else { None };
+                    let permissions = if approval.is_none() {
+                        match permissions.authorization(&message).await {
+                            Ok(grant) => grant.map(Box::new),
+                            Err(error) => {
+                                let response=remote_codex_adapter::thread::response(message["id"].clone(), Err(error));
+                                frontend.send(Message::Text(response.to_string().into())).await.map_err(|_|ClientError::RemoteResponse)?;
+                                continue;
+                            }
+                        }
+                    } else { None };
                     let required = if approval.is_some() { Some(remote_codex_protocol::COMMAND_APPROVAL_CAPABILITY) } else if permissions.is_some() { Some(remote_codex_protocol::SESSION_PERMISSIONS_CAPABILITY) } else { None };
                     if required.is_some_and(|required| !remote.identity.capabilities.iter().any(|c| c == required)) {
                         let response=serde_json::json!({"id":message["id"],"error":{"code":-32000,"message":"SERVICE_UPDATE_REQUIRED: the remote service must be updated to honor these permissions; no operation was run"}});

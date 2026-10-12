@@ -1,3 +1,4 @@
+mod agents;
 mod environment;
 mod extensions;
 mod frontend_recovery;
@@ -64,6 +65,9 @@ pub(super) struct Arguments {
     /// Verify native prompt editing and the resulting remote session bindings.
     #[arg(long)]
     editing_only: bool,
+    /// Verify parent interruption and child permission inheritance without unrelated recovery checks.
+    #[arg(long)]
+    agents_only: bool,
 }
 
 pub(super) struct Context {
@@ -191,6 +195,9 @@ pub(super) async fn run() -> ProbeResult<()> {
             );
         }
         retried.close().await;
+        if context.environment.args.agents_only {
+            return agents::exercise(&context).await;
+        }
         if context.environment.args.goals_only {
             return goals::exercise(&context).await;
         }
@@ -205,6 +212,7 @@ pub(super) async fn run() -> ProbeResult<()> {
             return tui_recovery::exercise(&context).await;
         }
         headless::exercise(&context).await?;
+        agents::exercise(&context).await?;
         tui_resume::exercise(&context).await?;
         extensions::exercise(&context).await?;
         lifecycle::exercise(&context).await?;
@@ -234,7 +242,8 @@ pub(super) async fn run() -> ProbeResult<()> {
         context.environment.args.output.join("report.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "passed":result.is_ok() && cleanup.is_ok(),"transport":if context.environment.args.control.is_some() {"OpenSSH with reused authentication; local readiness socket fixture"} else {"OpenSSH with identity file"},"native_version":remote_codex_adapter::program::inspect(&remote_codex_adapter::program::discover().await?).await?.version,
-        "headless_and_tui":!context.environment.args.credentials_only && !context.environment.args.recovery_only && !context.environment.args.editing_only && !context.environment.args.goals_only,
+        "headless_and_tui":!context.environment.args.credentials_only && !context.environment.args.recovery_only && !context.environment.args.editing_only && !context.environment.args.goals_only && !context.environment.args.agents_only,
+        "agents_only":context.environment.args.agents_only,
         "recovery_only":context.environment.args.recovery_only,
         "goals_only":context.environment.args.goals_only,
         "editing_only":context.environment.args.editing_only,

@@ -132,6 +132,7 @@ impl Recipe {
                 native.pause_goal_for_recovery().await?;
             }
             permissions.restore(&bridge.channel, &native.binding().session.id, full)?;
+            permissions.attach(codex.clone())?;
             Ok::<_, ClientError>((native, skills))
         }
         .await;

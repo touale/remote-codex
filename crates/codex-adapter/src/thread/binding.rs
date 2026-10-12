@@ -7,7 +7,7 @@ pub(crate) const START_APPROVAL_POLICY: &str = "on-request";
 pub(crate) fn start_params(environment: &str, cwd: &str, mode: &str) -> Value {
     json!({"cwd":cwd,"environments":[{"environmentId":environment,"cwd":cwd}],
         "approvalPolicy":START_APPROVAL_POLICY,"sandbox":if full_access(mode) {"danger-full-access"} else {"workspace-write"},
-        "config":{"features.multi_agent":false},"experimentalRawEvents":false})
+        "experimentalRawEvents":false})
 }
 
 pub(crate) fn turn_params(params: &mut Value, binding: &SessionBinding) {

@@ -10,6 +10,11 @@ fn binding() -> Result<SessionBinding, serde_json::Error> {
         "session":{"id":"thread","title":"test","cwd":"/workspace","created_at":1,"updated_at":1,"archived":false,"state":"idle"}}),
     )
 }
+fn permissions() -> Result<super::super::permissions::Permissions, Fault> {
+    let permissions = super::super::permissions::Permissions::default();
+    permissions.restore("channel", "thread", false)?;
+    Ok(permissions)
+}
 fn event() -> Notice {
     Notice::Approval(Approval {
         request_id: "1".into(),
@@ -25,17 +30,19 @@ fn command() -> Value {
     json!({"method":"process/start","params":{"argv":["/bin/sh","-c","printf 123 > 1.txt"],
         "cwd":"file:///workspace%20with%20spaces","env":{"CODEX_THREAD_ID":"thread"},"sandbox":null}})
 }
-fn accept(approvals: &Approvals) -> TestResult {
-    approvals.observe(&event(), &binding()?, "channel")?;
+async fn accept(approvals: &Approvals) -> TestResult {
+    approvals
+        .observe(&event(), &binding()?, "channel", &permissions()?)
+        .await?;
     approvals.respond("1", true)?;
     Ok(())
 }
 
-#[test]
-fn approval_is_exact_and_consumed_once() -> TestResult {
+#[tokio::test]
+async fn approval_is_exact_and_consumed_once() -> TestResult {
     let approvals = Approvals::default();
     assert!(approvals.take(&command())?.is_none());
-    accept(&approvals)?;
+    accept(&approvals).await?;
     let grant = approvals.take(&command())?.ok_or("approval missing")?;
     assert!(grant.valid_for("channel", &grant.id, &command()));
     assert!(!grant.valid_for("other", &grant.id, &command()));
@@ -44,10 +51,10 @@ fn approval_is_exact_and_consumed_once() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn approval_cannot_authorize_different_command_directory_or_thread() -> TestResult {
+#[tokio::test]
+async fn approval_cannot_authorize_different_command_directory_or_thread() -> TestResult {
     let approvals = Approvals::default();
-    accept(&approvals)?;
+    accept(&approvals).await?;
     for (pointer, value) in [
         (
             "/params/argv",
@@ -65,11 +72,13 @@ fn approval_cannot_authorize_different_command_directory_or_thread() -> TestResu
     Ok(())
 }
 
-#[test]
-fn decline_cancel_and_unknown_responses_never_grant_execution() -> TestResult {
+#[tokio::test]
+async fn decline_cancel_and_unknown_responses_never_grant_execution() -> TestResult {
     let approvals = Approvals::default();
     for _ in 0..2 {
-        approvals.observe(&event(), &binding()?, "channel")?;
+        approvals
+            .observe(&event(), &binding()?, "channel", &permissions()?)
+            .await?;
         approvals.respond("1", false)?;
         assert!(approvals.take(&command())?.is_none());
     }
@@ -78,8 +87,8 @@ fn decline_cancel_and_unknown_responses_never_grant_execution() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn approvals_cannot_cross_the_bound_environment_or_thread() -> TestResult {
+#[tokio::test]
+async fn approvals_cannot_cross_the_bound_environment_or_thread() -> TestResult {
     for thread in [true, false] {
         let mut notice = event();
         if let Notice::Approval(approval) = &mut notice {
@@ -91,15 +100,16 @@ fn approvals_cannot_cross_the_bound_environment_or_thread() -> TestResult {
         }
         assert!(
             Approvals::default()
-                .observe(&notice, &binding()?, "channel")
+                .observe(&notice, &binding()?, "channel", &permissions()?)
+                .await
                 .is_err()
         );
     }
     Ok(())
 }
 
-#[test]
-fn completion_timeout_and_shutdown_revoke_unused_grants() -> TestResult {
+#[tokio::test]
+async fn completion_timeout_and_shutdown_revoke_unused_grants() -> TestResult {
     let approvals = Approvals::default();
     for event in [
         Notice::Completed {
@@ -111,15 +121,17 @@ fn completion_timeout_and_shutdown_revoke_unused_grants() -> TestResult {
             turn: Some("turn".into()),
         },
     ] {
-        accept(&approvals)?;
-        approvals.observe(&event, &binding()?, "channel")?;
+        accept(&approvals).await?;
+        approvals
+            .observe(&event, &binding()?, "channel", &permissions()?)
+            .await?;
         assert!(approvals.take(&command())?.is_none());
     }
-    accept(&approvals)?;
+    accept(&approvals).await?;
     approvals.0.lock().map_err(|_| "poisoned fixture")?.accepted[0].0 =
         Instant::now() - Duration::from_secs(61);
     assert!(approvals.take(&command())?.is_none());
-    accept(&approvals)?;
+    accept(&approvals).await?;
     approvals.clear();
     assert!(approvals.take(&command())?.is_none());
     Ok(())

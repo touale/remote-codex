@@ -1,6 +1,7 @@
+use remote_codex_adapter::thread::Codex;
 use remote_codex_protocol::{Fault, SessionPermissions};
 use serde_json::Value;
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 #[cfg(test)]
 #[path = "permissions_tests.rs"]
@@ -18,6 +19,8 @@ struct State {
     thread: String,
     grant: Option<SessionPermissions>,
     pending: Option<Change>,
+    native: Option<Codex>,
+    children: HashMap<String, SessionPermissions>,
 }
 
 struct Change {
@@ -35,10 +38,67 @@ impl Permissions {
         full_access: bool,
     ) -> Result<(), Fault> {
         let mut state = self.state.lock().map_err(|_| invalid())?;
+        *state = State::default();
         state.channel = channel.into();
         state.thread = thread.into();
         state.grant = full_access.then(|| state.grant());
         Ok(())
+    }
+
+    pub(crate) fn attach(&self, native: Codex) -> Result<(), Fault> {
+        self.state.lock().map_err(|_| invalid())?.native = Some(native);
+        Ok(())
+    }
+
+    /// Only ancestry returned by our native backend can expand this session's scope.
+    pub(crate) async fn contains(&self, thread: &str) -> Result<bool, Fault> {
+        let (native, channel, root) = {
+            let state = self.state.lock().map_err(|_| invalid())?;
+            if thread.is_empty() || state.thread.is_empty() {
+                return Ok(false);
+            }
+            if thread == state.thread || state.children.contains_key(thread) {
+                return Ok(true);
+            }
+            let Some(native) = state.native.clone() else {
+                return Ok(false);
+            };
+            (native, state.channel.clone(), state.thread.clone())
+        };
+        let mut path = Vec::new();
+        let mut current = thread.to_owned();
+        loop {
+            {
+                let state = self.state.lock().map_err(|_| invalid())?;
+                if state.channel != channel || state.thread != root {
+                    return Ok(false);
+                }
+                if current == root || state.children.contains_key(&current) {
+                    break;
+                }
+            }
+            if path.contains(&current) {
+                return Ok(false);
+            }
+            path.push(current.clone());
+            let Some(parent) = native.parent_thread(&current).await? else {
+                return Ok(false);
+            };
+            current = parent;
+        }
+        let mut state = self.state.lock().map_err(|_| invalid())?;
+        if state.channel != channel || state.thread != root {
+            return Ok(false);
+        }
+        for child in path {
+            let grant = SessionPermissions {
+                id: uuid::Uuid::new_v4().to_string(),
+                channel: channel.clone(),
+                thread: child.clone(),
+            };
+            state.children.entry(child).or_insert(grant);
+        }
+        Ok(true)
     }
 
     /// Record frontend intent. An expansion needs both a native response and
@@ -152,14 +212,31 @@ impl Permissions {
         }
     }
 
-    pub(crate) fn authorization(
+    pub(crate) async fn authorization(
         &self,
         message: &Value,
     ) -> Result<Option<SessionPermissions>, Fault> {
+        let thread = if message["method"] == "process/start" {
+            message
+                .pointer("/params/env/CODEX_THREAD_ID")
+                .and_then(Value::as_str)
+        } else {
+            None
+        };
+        if let Some(thread) = thread
+            && self.full_access()
+            && !self.contains(thread).await?
+        {
+            return Ok(None);
+        }
         let state = self.state.lock().map_err(|_| invalid())?;
+        if state.grant.is_none() {
+            return Ok(None);
+        }
         Ok(state
-            .grant
-            .as_ref()
+            .children
+            .get(thread.unwrap_or_default())
+            .or(state.grant.as_ref())
             .filter(|grant| grant.matches(&state.channel, message))
             .cloned())
     }

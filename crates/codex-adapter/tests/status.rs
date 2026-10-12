@@ -1,6 +1,51 @@
-use remote_codex_adapter::{events::public_event, status};
+use remote_codex_adapter::{
+    events::{public_event, session_event},
+    status,
+};
 use remote_codex_core::session::SessionEvent;
 use serde_json::json;
+
+#[test]
+fn child_events_do_not_replace_the_parent_turn_settings_or_status() {
+    for mut event in [
+        json!({"method":"turn/started","params":{"turn":{"id":"turn"}}}),
+        json!({"method":"turn/completed","params":{"turn":{"id":"turn","status":"completed"}}}),
+        json!({"method":"thread/settings/updated","params":{"threadSettings":{"sandboxPolicy":{"type":"readOnly"}}}}),
+        json!({"method":"thread/status/changed","params":{"status":{"type":"idle"}}}),
+        json!({"method":"thread/tokenUsage/updated","params":{"tokenUsage":{"last":{"totalTokens":1,"inputTokens":1,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0},"total":{"totalTokens":1}}}}),
+        json!({"method":"thread/goal/updated","params":{"goal":null}}),
+    ] {
+        event["params"]["threadId"] = json!("root");
+        assert!(
+            session_event(&event, "root").is_some(),
+            "{}",
+            event["method"]
+        );
+        event["params"]["threadId"] = json!("child");
+        assert!(
+            session_event(&event, "root").is_none(),
+            "{}",
+            event["method"]
+        );
+    }
+    let request = json!({"id":7,"method":"item/commandExecution/requestApproval","params":{"threadId":"child","command":"printf test"}});
+    assert!(matches!(
+        session_event(&request, "root"),
+        Some(SessionEvent::ApprovalRequested { .. })
+    ));
+    let resolved =
+        json!({"method":"serverRequest/resolved","params":{"threadId":"child","requestId":7}});
+    assert!(matches!(
+        session_event(&resolved, "root"),
+        Some(SessionEvent::InteractionResolved { .. })
+    ));
+    let account = json!({"method":"account/rateLimits/updated","params":{"rateLimits":{}}});
+    assert!(matches!(
+        session_event(&account, "root"),
+        Some(SessionEvent::RateLimitsChanged { .. })
+    ));
+}
+
 #[test]
 fn native_turn_message_and_usage_metadata_survives_projection()
 -> Result<(), Box<dyn std::error::Error>> {
