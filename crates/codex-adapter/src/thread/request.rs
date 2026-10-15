@@ -75,7 +75,7 @@ impl Thread {
             "thread/goal/set" => {
                 settings::known_fields(
                     &params,
-                    &["threadId", "objective", "status", "tokenBudget"],
+                    &["threadId", "objective", "status", "tokenBudget", "origin"],
                 )?;
                 if params["status"] == "active"
                     || (params["objective"].is_string() && params["status"] != "paused")
@@ -88,7 +88,7 @@ impl Thread {
                 }
             }
             "thread/goal/clear" => {
-                settings::known_fields(&params, &["threadId"])?;
+                settings::known_fields(&params, &["threadId", "origin"])?;
                 OperationKind::GoalControl
             }
             "thread/settings/update" | "turn/settings/update" => {
