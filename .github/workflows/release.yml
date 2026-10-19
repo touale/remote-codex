@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - name: Calculate release version and notes
         id: changelog
-        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
         with:
           version: v2.14.1
           args: --bump --unreleased
@@ -55,7 +55,7 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
           cargo build --release --locked -p remote-codex-server --target x86_64-unknown-linux-musl
       - name: Share Linux execution service
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: execution-service
           path: target/x86_64-unknown-linux-musl/release/remote-codex-server
@@ -82,14 +82,14 @@ jobs:
           cache-bin: false
       - run: cargo fetch --locked
       - name: Install Node and cache npm dependencies
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24.20.0'
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Set release version
         run: python3 .github/scripts/release-version.py "$RELEASE_VERSION"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: execution-service
           path: target/execution-service
@@ -123,7 +123,7 @@ jobs:
           cd target/release-artifacts
           shasum -a 256 *.tar.gz *.dmg *.sig > SHA256SUMS
       - name: Upload release packages
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: remote-codex-macos-arm64
           path: target/release-artifacts/
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: remote-codex-macos-arm64
           path: target/release-artifacts
