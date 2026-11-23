@@ -14,7 +14,7 @@ export async function fileRelocation(invoke: Invoke, context: string) {
   await $(row('relocate/empty')).click();
   await expect($(row('relocate/empty'))).toHaveAttribute('aria-expanded', 'true');
   // This shell mutation emits no App notification. Full refresh must invalidate child caches.
-  await $('button[aria-label="Toggle terminal (⌘`)"]').click();
+  await $('button[aria-label^="Toggle terminal ("]').click();
   await $('.xterm-helper-textarea').waitForExist();
   await $('.xterm-helper-textarea').addValue('mv relocate/source.txt relocate/empty/source.txt\r');
   await browser.waitUntil(async () => {
@@ -47,7 +47,7 @@ export async function fileRelocation(invoke: Invoke, context: string) {
   await $('[role="dialog"]').waitForExist({ reverse: true });
   await $(row('relocate/destination/empty/renamed.txt')).waitForDisplayed();
   await expect($('.editor-tab.selected .dirty-dot')).toExist();
-  await $('button[aria-label="Save file (⌘S)"]').click();
+  await $('button[aria-label^="Save file ("]').click();
   await browser.waitUntil(async () =>
     (await invoke<TextFile>('file_read', { context, path: 'relocate/destination/empty/renamed.txt' })).text.includes(
       'unsaved',
@@ -95,7 +95,7 @@ export async function fileRelocation(invoke: Invoke, context: string) {
   await $('.editor-tabs').$('button[role="tab"][title$="/relocate/renamed.txt"]').click();
   await $('button=Retry move').waitForDisplayed();
   await expect($('.monaco-editor .view-lines')).toHaveText(expect.stringMatching(/Incoming\s+draft\./));
-  await expect($('button[aria-label="Save file (⌘S)"]')).toBeDisabled();
+  await expect($('button[aria-label^="Save file ("]')).toBeDisabled();
   await $('.editor-tabs').$('button[role="tab"][title$="/relocate/target.txt"]').click();
   await expect($('.monaco-editor .view-lines')).toHaveText(expect.stringMatching(/Destination\s+draft\./));
   await $('button[aria-label="Close relocate/target.txt"]').click();
@@ -103,7 +103,7 @@ export async function fileRelocation(invoke: Invoke, context: string) {
   await $('button=Retry move').click();
   await $('button=Retry move').waitForExist({ reverse: true });
   await expect($('.editor-tab.selected .tab-name')).toHaveText('target.txt');
-  await $('button[aria-label="Save file (⌘S)"]').click();
+  await $('button[aria-label^="Save file ("]').click();
   await browser.waitUntil(async () =>
     (await invoke<TextFile>('file_read', { context, path: 'relocate/target.txt' })).text.includes('Incoming draft.'),
   );

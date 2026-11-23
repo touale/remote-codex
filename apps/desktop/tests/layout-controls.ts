@@ -81,5 +81,5 @@ export async function editorTabs(remote: string) {
     document.querySelector('.editor-tabs')!.scrollLeft = 0;
   });
   await $(`[role="tab"][title="desktop-test · ${remote}/notes.md"]`).click();
-  await expect($('button[aria-label="Save file (⌘S)"]')).toBeDisplayed();
+  await expect($('button[aria-label^="Save file ("]')).toBeDisplayed();
 }

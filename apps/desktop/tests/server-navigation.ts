@@ -8,7 +8,7 @@ type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
 export async function serverNavigation(invoke: Invoke, workspace: string, remote: string, session: string) {
   const savedFile = await invoke<TextFile>('file_read', { context: workspace, path: 'notes.md' });
   await $('.monaco-editor textarea').addValue(' Retained across servers.');
-  await $('button[aria-label="Save file (⌘S)"]').waitForEnabled();
+  await $('button[aria-label^="Save file ("]').waitForEnabled();
   const secondary = await invoke<Server>('server_save', {
     operationId: crypto.randomUUID(),
     input: {
@@ -74,7 +74,7 @@ export async function serverNavigation(invoke: Invoke, workspace: string, remote
   await expect($('[role="dialog"]')).not.toHaveText(expect.stringContaining('desktop-test'));
   await $('button=Cancel').click();
   expect(masters().length).toBe(beforePicker);
-  await $('button[aria-label="Toggle terminal (⌘`)"]').click();
+  await $('button[aria-label^="Toggle terminal ("]').click();
   await $('.terminal-panel').waitForDisplayed();
   await expect($('[role="dialog"]')).not.toExist();
   expect(await $('.terminal-tab.selected > button').getText()).toMatch(/^\//);
@@ -89,13 +89,13 @@ export async function serverNavigation(invoke: Invoke, workspace: string, remote
   await $('[role="dialog"]').$(`span=desktop-test · ${remote}`).click();
   await expect($('textarea[aria-label="Message Codex"]')).toHaveValue('Keep this draft on the first server.');
   await $('textarea[aria-label="Message Codex"]').setValue('');
-  await expect($('button[aria-label="Save file (⌘S)"]')).toBeEnabled();
+  await expect($('button[aria-label^="Save file ("]')).toBeEnabled();
   await expect($('.monaco-editor')).toBeDisplayed();
   // Monaco virtualizes rendered lines; verify retained edits through the actual save below.
   expect((await invoke<TextFile>('file_read', { context: workspace, path: 'notes.md' })).revision).toBe(
     savedFile.revision,
   );
-  await $('button[aria-label="Save file (⌘S)"]').click();
+  await $('button[aria-label^="Save file ("]').click();
   await browser.waitUntil(async () =>
     (await invoke<TextFile>('file_read', { context: workspace, path: 'notes.md' })).text.includes(
       'Retained across servers.',

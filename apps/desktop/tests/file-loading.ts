@@ -5,7 +5,7 @@ type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
 const entry = (path: string) => `.file-row .tree-label[title="${path}"]`;
 const selected = '.editor-tab.selected .tab-name';
 const skeleton = '[aria-label="Loading file content"]';
-const save = 'button[aria-label="Save file (⌘S)"]';
+const save = 'button[aria-label^="Save file ("]';
 const close = (name: string) => $(`button[aria-label="Close ${name}"]`).click();
 const screenshot = (name: string) =>
   browser.saveScreenshot(new URL(`../../../.artifacts/desktop-e2e/${name}.png`, import.meta.url).pathname);

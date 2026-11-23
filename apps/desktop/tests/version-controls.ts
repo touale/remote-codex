@@ -144,8 +144,8 @@ export async function appVersionIndicator() {
     await browser.execute(() => {
       window.appVersionFixture.fail = true;
     });
-    await $('button[aria-label="Toggle sidebar (⌘B)"]').click();
-    await $('button[aria-label="Toggle sidebar (⌘B)"]').click();
+    await $('button[aria-label^="Toggle sidebar ("]').click();
+    await $('button[aria-label^="Toggle sidebar ("]').click();
     await expect($('[aria-label="Remote Codex version"]')).toHaveText('—');
     await expect($('button[aria-label^="Update available"]')).not.toExist();
     await expect($('button[aria-label^="Restart to use"]')).not.toExist();

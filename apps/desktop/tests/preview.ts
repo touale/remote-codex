@@ -88,7 +88,7 @@ export async function filePreviews() {
     await $('button=Open paper.pdf').click();
     await $('.pdfViewer .textLayer').waitForExist();
     await expect($('.pdf-preview')).toHaveText(expect.stringContaining('Preview page one'));
-    await expect($('button[aria-label="Save file (⌘S)"]')).not.toExist();
+    await expect($('button[aria-label^="Save file ("]')).not.toExist();
     await $('button[aria-label="Next page"]').click();
     await expect($('input[aria-label="Page number"]')).toHaveValue('2');
     await $('button[aria-label="Zoom in"]').click();
@@ -130,7 +130,7 @@ export async function filePreviews() {
     );
     await $('button=Preview').click();
     await expect($('.monaco-editor')).not.toExist();
-    await $('button[aria-label="Save file (⌘S)"]').click();
+    await $('button[aria-label^="Save file ("]').click();
     expect(await browser.execute(() => window.previewFixture.writes[0])).toContain('Draft retained');
     await $('.markdown-rendered').$('a=Outside').click();
     await expect($('.file-surface [role="alert"]')).toHaveText(expect.stringContaining('outside'));

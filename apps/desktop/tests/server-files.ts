@@ -67,7 +67,7 @@ export async function emptyServerFiles(invoke: Invoke, server: Server, other: Se
   await $(`.file-row .tree-label[title="${directory}/child.txt"]`).click();
   await $('.monaco-editor textarea').waitForExist();
   await $('.monaco-editor textarea').addValue(' edited');
-  await $('button[aria-label="Save file (⌘S)"]').waitForEnabled();
+  await $('button[aria-label^="Save file ("]').waitForEnabled();
   expect((await invoke<TextFile>('file_read', { context, path: `${directory}/child.txt` })).text).toBe('Server files');
   // Saving a workspace must not replace the current root browser.
   await invoke('workspace_open', { operationId: crypto.randomUUID(), server: server.name, path: `/${directory}` });
@@ -76,8 +76,8 @@ export async function emptyServerFiles(invoke: Invoke, server: Server, other: Se
   await activateTree(`[data-workspace-path="/${directory}"] .tree-label`);
   await $('.file-row .tree-label[title="child.txt"]').click();
   await expect($$('.editor-tab')).toBeElementsArrayOfSize(1);
-  await expect($('button[aria-label="Save file (⌘S)"]')).toBeEnabled();
-  await $('button[aria-label="Save file (⌘S)"]').click();
+  await expect($('button[aria-label^="Save file ("]')).toBeEnabled();
+  await $('button[aria-label^="Save file ("]').click();
   await browser.waitUntil(async () =>
     (await invoke<TextFile>('file_read', { context, path: `${directory}/child.txt` })).text.includes('edited'),
   );

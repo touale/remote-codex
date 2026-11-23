@@ -81,7 +81,7 @@ describe('Remote Codex desktop', () => {
     );
     await browser.saveScreenshot(path.resolve('../../.artifacts/desktop-e2e/settings-general-dark.png'));
     await $('[role=dialog] button[aria-label=Close]').click();
-    await $('button[aria-label="Toggle terminal (⌘`)"]').click();
+    await $('button[aria-label^="Toggle terminal ("]').click();
     await expect($('[role="dialog"]')).toHaveText(expect.stringContaining('Choose a server'));
     await $('button=Cancel').click();
     const settingsBottom = await browser.execute(
@@ -106,9 +106,9 @@ describe('Remote Codex desktop', () => {
     ).toBe(true);
     await $('button=Workspaces').click();
     await browser.saveScreenshot(path.resolve('../../.artifacts/desktop-e2e/dark.png'));
-    await $('button[aria-label="Toggle sidebar (⌘B)"]').click();
+    await $('button[aria-label^="Toggle sidebar ("]').click();
     await expect($('section[aria-label="Connections and sessions"]')).not.toBeExisting();
-    await $('button[aria-label="Toggle sidebar (⌘B)"]').click();
+    await $('button[aria-label^="Toggle sidebar ("]').click();
   });
   it('shares General preferences across windows and shows local account usage', sharedAppearanceAndUsage);
   it('rejects unknown resource handles through the real application API', async () => {

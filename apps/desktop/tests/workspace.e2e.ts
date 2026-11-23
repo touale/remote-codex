@@ -147,8 +147,8 @@ describe('A real SSH workspace in the native desktop', () => {
       await $('button=Create').click();
       await $('.monaco-editor textarea').waitForExist({ timeout: 30000 });
       await $('.monaco-editor textarea').addValue('Desktop editing works.');
-      await $('button[aria-label="Save file (⌘S)"]').waitForEnabled();
-      await $('button[aria-label="Save file (⌘S)"]').click();
+      await $('button[aria-label^="Save file ("]').waitForEnabled();
+      await $('button[aria-label^="Save file ("]').click();
       await browser.waitUntil(async () =>
         (await invoke<TextFile>('file_read', { context: workspace, path: 'notes.md' })).text.includes(
           'Desktop editing works.',
@@ -162,7 +162,7 @@ describe('A real SSH workspace in the native desktop', () => {
         revision: original.revision,
       });
       await $('.monaco-editor textarea').addValue(' More edits.');
-      await $('button[aria-label="Save file (⌘S)"]').click();
+      await $('button[aria-label^="Save file ("]').click();
       await expect($('[role="dialog"]')).toHaveText(expect.stringContaining('This file changed remotely'));
       await $('button=Discard my edits').click();
       await expect($('.editor-status')).toHaveText(expect.stringContaining('Saved'));
@@ -183,7 +183,7 @@ describe('A real SSH workspace in the native desktop', () => {
       await $('button[aria-label="Close notes.md"]').click();
       await $('button=Cancel').click();
       await expect($('.dirty-dot')).toBeDisplayed();
-      await $('button[aria-label="Save file (⌘S)"]').click();
+      await $('button[aria-label^="Save file ("]').click();
       await browser.waitUntil(async () =>
         (await invoke<TextFile>('file_read', { context: workspace, path: 'notes.md' })).text.includes(
           'Kept across workspaces.',
@@ -278,7 +278,7 @@ describe('A real SSH workspace in the native desktop', () => {
       expect((await invoke<TextFile>('file_read', { context: workspace, path: 'approval.txt' })).text).toBe(
         'from-codex\n',
       );
-      await $('button[aria-label="Toggle terminal (⌘`)"]').click();
+      await $('button[aria-label^="Toggle terminal ("]').click();
       await $('.xterm-screen').waitForDisplayed();
       expect(await browser.execute(() => document.querySelectorAll('.terminal-tab').length)).toBe(1);
       await $('.xterm-helper-textarea').addValue("sleep 0.2; printf 'hidden-ok\\n' > hidden.txt\r");
@@ -294,7 +294,7 @@ describe('A real SSH workspace in the native desktop', () => {
       });
       await expect($('.xterm-screen')).not.toBeDisplayed();
       await expect($('section[aria-label="Remote terminal"]')).not.toBeDisplayed();
-      await $('button[aria-label="Toggle terminal (⌘`)"]').click();
+      await $('button[aria-label^="Toggle terminal ("]').click();
       await expect($('.xterm-screen')).toBeDisplayed();
       expect(await browser.execute(() => document.querySelectorAll('.terminal-tab').length)).toBe(1);
       await $('.xterm-helper-textarea').addValue("printf 'terminal-ok\\n' > terminal.txt\r");

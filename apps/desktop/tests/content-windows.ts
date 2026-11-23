@@ -80,13 +80,13 @@ export async function contentWindows(remote: string) {
     await expect($('.editor-pane')).not.toExist();
     await closeContentTestWindow(source);
     await browser.switchToWindow(destination);
-    await $('button[aria-label="Save file (⌘S)"]').click();
+    await $('button[aria-label^="Save file ("]').click();
     await expect($('.editor-status')).toHaveText(expect.stringContaining('Saved'));
     const saved = await invokeWindow<TextFile>('main', 'file_read', file);
     expect(saved.text).toContain('unsaved transfer');
     await invokeWindow('main', 'file_write', { ...file, revision: saved.revision, text: 'external edit\n' });
     await $('.monaco-editor textarea').addValue('local edit\n');
-    await $('button[aria-label="Save file (⌘S)"]').click();
+    await $('button[aria-label^="Save file ("]').click();
     await expect($('[role="dialog"]')).toHaveText(expect.stringContaining('This file changed remotely'));
     await $('button=Discard my edits').click();
     await expect($('.view-lines')).toHaveText(expect.stringMatching(/external\s+edit/));

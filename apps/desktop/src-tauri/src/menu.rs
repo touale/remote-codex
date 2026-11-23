@@ -26,16 +26,16 @@ pub(crate) fn install(app: &tauri::App) -> tauri::Result<()> {
         app,
         "Remote Codex",
         true,
-        &[
-            &settings,
-            &Predefined::separator(app)?,
-            &Predefined::hide(app, None)?,
-            &Predefined::hide_others(app, None)?,
-            &Predefined::show_all(app, None)?,
-            &Predefined::separator(app)?,
-            &Predefined::quit(app, None)?,
-        ],
+        &[&settings, &Predefined::separator(app)?],
     )?;
+    #[cfg(target_os = "macos")]
+    app_menu.append_items(&[
+        &Predefined::hide(app, None)?,
+        &Predefined::hide_others(app, None)?,
+        &Predefined::show_all(app, None)?,
+        &Predefined::separator(app)?,
+    ])?;
+    app_menu.append(&Predefined::quit(app, None)?)?;
     let file = Submenu::with_items(
         app,
         "File",

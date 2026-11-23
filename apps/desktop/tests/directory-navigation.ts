@@ -25,7 +25,7 @@ export async function directoryNavigation(invoke: Invoke, workspace: string, rem
     await restoreFiles();
   }
   await $('.file-row .tree-label[title="test1"]').waitForDisplayed();
-  await $('button[aria-label="Toggle terminal (⌘`)"]').click();
+  await $('button[aria-label^="Toggle terminal ("]').click();
   await $('.xterm-screen').waitForDisplayed();
   await $('.xterm-helper-textarea').waitForExist();
   await expect($('.terminal-tab.selected > button')).toHaveText(parent);

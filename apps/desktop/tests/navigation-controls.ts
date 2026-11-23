@@ -21,7 +21,7 @@ export async function refreshTree() {
   await expect($('[role="menuitem"]=Refresh')).toBeDisplayed();
   await expect($('[role="menuitem"]=Show archived sessions')).not.toExist();
   await browser.keys('Escape');
-  await expect($('button[aria-label="New session (⌘N)"]')).not.toExist();
+  await expect($('button[aria-label^="New session ("]')).not.toExist();
   expect(
     await browser.execute(() => document.querySelector('.composer-options button')!.getAttribute('aria-label')),
   ).toBe('Session status (/status)');
