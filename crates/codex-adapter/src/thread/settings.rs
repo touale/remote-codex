@@ -176,21 +176,24 @@ fn validate_edit(edit: &Value, cwd: &str) -> Result<(), Fault> {
     if !preference_key(key) && !project_trust {
         return Err(Fault::new(
             "UNSUPPORTED_CONFIG_SETTING",
-            "this workspace can save native model and reviewer preferences and its own project trust; the execution ceiling is managed by remote-codex config -n NAME",
+            "this workspace can save native preferences and its own project trust; the execution ceiling is managed by remote-codex config -n NAME",
         ));
     }
-    if !matches!(edit["mergeStrategy"].as_str(), Some("replace" | "upsert"))
-        || edit
-            .get("value")
-            .is_none_or(|value| !value.is_null() && !value.is_string())
-    {
+    let value = edit.get("value").ok_or_else(invalid)?;
+    let valid_value = value.is_null()
+        || if key.rsplit('.').next() == Some("daybreak") {
+            value.is_boolean()
+        } else {
+            value.is_string()
+        };
+    if !matches!(edit["mergeStrategy"].as_str(), Some("replace" | "upsert")) || !valid_value {
         return Err(invalid());
     }
-    if project_trust && !matches!(edit["value"].as_str(), Some("trusted" | "untrusted")) {
+    if project_trust && !matches!(value.as_str(), Some("trusted" | "untrusted")) {
         return Err(invalid());
     }
     if key.rsplit('.').next() == Some("approvals_reviewer") {
-        execution_policy::validate_reviewer(&edit["value"])?;
+        execution_policy::validate_reviewer(value)?;
     }
     Ok(())
 }
@@ -198,6 +201,7 @@ fn validate_edit(edit: &Value, cwd: &str) -> Result<(), Fault> {
 fn preference_key(key: &str) -> bool {
     const KEYS: &[&str] = &[
         "model",
+        "daybreak",
         "model_reasoning_effort",
         "model_reasoning_summary",
         "model_verbosity",

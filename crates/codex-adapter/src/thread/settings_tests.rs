@@ -95,6 +95,8 @@ fn running_turn_settings_allow_model_preferences_but_not_thread_only_fields() ->
 fn defaults_target_local_codex_and_preserve_optimistic_version() -> TestResult {
     let mut params = json!({"edits":[
         {"keyPath":"model", "value":"gpt-6-astra", "mergeStrategy":"replace"},
+        {"keyPath":"daybreak", "value":true, "mergeStrategy":"replace"},
+        {"keyPath":"profiles.work.daybreak", "value":false, "mergeStrategy":"replace"},
         {"keyPath":"model_reasoning_effort", "value":"xhigh", "mergeStrategy":"replace"},
         {"keyPath":"profiles.work.service_tier", "value":null, "mergeStrategy":"upsert"}
     ], "expectedVersion":"original-version", "filePath":null, "reloadUserConfig":true});
@@ -110,6 +112,8 @@ fn defaults_target_local_codex_and_preserve_optimistic_version() -> TestResult {
 #[test]
 fn config_batches_reject_unsafe_edits_before_any_forwarding() -> TestResult {
     for key in [
+        "daybreak",
+        "profiles.work.daybreak",
         "sandbox_mode",
         "mcp_servers.local.command",
         "environments",
@@ -138,6 +142,7 @@ fn single_writes_validate_file_and_value_type() -> TestResult {
     prepare_config("config/value/write", &mut params, &binding()?)?;
     for (key, value) in [
         ("filePath", json!("/remote/project/.codex/config.toml")),
+        ("value", json!(true)),
         ("value", json!({"sandbox_mode":"danger-full-access"})),
         ("mergeStrategy", json!("unknown")),
         ("expectedVersion", json!(false)),

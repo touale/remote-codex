@@ -91,6 +91,13 @@ impl Thread {
                 settings::known_fields(&params, &["threadId", "origin"])?;
                 OperationKind::GoalControl
             }
+            "thread/metadata/update" => {
+                settings::known_fields(
+                    &params,
+                    &["threadId", "daybreakEnabled", "gitInfo", "projectId"],
+                )?;
+                OperationKind::Read
+            }
             "thread/settings/update" | "turn/settings/update" => {
                 settings::prepare_thread(method, &params, &self.binding)?;
                 OperationKind::Settings(permission_intent(&params))
@@ -141,6 +148,7 @@ impl Thread {
             | "account/rateLimits/read"
             | "config/read"
             | "configRequirements/read"
+            | "permissionProfile/list"
             | "skills/list"
             | "plugin/list"
             | "hooks/list"
