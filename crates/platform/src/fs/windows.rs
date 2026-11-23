@@ -8,9 +8,9 @@ use std::{
     sync::OnceLock,
 };
 use windows_permissions::{
-    LocalBox, SecurityDescriptor, WindowsSecure,
+    LocalBox, SecurityDescriptor,
     constants::{AceFlags, AceType, SeObjectType, SecurityInformation},
-    wrappers::SetSecurityInfo,
+    wrappers::{GetSecurityInfo, SetSecurityInfo},
 };
 use windows_sys::Win32::{
     Foundation::{GENERIC_ALL, GENERIC_READ, GENERIC_WRITE},
@@ -75,8 +75,11 @@ fn check(file: &File, access: Access) -> io::Result<()> {
         return Err(denied());
     }
     let sid = user_sid()?;
-    let descriptor =
-        file.security_descriptor(SecurityInformation::Owner | SecurityInformation::Dacl)?;
+    let descriptor = GetSecurityInfo(
+        file,
+        SeObjectType::SE_FILE_OBJECT,
+        SecurityInformation::Owner | SecurityInformation::Dacl,
+    )?;
     if descriptor
         .owner()
         .is_none_or(|owner| owner.to_string() != sid && owner.to_string() != "S-1-5-32-544")
