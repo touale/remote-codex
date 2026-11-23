@@ -11,6 +11,19 @@ use tauri::Manager;
 
 pub fn run() {
     let context = tauri::generate_context!();
+    #[cfg(windows)]
+    let context = {
+        let mut context = context;
+        context
+            .config_mut()
+            .plugins
+            .0
+            .entry("updater".into())
+            .or_insert_with(|| serde_json::json!({
+                "pubkey": include_str!("../../../../crates/client/src/updates/public.key").trim()
+            }));
+        context
+    };
     #[cfg(feature = "e2e")]
     let context = {
         let mut context = context;

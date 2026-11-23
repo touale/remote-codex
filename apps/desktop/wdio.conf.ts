@@ -31,6 +31,7 @@ export const config = {
           `../../target/debug/remote-codex-desktop${process.platform === 'win32' ? '.exe' : ''}`,
         ),
         driverProvider: 'embedded',
+        captureBackendLogs: true,
       },
     ],
   ],
