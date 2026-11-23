@@ -1,32 +1,17 @@
 use crate::{ClientError, Result};
-use nix::fcntl::{Flock, FlockArg};
-use std::{
-    fs::{File, OpenOptions},
-    os::unix::fs::{OpenOptionsExt, PermissionsExt},
-    path::Path,
-    time::Duration,
-};
+use remote_codex_platform::fs::{Creation, FileLock, LockMode, open_private};
+use std::fs::TryLockError;
+use std::{path::Path, time::Duration};
 
 /// Serialize first-open journal and schema setup across CLI/App processes.
 /// SQLite transactions still protect ordinary operations after initialization.
-pub(super) async fn lock(directory: &Path) -> Result<Flock<File>> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .custom_flags(nix::libc::O_NOFOLLOW)
-        .open(directory.join("initialization.lock"))?;
-    let metadata = file.metadata()?;
-    if !metadata.is_file() || metadata.permissions().mode() & 0o077 != 0 {
-        return Err(ClientError::PrivatePath);
-    }
+pub(super) async fn lock(directory: &Path) -> Result<FileLock> {
+    let mut file = open_private(&directory.join("initialization.lock"), Creation::IfMissing)?;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     loop {
-        match Flock::lock(file, FlockArg::LockExclusiveNonblock) {
+        match FileLock::try_lock(file, LockMode::Exclusive) {
             Ok(lock) => return Ok(lock),
-            Err((returned, nix::errno::Errno::EWOULDBLOCK)) => {
+            Err((returned, TryLockError::WouldBlock)) => {
                 file = returned;
                 if tokio::time::Instant::now() >= deadline {
                     return Err(ClientError::Timeout);

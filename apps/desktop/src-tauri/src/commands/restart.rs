@@ -2,11 +2,11 @@ use crate::{
     error::Result,
     state::{AppState, Event, unavailable},
 };
-use remote_codex_client::application::{GoalStatus, UpdateComponent, Updater};
+use remote_codex_client::application::GoalStatus;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
-use tauri::{State, WebviewWindow};
+use tauri::{Manager, State, WebviewWindow};
 
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -30,11 +30,7 @@ pub(crate) async fn restart_app(
     if state.restarting.load(Ordering::Acquire) {
         return Ok(RestartResult::Closing);
     }
-    if Updater::open(None, UpdateComponent::App)?
-        .snapshot()
-        .await?
-        .busy
-    {
+    if super::updates::snapshot(window.app_handle()).await?.busy {
         return Err(crate::error::Error::new(
             "UPDATE_BUSY",
             "An app update is running. Wait for it to finish before restarting.",

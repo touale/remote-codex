@@ -1,0 +1,4 @@
+{
+  "app": { "windows": [{ "label": "main", "title": "Remote Codex", "width": 1440, "height": 900, "minWidth": 900, "minHeight": 600, "titleBarStyle": "Visible", "hiddenTitle": false }] },
+  "bundle": { "targets": ["nsis"], "icon": ["icons/icon.ico"], "windows": { "nsis": { "installMode": "currentUser" } } }
+}

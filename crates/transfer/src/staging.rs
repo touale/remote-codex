@@ -1,10 +1,10 @@
+use super::paths::Access;
 use super::{
     Endpoint, Result, fault, inspect, io,
     journal::{Journal, Stage, name},
     paths,
 };
 use remote_codex_protocol::transfer::{CHUNK, Kind, Reply, Stamp};
-use rustix::fs::OFlags;
 use std::io::{Seek, SeekFrom, Write};
 
 impl Endpoint {
@@ -44,7 +44,7 @@ impl Endpoint {
             ));
         }
         if !stage.journal.committed {
-            let length = paths::file(&stage.dir, "data", OFlags::RDONLY)?
+            let length = paths::file(&stage.dir, "data", Access::Read)?
                 .metadata()
                 .map_err(io)?
                 .len();
@@ -127,7 +127,7 @@ impl Endpoint {
                 "Incomplete transfer or destination changed.",
             ));
         }
-        let mut data = paths::file(&stage.dir, "data", OFlags::RDONLY)?;
+        let mut data = paths::file(&stage.dir, "data", Access::Read)?;
         if inspect::hash_file(&mut data, &self.cancelled)? != digest {
             return Err(fault(
                 "TRANSFER_CHECKSUM",
@@ -145,6 +145,7 @@ impl Endpoint {
                 "Destination changed before commit.",
             ));
         }
+        #[cfg(unix)]
         if stage.journal.expected.is_none() {
             rustix::fs::renameat_with(
                 &stage.dir,
@@ -160,13 +161,26 @@ impl Endpoint {
                 .rename("data", &stage.parent, &target)
                 .map_err(io)?;
         }
-        stage
-            .parent
-            .try_clone()
-            .map_err(io)?
-            .into_std_file()
-            .sync_all()
-            .map_err(io)?;
+        #[cfg(windows)]
+        {
+            // Hard-link publication is no-replace, unlike Windows rename-overwrite.
+            if stage.journal.expected.is_none() {
+                stage
+                    .dir
+                    .hard_link("data", &stage.parent, &target)
+                    .map_err(io)?;
+                stage.dir.remove_file("data").map_err(io)?;
+            } else {
+                stage
+                    .dir
+                    .rename("data", &stage.parent, &target)
+                    .map_err(io)?;
+            }
+        }
+        remote_codex_platform::fs::sync_directory(
+            &stage.parent.try_clone().map_err(io)?.into_std_file(),
+        )
+        .map_err(io)?;
         stage.journal.committed = true;
         stage.save()?;
         Ok(Reply::Done)
@@ -189,7 +203,7 @@ impl Endpoint {
             }
         }
         stage.parent.remove_dir(&stage.name).map_err(io)?;
-        stage.parent.into_std_file().sync_all().map_err(io)?;
+        remote_codex_platform::fs::sync_directory(&stage.parent.into_std_file()).map_err(io)?;
         Ok(Reply::Done)
     }
 }

@@ -2,7 +2,6 @@ use super::{Launch, missing, schema};
 use remote_codex_protocol::Fault;
 use std::{
     collections::HashMap,
-    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     process::Stdio,
     sync::OnceLock,
@@ -22,7 +21,8 @@ struct Identity {
     device: u64,
     inode: u64,
     size: u64,
-    modified: (i64, i64),
+    modified: Option<std::time::SystemTime>,
+    #[cfg(unix)]
     changed: (i64, i64),
 }
 
@@ -31,11 +31,15 @@ fn identity(path: &Path) -> Result<Identity, Fault> {
     if !value.is_file() {
         return Err(missing());
     }
+    let identity = remote_codex_platform::fs::identity_at(path).map_err(|_| missing())?;
+    #[cfg(unix)]
+    use std::os::unix::fs::MetadataExt;
     Ok(Identity {
-        device: value.dev(),
-        inode: value.ino(),
+        device: identity.device,
+        inode: identity.inode,
         size: value.len(),
-        modified: (value.mtime(), value.mtime_nsec()),
+        modified: value.modified().ok(),
+        #[cfg(unix)]
         changed: (value.ctime(), value.ctime_nsec()),
     })
 }

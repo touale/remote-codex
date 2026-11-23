@@ -54,7 +54,9 @@ export function UpdatesSettings({ ask, onBusy }: { ask: Ask; onBusy: (busy: bool
     if (
       await ask({
         title: 'Restart to update?',
-        message: `Remote Codex v${value.installed_version} is installed. Restart the app to use it.`,
+        message: value.pending_version
+          ? `Remote Codex v${value.pending_version} is ready. Restart to install the update.`
+          : `Remote Codex v${value.installed_version} is installed. Restart the app to use it.`,
         choices: ['Restart now'],
         cancelLabel: 'Later',
       })
@@ -214,7 +216,9 @@ export function UpdatesSettings({ ask, onBusy }: { ask: Ask; onBusy: (busy: bool
                 Restart now
               </button>
               <small className="muted">
-                Version {snapshot.installed_version} is installed. The next launch uses the new version.
+                {snapshot.pending_version
+                  ? `Version ${snapshot.pending_version} is ready to install on restart.`
+                  : `Version ${snapshot.installed_version} is installed. The next launch uses the new version.`}
               </small>
             </>
           )}

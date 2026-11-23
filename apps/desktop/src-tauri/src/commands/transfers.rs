@@ -83,11 +83,13 @@ pub(crate) async fn transfer_reveal(
         .transfers()
         .download_directory(&id)
         .await?;
-    tokio::process::Command::new("/usr/bin/open")
-        .arg("--")
-        .arg(path)
-        .status()
-        .await?;
+    use tauri_plugin_opener::OpenerExt;
+    window
+        .opener()
+        .open_path(path.to_string_lossy(), None::<&str>)
+        .map_err(|_| {
+            crate::error::Error::new("REVEAL_FAILED", "Cannot open the download directory.")
+        })?;
     Ok(())
 }
 

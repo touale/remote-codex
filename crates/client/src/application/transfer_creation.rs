@@ -1,9 +1,6 @@
 use super::transfers::TransferService;
 use crate::{ClientError, Result, transfers::model::*};
-use std::{
-    os::unix::fs::MetadataExt,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 impl TransferService {
     /// Local paths must be supplied by the host's native file authorization UI.
@@ -94,7 +91,7 @@ impl TransferService {
     ) -> Result<Transfer> {
         let state = &self.client.0;
         state.ensure_open()?;
-        if !Path::new(workspace).is_absolute() {
+        if !remote_codex_core::path::absolute(workspace) {
             return Err(ClientError::Argument("Select a remote workspace."));
         }
         let record = state.store.find_connection(server).await?;
@@ -139,22 +136,21 @@ impl TransferService {
 }
 fn grant(root: &Path) -> Result<Grant> {
     let meta = std::fs::symlink_metadata(root)?;
-    if !meta.is_dir() {
+    if !meta.is_dir() || remote_codex_platform::fs::is_link(&meta) {
         return Err(ClientError::Argument("Select a local directory."));
     }
+    let identity = remote_codex_platform::fs::identity_at(root)?;
     Ok(Grant {
         root: root.into(),
-        device: meta.dev(),
-        inode: meta.ino(),
+        device: identity.device,
+        inode: identity.inode,
     })
 }
 fn relative(path: &str, empty: bool) -> Result<()> {
     if (!empty && path.is_empty())
         || path.len() > 4096
         || path.contains('\0')
-        || Path::new(path)
-            .components()
-            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+        || !remote_codex_core::path::relative(path)
     {
         return Err(ClientError::Argument("Select a path inside the workspace."));
     }

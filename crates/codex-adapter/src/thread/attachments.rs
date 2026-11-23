@@ -10,10 +10,8 @@ mod tests;
 
 /// Descriptor-relative opens prevent a replaced directory or link escaping the home.
 pub(super) fn read_text(home: &Path, path: &str, limit: usize) -> Result<String, Fault> {
-    use nix::{
-        fcntl::{OFlag, open, openat},
-        sys::stat::Mode,
-    };
+    use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
+    use cap_std::fs::{Dir, OpenOptions};
     use std::io::Read;
     let mut params = json!({"path":path});
     prepare("fs/readFile", &mut params, home)?;
@@ -24,22 +22,28 @@ pub(super) fn read_text(home: &Path, path: &str, limit: usize) -> Result<String,
         .map_err(|_| denied())?
         .components()
         .peekable();
-    let flags = OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK;
-    let mut fd = open(&root, flags | OFlag::O_DIRECTORY, Mode::empty()).map_err(|_| denied())?;
+    let mut dir =
+        Dir::open_ambient_dir(&root, cap_std::ambient_authority()).map_err(|_| denied())?;
+    let mut file = None;
     while let Some(part) = parts.next() {
-        fd = openat(
-            &fd,
-            Path::new(part.as_os_str()),
-            if parts.peek().is_some() {
-                flags | OFlag::O_DIRECTORY
-            } else {
-                flags
-            },
-            Mode::empty(),
-        )
-        .map_err(|_| denied())?;
+        if parts.peek().is_some() {
+            dir = dir
+                .open_dir_nofollow(Path::new(part.as_os_str()))
+                .map_err(|_| denied())?;
+        } else {
+            let mut options = OpenOptions::new();
+            options.read(true).follow(FollowSymlinks::No);
+            file = Some(
+                dir.open_with(Path::new(part.as_os_str()), &options)
+                    .map_err(|_| denied())?
+                    .into_std(),
+            );
+        }
     }
-    let file = std::fs::File::from(fd);
+    let file = file.ok_or_else(denied)?;
+    if remote_codex_platform::fs::is_link(&file.metadata().map_err(|_| denied())?) {
+        return Err(denied());
+    }
     if !file.metadata().map_err(|_| denied())?.is_file() {
         return Err(denied());
     }
@@ -106,7 +110,7 @@ pub(super) fn prepare(method: &str, params: &mut Value, home: &Path) -> Result<(
     for component in Path::new("attachments").join(relative).components() {
         resolved.push(component);
         match std::fs::symlink_metadata(&resolved) {
-            Ok(meta) if meta.file_type().is_symlink() => return Err(denied()),
+            Ok(meta) if remote_codex_platform::fs::is_link(&meta) => return Err(denied()),
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => return Err(denied()),

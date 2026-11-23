@@ -1,13 +1,10 @@
+use super::paths::Access;
 use super::{Endpoint, Result, fault, io, paths};
 use cap_std::fs::Dir;
-use nix::fcntl::{Flock, FlockArg};
+use remote_codex_platform::fs::{FileLock, LockMode};
 use remote_codex_protocol::transfer::Stamp;
-use rustix::fs::OFlags;
 use serde::{Deserialize, Serialize};
-use std::{
-    io::{Read, Write},
-    os::unix::fs::PermissionsExt,
-};
+use std::io::{Read, Write};
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct Journal {
@@ -24,30 +21,24 @@ pub(super) struct Stage {
     pub(super) name: String,
     pub(super) dir: Dir,
     pub(super) journal: Journal,
-    _lock: Flock<std::fs::File>,
+    _lock: FileLock,
 }
 impl Stage {
     pub(super) fn save(&self) -> Result<()> {
-        let mut file = paths::file(
-            &self.dir,
-            "next.json",
-            OFlags::WRONLY | OFlags::CREATE | OFlags::TRUNC,
-        )?;
+        let mut file = paths::file(&self.dir, "next.json", Access::Truncate)?;
         file.write_all(&serde_json::to_vec(&self.journal).map_err(io)?)
             .map_err(io)?;
         file.sync_all().map_err(io)?;
         self.dir
             .rename("next.json", &self.dir, "state.json")
             .map_err(io)?;
-        self.dir
-            .try_clone()
-            .map_err(io)?
-            .into_std_file()
-            .sync_all()
-            .map_err(io)
+        remote_codex_platform::fs::sync_directory(
+            &self.dir.try_clone().map_err(io)?.into_std_file(),
+        )
+        .map_err(io)
     }
     pub(super) fn data(&self) -> Result<std::fs::File> {
-        paths::file(&self.dir, "data", OFlags::RDWR)
+        paths::file(&self.dir, "data", Access::ReadWrite)
     }
 }
 pub(super) fn name(token: &str) -> Result<String> {
@@ -70,20 +61,16 @@ impl Endpoint {
         };
         let dir = paths::directory(&parent, &name)?;
         if created {
-            dir.set_permissions(
-                ".",
-                cap_std::fs::Permissions::from_std(std::fs::Permissions::from_mode(0o700)),
-            )
-            .map_err(io)?;
+            paths::protect_stage(&parent, &name, &dir)?;
         }
-        let lock = paths::file(&dir, "lock", OFlags::RDWR | OFlags::CREATE)?;
-        let lock = Flock::lock(lock, FlockArg::LockExclusiveNonblock)
+        let lock = paths::file(&dir, "lock", Access::Create)?;
+        let lock = FileLock::try_lock(lock, LockMode::Exclusive)
             .map_err(|_| fault("TRANSFER_BUSY", "Another transfer owns this staging file."))?;
         let missing = dir
             .symlink_metadata("state.json")
             .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound);
         let initialize = missing && initial.is_some();
-        let journal = match paths::file(&dir, "state.json", OFlags::RDONLY) {
+        let journal = match paths::file(&dir, "state.json", Access::Read) {
             Ok(file) => serde_json::from_reader(file.take(16384)).map_err(io)?,
             Err(_) if initialize => initial
                 .ok_or_else(|| fault("TRANSFER_MISSING", "Transfer checkpoint is unavailable."))?,
@@ -110,21 +97,14 @@ impl Endpoint {
         };
         if initialize {
             // There is no durable checkpoint yet; an interrupted first block may be discarded.
-            paths::file(
-                &stage.dir,
-                "data",
-                OFlags::RDWR | OFlags::CREATE | OFlags::TRUNC,
-            )?
-            .sync_all()
-            .map_err(io)?;
-            stage.save()?;
-            stage
-                .parent
-                .try_clone()
-                .map_err(io)?
-                .into_std_file()
+            paths::file(&stage.dir, "data", Access::Truncate)?
                 .sync_all()
                 .map_err(io)?;
+            stage.save()?;
+            remote_codex_platform::fs::sync_directory(
+                &stage.parent.try_clone().map_err(io)?.into_std_file(),
+            )
+            .map_err(io)?;
         }
         Ok(stage)
     }

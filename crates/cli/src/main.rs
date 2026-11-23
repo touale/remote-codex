@@ -93,11 +93,18 @@ async fn run(cli: &Cli) -> Result<()> {
                 ))
             } else {
                 let server = selection::server(cli, &context).await?;
-                context
-                    .client
-                    .servers()
-                    .shell(&server.name, cli.path.as_deref())
-                    .await
+                #[cfg(unix)]
+                {
+                    context
+                        .client
+                        .servers()
+                        .shell(&server.name, cli.path.as_deref())
+                        .await
+                }
+                #[cfg(windows)]
+                {
+                    windows_shell::run(&context, &server.name, cli.path.as_deref()).await
+                }
             }
         }
         None => chat::start(cli, &context).await,
@@ -110,3 +117,11 @@ async fn run(cli: &Cli) -> Result<()> {
     }
     result
 }
+
+#[cfg(windows)]
+mod windows_auth;
+
+#[cfg(windows)]
+mod windows_shell;
+#[cfg(windows)]
+mod windows_terminal;

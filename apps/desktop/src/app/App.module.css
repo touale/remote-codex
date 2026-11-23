@@ -149,3 +149,10 @@
     display: none;
   }
 }
+
+:global(html[data-platform='other']) .trafficSpace {
+  display: none;
+}
+:global(html[data-platform='other']) .titlebar {
+  padding-left: 10px;
+}

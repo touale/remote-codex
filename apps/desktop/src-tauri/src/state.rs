@@ -17,6 +17,10 @@ pub(crate) use crate::events::Event;
 
 #[derive(Default)]
 pub(crate) struct AppState {
+    #[cfg(windows)]
+    pub pending_update: Mutex<Option<crate::commands::windows_updates::Pending>>,
+    #[cfg(windows)]
+    pub update_gate: tokio::sync::Mutex<()>,
     pub windows: Mutex<HashMap<String, Arc<WindowState>>>,
     pub preferences: Mutex<Option<crate::commands::app_preferences::AppPreferences>>,
     pub startup_targets: Mutex<HashMap<String, crate::commands::window::WindowTarget>>,

@@ -193,8 +193,8 @@ pub(crate) fn transient(error: &ClientError) -> bool {
     matches!(
         error,
         ClientError::Ssh(255) | ClientError::Timeout | ClientError::RemoteResponse
-    ) || matches!(error, ClientError::Io(e) if matches!(e.kind(), std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::TimedOut))
-        || matches!(error, ClientError::RemoteFault(code, _, _) if matches!(code.as_str(), "SERVICE_UPDATE_BUSY" | "EXECUTION_BUSY" | "CAPACITY_EXCEEDED"))
+    ) || matches!(error, ClientError::Io(e) if matches!(e.kind(), std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted | std::io::ErrorKind::NotConnected | std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::TimedOut))
+        || matches!(error, ClientError::RemoteFault(code, _, _) if matches!(code.as_str(), "SSH_FAILED" | "SERVICE_UPDATE_BUSY" | "EXECUTION_BUSY" | "CAPACITY_EXCEEDED"))
 }
 
 #[cfg(test)]

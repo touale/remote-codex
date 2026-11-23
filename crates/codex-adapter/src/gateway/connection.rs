@@ -1,11 +1,12 @@
+use super::listener::Stream;
 use super::{Fault, Result, transport};
 use crate::engine::MAX_MESSAGE_BYTES;
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use serde_json::Value;
 use std::{collections::HashSet, time::Duration};
-use tokio::{net::UnixStream, sync::mpsc};
+use tokio::sync::mpsc;
 use tokio_tungstenite::{
-    WebSocketStream, accept_async_with_config,
+    WebSocketStream, accept_hdr_async_with_config,
     tungstenite::{Message, protocol::WebSocketConfig},
 };
 
@@ -18,7 +19,7 @@ const OUTPUT_CAPACITY: usize = 256;
 /// Keep socket writes out of the accept/read loop: a stalled old reader must
 /// never prevent its replacement from completing the WebSocket handshake.
 pub(super) struct Connection {
-    incoming: SplitStream<WebSocketStream<UnixStream>>,
+    incoming: SplitStream<WebSocketStream<Stream>>,
     outgoing: mpsc::Sender<Message>,
     writer: tokio::task::JoinHandle<Result<()>>,
     failure: Option<Fault>,
@@ -26,19 +27,39 @@ pub(super) struct Connection {
 }
 
 impl Connection {
-    pub(super) async fn accept(stream: UnixStream) -> Result<Self> {
-        if stream.peer_cred().map_err(transport)?.uid() != nix::unistd::geteuid().as_raw() {
-            return Err(Fault::new(
-                "FRONTEND_OWNER",
-                "frontend must belong to the current user",
-            ));
-        }
+    // Tungstenite requires an HTTP response as the handshake callback error.
+    #[allow(clippy::result_large_err)]
+    pub(super) async fn accept(stream: Stream, token: Option<String>) -> Result<Self> {
         let config = WebSocketConfig::default()
             .max_message_size(Some(MAX_MESSAGE_BYTES))
             .max_frame_size(Some(MAX_MESSAGE_BYTES));
         let socket = tokio::time::timeout(
             HANDSHAKE_TIMEOUT,
-            accept_async_with_config(stream, Some(config)),
+            accept_hdr_async_with_config(
+                stream,
+                move |request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                      response| {
+                    let authorized = token.as_ref().is_none_or(|token| {
+                        request
+                            .headers()
+                            .get("authorization")
+                            .and_then(|h| h.to_str().ok())
+                            .is_some_and(|value| {
+                                value.strip_prefix("Bearer ") == Some(token.as_str())
+                            })
+                    });
+                    if !authorized || request.headers().contains_key("origin") {
+                        let mut denied = tokio_tungstenite::tungstenite::http::Response::new(Some(
+                            "Forbidden".into(),
+                        ));
+                        *denied.status_mut() =
+                            tokio_tungstenite::tungstenite::http::StatusCode::FORBIDDEN;
+                        return Err(denied);
+                    }
+                    Ok(response)
+                },
+                Some(config),
+            ),
         )
         .await
         .map_err(|_| transport("native frontend handshake timed out"))?

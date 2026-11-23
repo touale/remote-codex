@@ -1,5 +1,5 @@
 pub(crate) mod bridge;
-mod channel;
+pub(crate) mod channel;
 mod configuration;
 pub(crate) mod recovery;
 

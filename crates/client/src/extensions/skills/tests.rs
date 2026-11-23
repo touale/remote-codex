@@ -1,5 +1,5 @@
 use super::*;
-use std::fs;
+use std::{fs, os::unix::fs::PermissionsExt};
 
 fn prepared(path: &Path) -> Result<SkillMap> {
     Ok(SkillMap {

@@ -1,41 +1,22 @@
 use super::{Answer, CommandMessage, MAX_MESSAGE_BYTES};
-use nix::{
-    sys::signal::{Signal, killpg},
-    unistd::Pid,
-};
+use remote_codex_platform::process::Child;
 use remote_codex_protocol::{Fault, codec};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use tokio::{
     io::BufReader,
-    process::Child,
     sync::{broadcast, mpsc, oneshot},
 };
-
-struct Group(Option<Pid>);
-impl Drop for Group {
-    fn drop(&mut self) {
-        if let Some(pid) = self.0 {
-            let _ = killpg(pid, Signal::SIGKILL);
-        }
-    }
-}
 
 pub(super) async fn run(
     mut child: Child,
     mut commands: mpsc::Receiver<CommandMessage>,
     events: broadcast::Sender<Value>,
 ) {
-    let _group = Group(
-        child
-            .id()
-            .and_then(|v| i32::try_from(v).ok())
-            .map(Pid::from_raw),
-    );
-    let Some(mut stdin) = child.stdin.take() else {
+    let Some(mut stdin) = child.stdin().take() else {
         return;
     };
-    let Some(stdout) = child.stdout.take() else {
+    let Some(stdout) = child.stdout().take() else {
         return;
     };
     let mut stdout = codec::Reader::with_limit(BufReader::new(stdout), MAX_MESSAGE_BYTES);
@@ -92,7 +73,7 @@ pub(super) async fn run(
     let status = match tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
         Ok(Ok(status)) => Some(status),
         _ => {
-            let _ = child.kill().await;
+            let _ = Box::into_pin(child.kill()).await;
             None
         }
     };

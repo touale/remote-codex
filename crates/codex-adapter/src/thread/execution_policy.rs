@@ -1,7 +1,6 @@
 use remote_codex_core::session::SessionBinding;
 use remote_codex_protocol::Fault;
 use serde_json::Value;
-use std::path::{Component, Path};
 
 /// The native thread owns preferences; execution checks require current authority.
 pub(crate) fn validate(
@@ -48,10 +47,9 @@ pub(crate) fn validate(
                 }
                 if let Some(roots) = policy.get("writableRoots") {
                     for root in roots.as_array().ok_or_else(exceeds_limit)? {
-                        let path = Path::new(root.as_str().ok_or_else(exceeds_limit)?);
+                        let path = root.as_str().ok_or_else(exceeds_limit)?;
                         if !unrestricted
-                            && (!path.starts_with(&binding.session.cwd)
-                                || path.components().any(|c| matches!(c, Component::ParentDir)))
+                            && !remote_codex_core::path::within(path, &binding.session.cwd)
                         {
                             return Err(exceeds_limit());
                         }

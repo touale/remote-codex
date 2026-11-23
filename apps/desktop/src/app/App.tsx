@@ -1,3 +1,4 @@
+import { modifierKey } from '../bridge/platform';
 import { Cable, ChevronDown, PanelLeft, PanelRight, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Tooltip } from 'radix-ui';
 import { useState } from 'react';
@@ -118,7 +119,7 @@ function WorkspaceApp({
         <header className={styles.titlebar} data-tauri-drag-region>
           <div className={styles.trafficSpace} data-tauri-drag-region />
           <IconButton
-            label="Toggle sidebar (⌘B)"
+            label={'Toggle sidebar (' + modifierKey + 'B)'}
             onClick={() => app.changePreferences({ sidebar_visible: !prefs.sidebar_visible })}
           >
             <PanelLeft size={17} />
@@ -134,7 +135,11 @@ function WorkspaceApp({
           >
             <PanelRight size={17} />
           </IconButton>
-          <IconButton label="Toggle terminal (⌘`)" disabled={Boolean(nav.opening)} onClick={toggleTerminal}>
+          <IconButton
+            label={'Toggle terminal (' + modifierKey + '`)'}
+            disabled={Boolean(nav.opening)}
+            onClick={toggleTerminal}
+          >
             <TerminalIcon size={17} />
           </IconButton>
         </header>

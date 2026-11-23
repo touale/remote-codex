@@ -5,7 +5,7 @@ use remote_codex_adapter::{
     thread::action::{Action, turn_id},
 };
 use remote_codex_core::session::{ApprovalDecision, SessionEvent, SessionSettings};
-use std::{ffi::OsString, path::Path, sync::atomic::Ordering};
+use std::{ffi::OsString, sync::atomic::Ordering};
 
 impl LocalRuntime {
     pub(crate) fn snapshot(&self) -> Result<remote_codex_core::desktop::SessionSnapshot> {
@@ -175,12 +175,13 @@ impl LocalRuntime {
     pub(crate) fn frontend(
         &self,
         program: &remote_codex_adapter::program::Launch,
-        socket: &Path,
+        endpoint: &str,
+        token: Option<&str>,
         arguments: &[OsString],
     ) -> Result<std::process::Command> {
         Ok(self
             .current()?
             .native
-            .frontend(program, socket, arguments)?)
+            .frontend(program, endpoint, token, arguments)?)
     }
 }

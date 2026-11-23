@@ -2,7 +2,7 @@ use super::{Prepared, Thread};
 use remote_codex_core::session::SessionSettings;
 use remote_codex_protocol::Fault;
 use serde_json::Value;
-use std::{collections::BTreeMap, ffi::OsString, path::Path};
+use std::{collections::BTreeMap, ffi::OsString};
 
 pub enum Action {
     Submit(String),
@@ -69,7 +69,8 @@ impl Thread {
     pub fn frontend(
         &self,
         program: &crate::program::Launch,
-        socket: &Path,
+        endpoint: &str,
+        token: Option<&str>,
         arguments: &[OsString],
     ) -> Result<std::process::Command, Fault> {
         validate_frontend_arguments(arguments)?;
@@ -78,9 +79,15 @@ impl Thread {
             .env("CODEX_HOME", &self.binding.codex_home)
             .current_dir(&self.binding.codex_home)
             .arg("--remote")
-            .arg(format!("unix://{}", socket.display()))
+            .arg(endpoint)
             .arg("--cd")
-            .arg(&self.binding.session.cwd)
+            .arg(&self.binding.session.cwd);
+        if let Some(token) = token {
+            command
+                .env("REMOTE_CODEX_FRONTEND_TOKEN", token)
+                .args(["--remote-auth-token-env", "REMOTE_CODEX_FRONTEND_TOKEN"]);
+        }
+        command
             .arg("resume")
             .arg(&self.binding.session.id)
             .args(arguments);
@@ -104,7 +111,7 @@ pub fn turn_id(response: &Value) -> Result<String, Fault> {
 fn validate_frontend_arguments(arguments: &[OsString]) -> Result<(), Fault> {
     for argument in arguments {
         let argument = argument.to_string_lossy();
-        if ["--remote", "--cd", "--config"]
+        if ["--remote", "--remote-auth-token-env", "--cd", "--config"]
             .iter()
             .any(|flag| argument == *flag || argument.starts_with(&format!("{flag}=")))
             || argument.starts_with("-c")

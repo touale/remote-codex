@@ -1,15 +1,11 @@
 use crate::{ClientError, Result};
-use nix::fcntl::{Flock, FlockArg};
+use remote_codex_platform::fs::{Creation, FileLock, LockMode, open_private};
 use sha2::{Digest, Sha256};
-use std::{
-    fs::{File, OpenOptions},
-    os::unix::fs::OpenOptionsExt,
-    path::Path,
-    sync::Mutex,
-};
+use std::fs::TryLockError;
+use std::{path::Path, sync::Mutex};
 
 /// OS locks cover all frontends, including sessions before their first turn.
-pub(crate) struct WorkspaceLock(Mutex<Option<Vec<Flock<File>>>>);
+pub(crate) struct WorkspaceLock(Mutex<Option<Vec<FileLock>>>);
 
 impl WorkspaceLock {
     pub(crate) fn acquire(
@@ -26,21 +22,14 @@ impl WorkspaceLock {
             (format!("{server}\0{}", path.unwrap_or_default()), exclusive),
         ] {
             let name = format!("{:x}.lock", Sha256::digest(key.as_bytes()));
-            let file = OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .mode(0o600)
-                .custom_flags(nix::libc::O_NOFOLLOW)
-                .open(directory.join(name))?;
+            let file = open_private(&directory.join(name), Creation::IfMissing)?;
             let kind = if write {
-                FlockArg::LockExclusiveNonblock
+                LockMode::Exclusive
             } else {
-                FlockArg::LockSharedNonblock
+                LockMode::Shared
             };
-            locks.push(Flock::lock(file, kind).map_err(|(_, error)| {
-                if error == nix::errno::Errno::EWOULDBLOCK {
+            locks.push(FileLock::try_lock(file, kind).map_err(|(_, error)| {
+                if matches!(error, TryLockError::WouldBlock) {
                     ClientError::RemoteFault("WORKSPACE_BUSY".into(), "Close the sessions, editors and terminals using this workspace, then retry.".into(), false)
                 } else { std::io::Error::from(error).into() }
             })?);

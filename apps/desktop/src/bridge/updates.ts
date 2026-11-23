@@ -15,6 +15,7 @@ export interface UpdateSnapshot {
   busy: boolean;
   available: boolean;
   restart_required: boolean;
+  pending_version?: string | null;
 }
 
 export interface UpdateProgress {

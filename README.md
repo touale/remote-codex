@@ -7,7 +7,7 @@
   <a href="https://github.com/touale/remote-codex/actions/workflows/check.yml"><img src="https://img.shields.io/github/actions/workflow/status/touale/remote-codex/check.yml?branch=main&amp;event=push&amp;label=CI&amp;style=flat" height="20" alt="CI status"></a>
   <a href="https://github.com/touale/remote-codex/releases/latest"><img src="https://img.shields.io/github/v/release/touale/remote-codex?label=Release&amp;style=flat" height="20" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/touale/remote-codex?label=License&amp;style=flat" height="20" alt="License"></a>
-  <a href="#requirements"><img src="https://img.shields.io/badge/Platform-macOS%20ARM64-555555?style=flat" height="20" alt="Platform: macOS ARM64"></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/Platform-macOS%20ARM64%20%7C%20Windows%20x64-555555?style=flat" height="20" alt="Platform: macOS ARM64 and Windows x64"></a>
 </p>
 
 Remote Codex provides a desktop application and CLI for using local Codex sessions
@@ -69,7 +69,7 @@ Saved servers and sessions are shared between the desktop application and CLI.
 
 | Component | Supported environment |
 | --- | --- |
-| Local platform | macOS on Apple Silicon; macOS 13 or later for the desktop application |
+| Local platform | macOS on Apple Silicon (macOS 13+ for the app), or Windows 11 x64 |
 | Remote server | Linux x86_64 with SSH access and a writable home directory |
 | Codex CLI | Installed locally |
 
@@ -77,12 +77,12 @@ Saved servers and sessions are shared between the desktop application and CLI.
 
 Get the latest release from [GitHub Releases](https://github.com/touale/remote-codex/releases).
 
-#### Desktop app
+#### macOS desktop app
 
 Download [remote-codex-app-macos-arm64.dmg](https://github.com/touale/remote-codex/releases/latest/download/remote-codex-app-macos-arm64.dmg),
 open it, and drag **Remote Codex** into **Applications**.
 
-#### CLI
+#### macOS CLI
 
 Download [remote-codex-cli-macos-arm64.tar.gz](https://github.com/touale/remote-codex/releases/latest/download/remote-codex-cli-macos-arm64.tar.gz).
 Alternatively, use `wget`:
@@ -106,6 +106,21 @@ If `~/.local/bin` is not on PATH, add this line to `~/.zshrc` and open a new ter
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+#### Windows
+
+Download **remote-codex-app-windows-x64.exe** from [GitHub Releases](https://github.com/touale/remote-codex/releases/latest) and run the per-user installer.
+For the CLI, extract **remote-codex-cli-windows-x64.zip** and add its directory to the user PATH, then open a new terminal:
+
+```powershell
+remote-codex --help
+```
+
+The Windows release supports passwords and RSA/Ed25519 keys, including encrypted keys,
+and basic `Host`, `HostName`, `User`, `Port`, and `IdentityFile` SSH configuration.
+ProxyJump, ProxyCommand, SSH agents, hardware keys, MFA, and SSH host certificates
+are not supported by the Windows backend. Unsupported configuration produces an explicit error.
+The initial Windows installer is not Authenticode signed; update packages use the project's update signature.
+
 ### Build from source
 
 See the [source build instructions](CONTRIBUTING.md#build-from-source).
@@ -121,7 +136,7 @@ npm install -g @openai/codex
 codex --version
 ```
 
-Make `codex` available on PATH. If authentication is required, sign in using either:
+Make `codex` available on PATH. On Windows, Remote Codex also detects the native executable in the standard npm installation. If authentication is required, sign in using either:
 
 - **Desktop:** open **Settings → Codex → Sign in with ChatGPT**.
 - **CLI:** run `codex login`.
@@ -190,8 +205,8 @@ or its official execution package is unavailable, Remote Codex reports an error.
 ### Where is data stored?
 
 - **Codex history:** `~/.codex` by default, or the directory specified by `CODEX_HOME`. Codex manages its own login credentials locally.
-- **Saved servers, workspace and session indexes, and caches:** `~/Library/Application Support/remote-codex` on macOS, unless a custom data directory is configured.
-- **Saved SSH passwords:** macOS Keychain.
+- **Saved servers, workspace and session indexes, and caches:** `~/Library/Application Support/remote-codex` on macOS or `%LOCALAPPDATA%\remote-codex` on Windows, unless a custom data directory is configured.
+- **Saved SSH passwords:** macOS Keychain or Windows Credential Manager.
 
 Project files are accessed on the remote server. Conversation history can include
 remote file contents and command output; local history is not limited to chat text.

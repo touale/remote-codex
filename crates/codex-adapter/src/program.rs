@@ -1,4 +1,8 @@
 use remote_codex_protocol::Fault;
+#[cfg(unix)]
+mod desktop_path;
+#[cfg(windows)]
+#[path = "program/windows_path.rs"]
 mod desktop_path;
 mod probe;
 mod schema;
@@ -22,6 +26,8 @@ impl Launch {
 
     pub fn command(&self) -> Command {
         let mut command = Command::new(&self.path);
+        #[cfg(windows)]
+        remote_codex_platform::process::hide_console(&mut command);
         if let Some(path) = &self.search_path {
             command.env("PATH", path);
         }
@@ -39,8 +45,16 @@ async fn discover_with_path(search_path: Option<OsString>) -> Result<Launch, Fau
         .clone()
         .or_else(|| std::env::var_os("PATH"))
         .ok_or_else(missing)?;
-    let program = std::env::split_paths(&path)
-        .map(|directory| directory.join("codex"))
+    let candidates: Vec<_> = std::env::split_paths(&path)
+        .map(|directory| directory.join(if cfg!(windows) { "codex.exe" } else { "codex" }))
+        .collect();
+    #[cfg(windows)]
+    let candidates: Vec<_> = candidates
+        .into_iter()
+        .chain(desktop_path::candidates())
+        .collect();
+    let program = candidates
+        .into_iter()
         .find(|program| program.is_file())
         .ok_or_else(missing)?;
     validate(Launch {
@@ -62,13 +76,17 @@ pub async fn discover_desktop(selected: Option<PathBuf>) -> Result<Launch, Fault
     }
     // Standard installation locations still work when shell discovery fails
     // or the installer has not added Codex to PATH.
+    #[cfg(unix)]
     let mut candidates = vec![
         PathBuf::from("/opt/homebrew/bin/codex"),
         PathBuf::from("/usr/local/bin/codex"),
     ];
+    #[cfg(unix)]
     if let Some(home) = std::env::var_os("HOME") {
         candidates.insert(0, PathBuf::from(home).join(".local/bin/codex"));
     }
+    #[cfg(windows)]
+    let candidates = desktop_path::candidates();
     let path = candidates
         .into_iter()
         .find(|path| path.is_file())

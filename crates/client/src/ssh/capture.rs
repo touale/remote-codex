@@ -1,7 +1,10 @@
-use super::*;
+use super::SshTransport;
+use crate::{ClientError, Result, connection::SshEndpoint};
+use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
 pub(crate) struct ScriptOutput {
-    pub(crate) status: std::process::ExitStatus,
+    pub(crate) status: i32,
     pub(crate) stdout: Vec<u8>,
     pub(crate) stderr: Vec<u8>,
 }
@@ -14,19 +17,15 @@ impl SshTransport {
         endpoint: &SshEndpoint,
         script: &str,
     ) -> Result<ScriptOutput> {
-        let mut child = self
-            .command(endpoint, Some("sh -s"), false)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let mut child = self.execute(endpoint, "sh -s").await?;
         let mut input = child.stdin.take().ok_or(ClientError::RemoteResponse)?;
         let stdout = child.stdout.take().ok_or(ClientError::RemoteResponse)?;
         let stderr = child.stderr.take().ok_or(ClientError::RemoteResponse)?;
         let operation = async {
             let send = async {
                 input.write_all(script.as_bytes()).await?;
-                input.shutdown().await
+                input.shutdown().await?;
+                Result::Ok(())
             };
             let (_, stdout, stderr) = tokio::try_join!(send, bounded(stdout), bounded(stderr))?;
             Ok(ScriptOutput {
@@ -37,19 +36,16 @@ impl SshTransport {
         };
         match tokio::time::timeout(Duration::from_secs(30), operation).await {
             Ok(result) => result,
-            Err(_) => {
-                child.kill().await?;
-                Err(ClientError::Timeout)
-            }
+            Err(_) => Err(ClientError::Timeout),
         }
     }
 }
 
-async fn bounded(reader: impl AsyncRead + Unpin) -> std::io::Result<Vec<u8>> {
+pub(super) async fn bounded(reader: impl AsyncRead + Unpin) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     reader.take(1024 * 1024 + 1).read_to_end(&mut bytes).await?;
     if bytes.len() > 1024 * 1024 {
-        return Err(std::io::Error::other("remote diagnostic exceeds limit"));
+        return Err(std::io::Error::other("remote diagnostic exceeds limit").into());
     }
     Ok(bytes)
 }

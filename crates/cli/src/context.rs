@@ -35,6 +35,12 @@ impl Context {
                 && !cli.json
                 && !matches!(&cli.command,
                 Some(Command::Server {command: ServerCommand::Add(args)}) if args.non_interactive),
+            #[cfg(windows)]
+            authentication: if ui::interactive() && !cli.json {
+                Some(crate::windows_auth::handler())
+            } else {
+                None
+            },
             service: ServiceBundle {
                 bytes: Arc::from(bundled::SERVICE),
                 sha256: bundled::SERVICE_SHA.into(),

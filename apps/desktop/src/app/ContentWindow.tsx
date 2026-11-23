@@ -1,3 +1,4 @@
+import '../bridge/platform';
 import { useEffect, useRef, useState } from 'react';
 import { Tooltip } from 'radix-ui';
 import { call, failure, operationId } from '../bridge/client';

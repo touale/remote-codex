@@ -1,9 +1,11 @@
 use super::*;
 use remote_codex_protocol::Fault;
+use std::process::Stdio;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
+use tokio::io::AsyncReadExt;
 
 pub(super) struct Master {
     child: tokio::process::Child,

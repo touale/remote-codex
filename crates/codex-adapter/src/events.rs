@@ -75,7 +75,7 @@ pub fn notice(event: &mut Value, restrict_commands: bool) -> Result<Notice, Faul
                 argv: shlex::split(&text("/params/command").ok_or_else(invalid)?)
                     .filter(|v| !v.is_empty())
                     .ok_or_else(invalid)?,
-                cwd: url::Url::from_file_path(text("/params/cwd").ok_or_else(invalid)?)
+                cwd: remote_codex_core::path::file_url(&text("/params/cwd").ok_or_else(invalid)?)
                     .map_err(|_| invalid())?
                     .to_string(),
             };

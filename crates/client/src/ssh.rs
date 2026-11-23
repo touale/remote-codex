@@ -1,28 +1,36 @@
+use crate::{ClientError, Result, connection::SshEndpoint};
 use std::{
     io::Cursor,
     path::{Path, PathBuf},
-    process::Stdio,
     time::Duration,
 };
-use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
-    process::Command,
-};
+use tokio::io::{AsyncRead, AsyncWriteExt};
 
-use crate::{ClientError, Result, connection::SshEndpoint};
-
+#[cfg(unix)]
 mod askpass;
 mod capture;
 pub(crate) mod credentials;
 pub(crate) mod interaction;
+#[cfg(unix)]
 mod master;
+mod process;
 pub(crate) mod target;
 mod transfer;
+#[cfg(unix)]
+mod unix;
+#[cfg(windows)]
+mod windows;
+
+pub(crate) use process::{Reader, SshProcess, Writer};
 
 pub(crate) struct SshTransport {
     options: ConnectOptions,
+    #[cfg(unix)]
     socket_dir: tempfile::TempDir,
+    #[cfg(unix)]
     master: tokio::sync::Mutex<master::Master>,
+    #[cfg(windows)]
+    native: windows::Connection,
 }
 
 #[derive(Clone, Default)]
@@ -37,83 +45,6 @@ pub(crate) struct ConnectOptions {
 impl SshTransport {
     pub(crate) fn saved_credentials(&mut self, store: &crate::store::LocalStore, server: &str) {
         self.options.credentials = Some(credentials::Credentials::saved(store, server));
-    }
-
-    pub(crate) async fn connect_with(
-        mut options: ConnectOptions,
-        endpoint: &SshEndpoint,
-    ) -> Result<Self> {
-        endpoint.validate()?;
-        if options.interaction.is_none() {
-            options.interaction = interaction::current();
-        }
-        let socket_dir = tempfile::Builder::new()
-            .prefix("rc-ssh-")
-            .tempdir_in("/tmp")?;
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(socket_dir.path(), std::fs::Permissions::from_mode(0o700))?;
-        let master = master::start(
-            &options,
-            endpoint,
-            &socket_dir.path().join("control"),
-            !options.batch,
-        )
-        .await?;
-        Ok(Self {
-            options,
-            socket_dir,
-            master: tokio::sync::Mutex::new(master),
-        })
-    }
-
-    pub(crate) async fn ensure_connected(
-        &self,
-        endpoint: &SshEndpoint,
-        interactive: bool,
-    ) -> Result<()> {
-        self.reconnect(endpoint, interactive, false).await
-    }
-
-    pub(crate) async fn ensure_connected_silent(&self, endpoint: &SshEndpoint) -> Result<()> {
-        self.reconnect(endpoint, false, true).await
-    }
-
-    async fn reconnect(
-        &self,
-        endpoint: &SshEndpoint,
-        interactive: bool,
-        silent: bool,
-    ) -> Result<()> {
-        let mut current = self.master.lock().await;
-        let socket = self.socket_dir.path().join("control");
-        if current.alive()? && socket.try_exists()? {
-            return Ok(());
-        }
-        current.stop().await?;
-        match std::fs::remove_file(&socket) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        }
-        let mut options = self.options.clone();
-        options.batch = !interactive;
-        if silent {
-            options.interaction = None;
-            options.credentials = None;
-        }
-        *current = master::start(&options, endpoint, &socket, interactive).await?;
-        Ok(())
-    }
-
-    pub(crate) fn healthy(&self) -> bool {
-        self.master
-            .try_lock()
-            .is_ok_and(|mut master| master.alive().unwrap_or(false))
-            && self.socket_dir.path().join("control").exists()
-    }
-
-    pub(crate) async fn close(self) -> Result<()> {
-        self.master.into_inner().close().await
     }
 
     pub(crate) async fn script(&self, endpoint: &SshEndpoint, script: &str) -> Result<String> {
@@ -143,88 +74,36 @@ impl SshTransport {
         input: impl AsyncRead + Unpin,
         progress: impl Fn(u64),
     ) -> Result<String> {
-        endpoint.validate()?;
-        let mut command = self.command(endpoint, Some(remote_command), false);
-        command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true);
-        let mut child = command.spawn()?;
-        let mut stdin = child.stdin.take().ok_or(ClientError::RemoteResponse)?;
-        let mut stdout = child
-            .stdout
-            .take()
-            .ok_or(ClientError::RemoteResponse)?
-            .take(1024 * 1024 + 1);
-        let exchange = async {
-            let sender = async move {
+        let mut process = self.execute(endpoint, remote_command).await?;
+        let mut stdin = process.stdin.take().ok_or(ClientError::RemoteResponse)?;
+        let stdout = process.stdout.take().ok_or(ClientError::RemoteResponse)?;
+        let stderr = process.stderr.take().ok_or(ClientError::RemoteResponse)?;
+        let operation = async {
+            let send = async {
                 transfer::copy_with_progress(input, &mut stdin, progress).await?;
                 stdin.shutdown().await?;
                 Result::Ok(())
             };
-            let reader = async move {
-                let mut bytes = Vec::new();
-                stdout.read_to_end(&mut bytes).await?;
-                if bytes.len() > 1024 * 1024 {
-                    return Err(ClientError::RemoteResponse);
-                }
-                String::from_utf8(bytes).map_err(|_| ClientError::RemoteResponse)
-            };
-            let output = match tokio::try_join!(sender, reader) {
-                Ok(((), output)) => output,
-                Err(error) => {
-                    child.kill().await?;
-                    return Err(error);
-                }
-            };
-            let status = child.wait().await?;
-            if !status.success() {
-                return Err(ClientError::Ssh(status.code().unwrap_or(255)));
+            let (_, output, diagnostic) =
+                tokio::try_join!(send, capture::bounded(stdout), capture::bounded(stderr))?;
+            let code = process.wait().await?;
+            if code != 0 {
+                return Err(ClientError::Ssh(code));
             }
-            Ok(output)
+            if !diagnostic.is_empty() {
+                eprint!("{}", String::from_utf8_lossy(&diagnostic));
+            }
+            String::from_utf8(output).map_err(|_| ClientError::RemoteResponse)
         };
-        match tokio::time::timeout(Duration::from_secs(300), exchange).await {
-            Ok(result) => result,
-            Err(_) => {
-                child.kill().await?;
-                Err(ClientError::Timeout)
-            }
-        }
-    }
-
-    pub(crate) fn command(
-        &self,
-        endpoint: &SshEndpoint,
-        remote: Option<&str>,
-        terminal: bool,
-    ) -> Command {
-        let mut command = base_command(&self.options, endpoint);
-        command
-            .arg("-S")
-            .arg(self.socket_dir.path().join("control"))
-            .args([
-                "-o",
-                "ControlMaster=no",
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "ProxyCommand=false",
-            ]);
-        if terminal {
-            command.arg("-tt");
-        }
-        command.arg("--").arg(endpoint.host());
-        if let Some(remote) = remote {
-            command.arg(remote);
-        }
-        command.kill_on_drop(true);
-        command
+        tokio::time::timeout(Duration::from_secs(300), operation)
+            .await
+            .map_err(|_| ClientError::Timeout)?
     }
 }
 
-fn base_command(options: &ConnectOptions, endpoint: &SshEndpoint) -> Command {
-    let mut command = Command::new("ssh");
+#[cfg(unix)]
+fn base_command(options: &ConnectOptions, endpoint: &SshEndpoint) -> tokio::process::Command {
+    let mut command = tokio::process::Command::new("ssh");
     command.args([
         "-T",
         "-o",

@@ -167,9 +167,11 @@ pub(crate) async fn new_window(
     .min_inner_size(
         if content_window { 640.0 } else { 900.0 },
         if content_window { 480.0 } else { 600.0 },
-    )
-    .title_bar_style(tauri::TitleBarStyle::Overlay)
-    .hidden_title(true);
+    );
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
     #[cfg(feature = "e2e")]
     let builder =
         builder.background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
@@ -225,6 +227,10 @@ pub(crate) async fn close_window(
     state.changed();
     if last_window {
         if state.restarting.swap(false, Ordering::AcqRel) {
+            #[cfg(windows)]
+            if super::windows_updates::install_pending(window.app_handle())? {
+                return Ok(());
+            }
             window.app_handle().request_restart();
         } else {
             window.app_handle().exit(0);
@@ -247,17 +253,11 @@ pub(crate) async fn external_link(
     {
         return Err(Error::new("INVALID_LINK", "Only web links can be opened."));
     }
-    let status = tokio::process::Command::new("/usr/bin/open")
-        .arg("--")
-        .arg(parsed.as_str())
-        .status()
-        .await?;
-    if !status.success() {
-        return Err(Error::new(
-            "LINK_FAILED",
-            "Cannot open this link in the browser.",
-        ));
-    }
+    use tauri_plugin_opener::OpenerExt;
+    window
+        .opener()
+        .open_url(parsed.as_str(), None::<&str>)
+        .map_err(|_| Error::new("LINK_FAILED", "Cannot open this link in the browser."))?;
     Ok(())
 }
 pub(crate) fn request_close(window: &WebviewWindow) -> bool {

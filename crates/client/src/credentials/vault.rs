@@ -87,21 +87,57 @@ fn native_delete(service: &str, account: &str) -> Result<()> {
         Err(_) => Err(ClientError::Credentials),
     }
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 fn native_put(_: &str, _: &str, _: &[u8]) -> Result<()> {
     Err(ClientError::Unsupported(
         "local credential backend on this platform",
     ))
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 fn native_read(_: &str, _: &str) -> Result<Zeroizing<String>> {
     Err(ClientError::Unsupported(
         "local credential backend on this platform",
     ))
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 fn native_delete(_: &str, _: &str) -> Result<()> {
     Err(ClientError::Unsupported(
         "local credential backend on this platform",
     ))
+}
+
+#[cfg(windows)]
+fn entry(service: &str, account: &str) -> Result<keyring_core::Entry> {
+    use keyring_core::api::CredentialStoreApi;
+    let store = windows_native_keyring_store::Store::new().map_err(|_| ClientError::Credentials)?;
+    let modifiers = std::collections::HashMap::from([("persistence", "Local")]);
+    store
+        .build(service, account, Some(&modifiers))
+        .map_err(|_| ClientError::Credentials)
+}
+#[cfg(windows)]
+fn native_put(service: &str, account: &str, value: &[u8]) -> Result<()> {
+    entry(service, account)?
+        .set_secret(value)
+        .map_err(|_| ClientError::Credentials)
+}
+#[cfg(windows)]
+fn native_read(service: &str, account: &str) -> Result<Zeroizing<String>> {
+    let value = Zeroizing::new(
+        entry(service, account)?
+            .get_secret()
+            .map_err(|_| ClientError::Credentials)?,
+    );
+    Ok(Zeroizing::new(
+        std::str::from_utf8(&value)
+            .map_err(|_| ClientError::Credentials)?
+            .to_owned(),
+    ))
+}
+#[cfg(windows)]
+fn native_delete(service: &str, account: &str) -> Result<()> {
+    match entry(service, account)?.delete_credential() {
+        Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
+        Err(_) => Err(ClientError::Credentials),
+    }
 }

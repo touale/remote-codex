@@ -15,3 +15,6 @@ pub(crate) mod updates;
 pub(crate) mod window;
 
 pub(crate) mod editor_windows;
+
+#[cfg(windows)]
+pub(crate) mod windows_updates;

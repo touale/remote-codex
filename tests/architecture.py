@@ -16,14 +16,15 @@ TARGET_LINES = 300
 # Extend deliberately when introducing the documented workspace boundaries.
 ALLOWED = {
     "remote-codex-core": set(),
+    "remote-codex-platform": set(),
     "remote-codex-protocol": set(),
-    "remote-codex-transfer": {"remote-codex-protocol"},
-    "remote-codex-client": {"remote-codex-core", "remote-codex-protocol", "remote-codex-adapter", "remote-codex-transfer"},
-    "remote-codex-adapter": {"remote-codex-core", "remote-codex-protocol"},
+    "remote-codex-transfer": {"remote-codex-platform", "remote-codex-protocol"},
+    "remote-codex-client": {"remote-codex-platform", "remote-codex-core", "remote-codex-protocol", "remote-codex-adapter", "remote-codex-transfer"},
+    "remote-codex-adapter": {"remote-codex-platform", "remote-codex-core", "remote-codex-protocol"},
     "remote-codex-server": {
         "remote-codex-core", "remote-codex-protocol", "remote-codex-adapter", "remote-codex-transfer"
     },
-    "remote-codex": {"remote-codex-client"},
+    "remote-codex": {"remote-codex-platform", "remote-codex-client"},
     "remote-codex-desktop": {"remote-codex-client"},
     "remote-codex-test-support": {"remote-codex-client", "remote-codex-adapter", "remote-codex-protocol"},
 }

@@ -4,17 +4,14 @@ use remote_codex_protocol::{
     Call, Frame, Request, VERSION, codec,
     transfer::{Command, Reply, wire},
 };
-use std::{process::Stdio, sync::Arc, time::Duration};
-use tokio::{
-    io::BufReader,
-    process::{Child, ChildStdin, ChildStdout},
-};
+use std::{sync::Arc, time::Duration};
+use tokio::io::BufReader;
 
 pub(super) struct Peer {
     pub root: remote_codex_protocol::transfer::RootIdentity,
-    reader: BufReader<ChildStdout>,
-    writer: ChildStdin,
-    _child: Child,
+    reader: BufReader<crate::ssh::Reader>,
+    writer: crate::ssh::Writer,
+    _child: crate::ssh::SshProcess,
 }
 impl Peer {
     pub(super) async fn open(
@@ -41,11 +38,9 @@ impl Peer {
         );
         let mut child = remote
             .ssh
-            .command(&remote.server.endpoint, Some(&command), false)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
+            .execute(&remote.server.endpoint, &command)
+            .await?;
+        crate::remote::channel::drain_diagnostics(child.stderr.take());
         let mut writer = child.stdin.take().ok_or(ClientError::RemoteResponse)?;
         let mut reader = codec::Reader::new(BufReader::new(
             child.stdout.take().ok_or(ClientError::RemoteResponse)?,
@@ -103,15 +98,16 @@ pub(super) struct Peers {
 }
 impl Peers {
     pub(super) async fn new(task: &Task, remote: &Remote, lease: Arc<Lease>) -> Result<Self> {
-        use std::os::unix::fs::MetadataExt;
         let locals = task
             .grants
             .iter()
             .map(|grant| {
                 let metadata = std::fs::symlink_metadata(&grant.root)?;
-                if !metadata.is_dir()
-                    || metadata.dev() != grant.device
-                    || metadata.ino() != grant.inode
+                let identity = remote_codex_platform::fs::identity_at(&grant.root)?;
+                if remote_codex_platform::fs::is_link(&metadata)
+                    || !metadata.is_dir()
+                    || identity.device != grant.device
+                    || identity.inode != grant.inode
                 {
                     return Err(ClientError::Argument(
                         "Local transfer directory moved or changed. Select it again.",

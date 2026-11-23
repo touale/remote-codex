@@ -260,10 +260,7 @@ pub(crate) fn execution_mode(config: &crate::config::EffectiveConfig) -> Result<
 pub(crate) fn codex_home() -> Result<PathBuf> {
     let path = match std::env::var_os("CODEX_HOME") {
         Some(value) => PathBuf::from(value),
-        None => {
-            PathBuf::from(std::env::var_os("HOME").ok_or(ClientError::Argument("HOME is not set"))?)
-                .join(".codex")
-        }
+        None => remote_codex_platform::fs::home_dir()?.join(".codex"),
     };
     if !path.is_absolute() {
         return Err(ClientError::Argument(

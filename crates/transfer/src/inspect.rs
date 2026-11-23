@@ -1,15 +1,36 @@
 use super::{Endpoint, Result, fault, io, paths};
-use cap_std::fs::{Metadata, MetadataExt as CapMetadataExt};
+#[cfg(windows)]
+use cap_fs_ext::{MetadataExt, OsMetadataExt};
+use cap_std::fs::Metadata;
+#[cfg(unix)]
+use cap_std::fs::MetadataExt;
 use remote_codex_protocol::transfer::{CHUNK, Entry, Kind, Page, Reply, Stamp};
 use sha2::{Digest, Sha256};
-use std::{
-    io::{Read, Seek, SeekFrom},
-    os::unix::fs::{MetadataExt, PermissionsExt},
-};
+use std::io::{Read, Seek, SeekFrom};
 
 fn stamp(m: &Metadata) -> Stamp {
+    #[cfg(unix)]
+    let linked = m.file_type().is_symlink();
+    #[cfg(windows)]
+    let linked = m.file_attributes() & 0x400 != 0; // FILE_ATTRIBUTE_REPARSE_POINT includes junctions.
+    #[cfg(unix)]
+    let (device, inode, mode) = (m.dev(), m.ino(), m.mode() & 0o777);
+    #[cfg(windows)]
+    let (device, inode, mode) = (
+        m.dev(),
+        m.ino(),
+        if m.is_dir() {
+            0o755
+        } else if m.permissions().readonly() {
+            0o444
+        } else {
+            0o644
+        },
+    );
     Stamp {
-        kind: if m.is_file() {
+        kind: if linked {
+            Kind::Unsupported
+        } else if m.is_file() {
             Kind::File
         } else if m.is_dir() {
             Kind::Directory
@@ -17,12 +38,15 @@ fn stamp(m: &Metadata) -> Stamp {
             Kind::Unsupported
         },
         length: m.len(),
-        modified_ns: (m.mtime() as u64)
-            .saturating_mul(1_000_000_000)
-            .saturating_add(m.mtime_nsec() as u64),
-        device: m.dev(),
-        inode: m.ino(),
-        mode: m.mode() & 0o777,
+        modified_ns: m
+            .modified()
+            .ok()
+            .and_then(|t| t.into_std().duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX))
+            .unwrap_or(0),
+        device,
+        inode,
+        mode,
     }
 }
 impl Endpoint {
@@ -82,16 +106,9 @@ impl Endpoint {
     }
     fn source(&self, path: &str, expected: &Stamp) -> Result<std::fs::File> {
         let (dir, name) = self.parent(path)?;
-        let file = paths::file(&dir, &name, rustix::fs::OFlags::RDONLY)?;
-        let m = file.metadata().map_err(io)?;
-        let modified = (m.mtime() as u64)
-            .saturating_mul(1_000_000_000)
-            .saturating_add(m.mtime_nsec() as u64);
-        if m.len() != expected.length
-            || m.ino() != expected.inode
-            || m.dev() != expected.device
-            || modified != expected.modified_ns
-        {
+        let file = paths::file(&dir, &name, paths::Access::Read)?;
+        let current = stamp(&Metadata::from_file(&file).map_err(io)?);
+        if current != *expected {
             return Err(fault(
                 "TRANSFER_SOURCE_CHANGED",
                 "Source changed. Restart this file to transfer its new contents.",
@@ -131,7 +148,7 @@ impl Endpoint {
             self.directory(path)?.into_std_file()
         } else {
             let (dir, name) = self.parent(path)?;
-            paths::file(&dir, &name, rustix::fs::OFlags::RDONLY)?
+            paths::file(&dir, &name, paths::Access::Read)?
         };
         metadata(&file, stamp)
     }
@@ -154,8 +171,7 @@ pub(super) fn hash_file(
     Ok(format!("{:x}", hasher.finalize()))
 }
 pub(super) fn metadata(file: &std::fs::File, stamp: &Stamp) -> Result<()> {
-    file.set_permissions(std::fs::Permissions::from_mode(stamp.mode & 0o777))
-        .map_err(io)?;
+    remote_codex_platform::fs::set_mode(file, stamp.mode & 0o777).map_err(io)?;
     file.set_times(
         std::fs::FileTimes::new().set_modified(
             std::time::UNIX_EPOCH + std::time::Duration::from_nanos(stamp.modified_ns),

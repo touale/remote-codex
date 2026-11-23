@@ -1,9 +1,8 @@
 use crate::{ClientError, Result, store::private_directory};
-use nix::fcntl::{Flock, FlockArg};
+use remote_codex_platform::fs::{Creation, FileLock, LockMode, open_private};
 use sha2::{Digest, Sha256};
+use std::fs::TryLockError;
 use std::{
-    fs::{File, OpenOptions},
-    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -12,7 +11,7 @@ use tokio::sync::watch;
 /// Locks are OS-owned; takeover asks the existing frontend to detach, and only
 /// succeeds after it releases its lock. No PID-based process termination.
 pub(crate) struct Lease {
-    lock: std::sync::Mutex<Option<Flock<File>>>,
+    lock: std::sync::Mutex<Option<FileLock>>,
     marker: PathBuf,
     generation: String,
     pub(crate) revoked: watch::Receiver<bool>,
@@ -26,22 +25,15 @@ impl Lease {
         let key = format!("{:x}", Sha256::digest(thread.as_bytes()));
         let path = root.join(format!("{key}.lock"));
         let marker = root.join(format!("{key}.request"));
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .custom_flags(nix::libc::O_NOFOLLOW)
-            .open(path)?;
+        let file = open_private(&path, Creation::IfMissing)?;
         let mut file = file;
         let deadline = tokio::time::Instant::now() + Duration::from_secs(12);
         let generation = uuid::Uuid::new_v4().to_string();
         let mut requested = false;
         let lock = loop {
-            match Flock::lock(file, FlockArg::LockExclusiveNonblock) {
+            match FileLock::try_lock(file, LockMode::Exclusive) {
                 Ok(lock) => break lock,
-                Err((returned, nix::errno::Errno::EWOULDBLOCK)) => {
+                Err((returned, TryLockError::WouldBlock)) => {
                     file = returned;
                     if !takeover {
                         return Err(ClientError::SessionInUse);

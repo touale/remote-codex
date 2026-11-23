@@ -27,8 +27,8 @@ pub(crate) async fn ensure(
     }
 }
 
-fn decode(status: std::process::ExitStatus, stdout: &[u8], stderr: &[u8]) -> Result<ServiceStart> {
-    if status.code() == Some(255) {
+fn decode(status: i32, stdout: &[u8], stderr: &[u8]) -> Result<ServiceStart> {
+    if status == 255 {
         return Err(ClientError::Ssh(255));
     }
     let result = serde_json::from_slice::<ServiceStart>(stdout).map_err(|_| {
@@ -47,7 +47,7 @@ fn decode(status: std::process::ExitStatus, stdout: &[u8], stderr: &[u8]) -> Res
             false,
         )
     })?;
-    if !status.success() && !matches!(result, ServiceStart::Failed(_)) {
+    if status != 0 && !matches!(result, ServiceStart::Failed(_)) {
         return Err(ClientError::RemoteResponse);
     }
     Ok(result)

@@ -5,10 +5,12 @@ use super::{
 };
 use crate::Result;
 use base64::Engine;
+#[cfg(not(windows))]
+use std::path::{Component, PathBuf};
 use std::{
     fs::File,
     io::{Read, Write},
-    path::{Component, Path, PathBuf},
+    path::Path,
 };
 
 #[derive(serde::Serialize)]
@@ -99,6 +101,7 @@ pub(super) fn verify(path: &Path, signature: &[u8], public_key: &str) -> Result<
     verifier.finalize().map_err(|_| invalid())
 }
 
+#[cfg(not(windows))]
 pub(super) fn extract(archive: &Path, directory: &Path, kind: UpdateComponent) -> Result<PathBuf> {
     let expected = match kind {
         UpdateComponent::Cli => "remote-codex",
@@ -179,12 +182,17 @@ pub(super) async fn install(
     release: &Release,
     report: &(dyn Fn(UpdateProgress) + Send + Sync),
 ) -> Result<()> {
-    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    if !cfg!(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(windows, target_arch = "x86_64")
+    )) {
         return Err(error(
             "UPDATE_PLATFORM",
             "In-app updates are available for macOS Apple Silicon releases.",
         ));
     }
+    #[cfg(windows)]
+    let original_identity = remote_codex_platform::fs::identity_at(&target.path)?;
     let original_metadata = std::fs::symlink_metadata(&target.path)?;
     let installed_version = installation::read_version(target.component, &target.path).await?;
     if !release::newer(&release.info.version, &installed_version) {
@@ -209,7 +217,10 @@ pub(super) async fn install(
         total: asset.size,
     });
     let file = download(root, asset, report).await?;
+    #[cfg(not(windows))]
     let path = extract(file.path(), stage.path(), target.component)?;
+    #[cfg(windows)]
+    let path = super::windows::extract(file.path(), stage.path(), target.component)?;
     if installation::read_version(target.component, &path).await? != release.info.version {
         return Err(error(
             "UPDATE_IDENTITY",
@@ -235,6 +246,22 @@ pub(super) async fn install(
             ));
         }
         replace(&path, &target.path, &original_metadata)?;
+    }
+    #[cfg(windows)]
+    {
+        if target.component != UpdateComponent::Cli {
+            return Err(error(
+                "UPDATE_PLATFORM",
+                "Use the desktop updater for the Windows app.",
+            ));
+        }
+        if remote_codex_platform::fs::identity_at(&target.path)? != original_identity {
+            return Err(error(
+                "UPDATE_CHANGED",
+                "The installation changed during download.",
+            ));
+        }
+        self_replace::self_replace(&path)?;
     }
     #[cfg(not(target_os = "macos"))]
     let _ = original_metadata;

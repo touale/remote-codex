@@ -1,13 +1,11 @@
 use super::{Client, ServerStatus};
-use crate::{
-    ClientError, Result,
-    connection::SshEndpoint,
-    remote::Remote,
-    servers,
-    ssh::{ConnectOptions, SshTransport},
-};
+#[cfg(unix)]
+use crate::ssh::{ConnectOptions, SshTransport};
+use crate::{ClientError, Result, connection::SshEndpoint, remote::Remote, servers};
 use serde::Serialize;
-use std::{path::PathBuf, process::Stdio};
+use std::path::PathBuf;
+#[cfg(unix)]
+use std::process::Stdio;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ServerSummary {
@@ -55,7 +53,7 @@ impl ServerService {
         )?;
         let remote = state.connect(record).await?;
         let path = remote.identity.home.clone();
-        if !std::path::Path::new(&path).is_absolute() {
+        if !remote_codex_core::path::absolute(&path) {
             return Err(ClientError::Argument(
                 "Remote home directory is unavailable.",
             ));
@@ -172,6 +170,7 @@ impl ServerService {
         self.client.0.store.workspaces(&record.id).await
     }
 
+    #[cfg(unix)]
     pub async fn shell(&self, name: &str, path: Option<&str>) -> Result<()> {
         let state = &self.client.0;
         if !state.options.interactive {

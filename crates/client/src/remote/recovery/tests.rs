@@ -23,6 +23,12 @@ async fn fixed_interval_and_budget_span_transport_and_native_recovery() -> TestR
     for attempt in 1..=10 {
         let error = match attempt {
             1 => ClientError::Ssh(255),
+            4 => Fault {
+                code: "SSH_FAILED".into(),
+                message: "SSH channel closed".into(),
+                outcome_unknown: true,
+            }
+            .into(),
             2 => {
                 recovery.begin_rebuild();
                 // Bridge completion crosses the Fault boundary before rebuilding.

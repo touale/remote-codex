@@ -1,10 +1,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { browser } from '@wdio/globals';
 
 const artifacts = path.resolve('../../.artifacts/desktop-e2e');
 fs.mkdirSync(artifacts, { recursive: true });
-const root = process.env.REMOTE_CODEX_E2E_ROOT ?? fs.mkdtempSync('/tmp/rc-desktop-ui-');
+const root = process.env.REMOTE_CODEX_E2E_ROOT ?? fs.mkdtempSync(path.join(os.tmpdir(), 'rc-desktop-ui-'));
 process.env.REMOTE_CODEX_DATA_DIR = path.join(root, 'state');
 process.env.REMOTE_CODEX_DESKTOP_STATE_DIR = path.join(root, 'preferences');
 process.env.CODEX_HOME = path.join(root, 'codex');
@@ -25,7 +26,12 @@ export const config = {
   services: [
     [
       '@wdio/tauri-service',
-      { appBinaryPath: path.resolve('../../target/debug/remote-codex-desktop'), driverProvider: 'embedded' },
+      {
+        appBinaryPath: path.resolve(
+          `../../target/debug/remote-codex-desktop${process.platform === 'win32' ? '.exe' : ''}`,
+        ),
+        driverProvider: 'embedded',
+      },
     ],
   ],
   capabilities: [{ browserName: 'tauri' }],

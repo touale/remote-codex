@@ -9,13 +9,40 @@ use std::sync::{
 use std::time::Duration;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::UnixStream,
     sync::{Notify, broadcast, watch},
 };
 use tokio_tungstenite::{WebSocketStream, client_async, tungstenite::Message};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
-type Socket = WebSocketStream<UnixStream>;
+#[cfg(windows)]
+use tokio::net::TcpStream as NativeStream;
+#[cfg(unix)]
+use tokio::net::UnixStream as NativeStream;
+type Socket = WebSocketStream<NativeStream>;
+async fn stream(gateway: &Gateway) -> Result<NativeStream, Box<dyn std::error::Error>> {
+    #[cfg(unix)]
+    {
+        Ok(NativeStream::connect(&gateway.socket).await?)
+    }
+    #[cfg(windows)]
+    {
+        let url = url::Url::parse(&gateway.url)?;
+        Ok(NativeStream::connect(("127.0.0.1", url.port().ok_or("port missing")?)).await?)
+    }
+}
+fn handshake(
+    gateway: &Gateway,
+) -> Result<tokio_tungstenite::tungstenite::handshake::client::Request, Box<dyn std::error::Error>>
+{
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let mut request = "ws://localhost/".into_client_request()?;
+    if let Some(token) = &gateway.token {
+        request
+            .headers_mut()
+            .insert("authorization", format!("Bearer {token}").parse()?);
+    }
+    Ok(request)
+}
 
 struct Session {
     events: broadcast::Sender<Value>,
@@ -90,13 +117,12 @@ impl Backend for Session {
 }
 
 async fn connect(gateway: &Gateway) -> Result<Socket, Box<dyn std::error::Error>> {
-    Ok(tokio::time::timeout(Duration::from_secs(2), async {
-        let stream = UnixStream::connect(&gateway.socket).await?;
-        client_async("ws://localhost/", stream)
-            .await
-            .map(|(socket, _)| socket)
+    tokio::time::timeout(Duration::from_secs(2), async {
+        let stream = stream(gateway).await?;
+        let (socket, _) = client_async(handshake(gateway)?, stream).await?;
+        Ok::<_, Box<dyn std::error::Error>>(socket)
     })
-    .await??)
+    .await?
 }
 
 async fn request(socket: &mut Socket, id: u64, method: &str) -> TestResult {
@@ -224,7 +250,7 @@ async fn stalled_frontend_cannot_block_reconnect_or_shutdown() -> TestResult {
     let session = Session::new();
     let gateway = Gateway::start(session.clone()).await?;
     let mut stalled = connect(&gateway).await?;
-    let mut half_open = UnixStream::connect(&gateway.socket).await?;
+    let mut half_open = stream(&gateway).await?;
     half_open.write_all(b"GET / HTTP/1.1\r\n").await?;
     // Active requests must complete while another client leaves its handshake unfinished.
     for id in 1..=3 {
@@ -257,7 +283,7 @@ async fn event_backlog_does_not_extend_reconnect_deadline_or_hide_handshake_erro
     frontend.close(None).await?;
     // Wait for the server to drop the original socket before advancing its grace period.
     let _ = tokio::time::timeout(Duration::from_secs(2), frontend.next()).await?;
-    let mut invalid = UnixStream::connect(&gateway.socket).await?;
+    let mut invalid = stream(&gateway).await?;
     invalid
         .write_all(b"not a websocket request\r\n\r\n")
         .await?;
@@ -285,5 +311,32 @@ async fn event_backlog_does_not_extend_reconnect_deadline_or_hide_handshake_erro
         .err()
         .ok_or("expected reconnect timeout")?;
     assert!(error.message.contains("handshake failed"), "{error}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn browser_origins_and_missing_tokens_cannot_replace_the_frontend() -> TestResult {
+    let session = Session::new();
+    let gateway = Gateway::start(session).await?;
+    let mut original = connect(&gateway).await?;
+    let mut browser = handshake(&gateway)?;
+    browser
+        .headers_mut()
+        .insert("origin", "http://localhost".parse()?);
+    assert!(
+        client_async(browser, stream(&gateway).await?)
+            .await
+            .is_err()
+    );
+    if gateway.token.is_some() {
+        assert!(
+            client_async("ws://localhost/", stream(&gateway).await?)
+                .await
+                .is_err()
+        );
+    }
+    request(&mut original, 1, "initialize").await?;
+    assert_eq!(receive(&mut original).await?["id"], 1);
+    gateway.finish().await?;
     Ok(())
 }

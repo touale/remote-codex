@@ -1,16 +1,16 @@
 //! Native TUI transport. Product authorization and persistence live in the backend.
+#[cfg(unix)]
+use std::path::PathBuf;
 mod connection;
+mod listener;
 
 use crate::thread::response;
 use connection::Connection;
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use remote_codex_protocol::Fault;
 use serde_json::Value;
-use std::{future::Future, path::PathBuf, sync::Arc, time::Duration};
-use tokio::{
-    net::UnixListener,
-    sync::{broadcast, watch},
-};
+use std::{future::Future, sync::Arc, time::Duration};
+use tokio::sync::{broadcast, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 // Local frontend attachment is separate from configurable SSH recovery attempts.
@@ -31,24 +31,22 @@ pub trait Backend: Send + Sync + 'static {
 }
 
 pub struct Gateway {
+    #[cfg(unix)]
     pub socket: PathBuf,
+    pub url: String,
+    pub token: Option<String>,
     pub closed: watch::Receiver<bool>,
     task: tokio::task::JoinHandle<Result<()>>,
     stop: watch::Sender<bool>,
-    _directory: tempfile::TempDir,
 }
 
 impl Gateway {
     pub async fn start<B: Backend>(backend: Arc<B>) -> Result<Self> {
-        use std::os::unix::fs::PermissionsExt;
-        let directory = tempfile::Builder::new()
-            .prefix("rc-ui-")
-            .tempdir_in("/tmp")
-            .map_err(transport)?;
-        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
-            .map_err(transport)?;
-        let socket = directory.path().join("frontend.sock");
-        let listener = UnixListener::bind(&socket).map_err(transport)?;
+        let listener = listener::Listener::bind().await?;
+        #[cfg(unix)]
+        let socket = listener.socket.clone();
+        let url = listener.url.clone();
+        let token = listener.token.clone();
         let (closed, receiver) = watch::channel(false);
         let (stop, stopped) = watch::channel(false);
         let task = tokio::spawn(async move {
@@ -61,11 +59,13 @@ impl Gateway {
             result
         });
         Ok(Self {
+            #[cfg(unix)]
             socket,
+            url,
+            token,
             closed: receiver,
             task,
             stop,
-            _directory: directory,
         })
     }
 
@@ -85,7 +85,7 @@ impl Drop for Gateway {
 }
 
 async fn serve<B: Backend>(
-    listener: UnixListener,
+    listener: listener::Listener,
     backend: &Arc<B>,
     mut stopped: watch::Receiver<bool>,
 ) -> Result<()> {
@@ -113,9 +113,9 @@ async fn serve<B: Backend>(
                 return Err(transport(format!("native frontend did not connect within {} seconds{detail}", ATTACH_TIMEOUT.as_secs())));
             }
             accepted = listener.accept(), if handshakes.is_empty() => {
-                let (stream, _) = accepted.map_err(transport)?;
+                let stream = accepted?;
                 // Negotiate one replacement without pausing the active connection.
-                handshakes.push(Connection::accept(stream));
+                handshakes.push(Connection::accept(stream, listener.token.clone()));
             }
             Some(next) = handshakes.next(), if !handshakes.is_empty() => {
                 match next {

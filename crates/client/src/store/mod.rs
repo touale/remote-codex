@@ -20,7 +20,6 @@ use sqlx::{
 };
 use std::{
     fs,
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -56,18 +55,16 @@ impl LocalStore {
         private_directory(directory)?;
         let _initialization = initialization::lock(directory).await?;
         let path = directory.join("state.sqlite3");
-        match fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .mode(0o600)
-            .open(&path)
-        {
+        match remote_codex_platform::fs::open_private(
+            &path,
+            remote_codex_platform::fs::Creation::New,
+        ) {
             Ok(file) => file.sync_all()?,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error.into()),
         }
         let meta = fs::symlink_metadata(&path)?;
-        if !meta.is_file() || meta.permissions().mode() & 0o077 != 0 {
+        if !meta.is_file() || remote_codex_platform::fs::check_private(&path).is_err() {
             return Err(ClientError::PrivatePath);
         }
         if meta.len() > 0 {
@@ -110,10 +107,15 @@ pub(crate) fn default_data_dir() -> Result<PathBuf> {
     if let Some(path) = std::env::var_os("REMOTE_CODEX_DATA_DIR") {
         return Ok(PathBuf::from(path));
     }
+    #[cfg(windows)]
+    let directory =
+        PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or(ClientError::PrivatePath)?)
+            .join("remote-codex");
+    #[cfg(unix)]
     let home = std::env::var_os("HOME").ok_or(ClientError::PrivatePath)?;
     #[cfg(target_os = "macos")]
     let directory = PathBuf::from(home).join("Library/Application Support/remote-codex");
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(unix, not(target_os = "macos")))]
     let directory = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(home).join(".local/share"))
@@ -122,13 +124,11 @@ pub(crate) fn default_data_dir() -> Result<PathBuf> {
 }
 
 pub(crate) fn private_directory(path: &Path) -> Result<()> {
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(path)?;
-    let metadata = fs::symlink_metadata(path)?;
-    if !metadata.is_dir() || metadata.permissions().mode() & 0o077 != 0 {
-        return Err(ClientError::PrivatePath);
-    }
-    Ok(())
+    remote_codex_platform::fs::private_dir(path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::PermissionDenied {
+            ClientError::PrivatePath
+        } else {
+            error.into()
+        }
+    })
 }

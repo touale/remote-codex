@@ -8,7 +8,6 @@ publish.workspace = true
 [dependencies]
 remote-codex-core = { path = "../core" }
 remote-codex-protocol = { path = "../protocol" }
-nix.workspace = true
 shlex.workspace = true
 semver = "1"
 url.workspace = true
@@ -19,9 +18,15 @@ tokio.workspace = true
 futures-util.workspace = true
 tokio-tungstenite.workspace = true
 tempfile.workspace = true
+remote-codex-platform.workspace = true
+cap-std = "4.0.3"
+cap-fs-ext = "4.0.3"
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true

@@ -22,11 +22,11 @@ impl Endpoint {
             .store(true, std::sync::atomic::Ordering::Release);
     }
     pub fn identity(&self) -> Result<remote_codex_protocol::transfer::RootIdentity> {
-        use cap_std::fs::MetadataExt;
-        let metadata = self.root.dir_metadata().map_err(io)?;
+        let file = self.root.try_clone().map_err(io)?.into_std_file();
+        let identity = remote_codex_platform::fs::identity(&file).map_err(io)?;
         Ok(remote_codex_protocol::transfer::RootIdentity {
-            device: metadata.dev(),
-            inode: metadata.ino(),
+            device: identity.device,
+            inode: identity.inode,
         })
     }
 
@@ -82,7 +82,7 @@ impl Endpoint {
             Command::Directory { path } => {
                 let (dir, name) = self.parent(&path)?;
                 dir.create_dir(&name).map_err(io)?;
-                dir.into_std_file().sync_all().map_err(io)?;
+                remote_codex_platform::fs::sync_directory(&dir.into_std_file()).map_err(io)?;
                 Reply::Done
             }
             Command::Metadata { path, stamp } => {

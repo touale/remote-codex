@@ -5,6 +5,7 @@ pub mod config;
 pub mod connection;
 
 pub mod desktop;
+pub mod path;
 pub mod session;
 pub mod status;
 pub mod workspace;

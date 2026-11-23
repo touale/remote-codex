@@ -1,3 +1,4 @@
+import { modifierKey } from '../bridge/platform';
 import { ArrowLeft, Save, X, ExternalLink } from 'lucide-react';
 import { RowMenu } from '../ui/RowMenu';
 import { useEffect, useRef } from 'react';
@@ -115,7 +116,7 @@ export function EditorHeader({
         )}
         {active && isText(active) && !diff && (
           <IconButton
-            label="Save file (⌘S)"
+            label={'Save file (' + modifierKey + 'S)'}
             disabled={
               !active.context ||
               !!active.pendingMove ||

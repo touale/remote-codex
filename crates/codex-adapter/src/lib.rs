@@ -1,6 +1,7 @@
 //! Supervised Codex app-server engine and its bounded stdio protocol transport.
 mod defaults;
 pub mod engine;
+#[cfg(unix)]
 pub mod executor;
 
 pub mod catalog;

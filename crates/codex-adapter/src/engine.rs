@@ -62,10 +62,8 @@ impl Engine {
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
-            .process_group(0)
             .kill_on_drop(true);
-        let child = command
-            .spawn()
+        let child = remote_codex_platform::process::Child::spawn(command)
             .map_err(|_| Fault::new("ENGINE_START_FAILED", "could not start local Codex"))?;
         let (sender, receiver) = mpsc::channel(64);
         let (events, _) = broadcast::channel(512);

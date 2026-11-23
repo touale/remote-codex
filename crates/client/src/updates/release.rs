@@ -73,10 +73,14 @@ pub(super) fn select(value: &serde_json::Value) -> Result<Release> {
     }
     let mut assets = BTreeMap::new();
     let list = value["assets"].as_array().ok_or_else(invalid)?;
-    for (component, name) in [
+    #[cfg(not(windows))]
+    let names = [
         (UpdateComponent::Cli, "remote-codex-cli-macos-arm64.tar.gz"),
         (UpdateComponent::App, "remote-codex-app-macos-arm64.tar.gz"),
-    ] {
+    ];
+    #[cfg(windows)]
+    let names = [(UpdateComponent::Cli, "remote-codex-cli-windows-x64.zip")];
+    for (component, name) in names {
         let url = format!("{REPOSITORY}/releases/download/{tag}/{name}");
         let sig = format!("{url}.sig");
         let archive = list

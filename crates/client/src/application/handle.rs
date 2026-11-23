@@ -109,9 +109,12 @@ impl SessionHandle {
         let backend = super::terminal::TerminalSessions::new(self.clone());
         let current = backend.current.subscribe();
         let gateway = remote_codex_adapter::gateway::Gateway::start(backend).await?;
-        let command = self
-            .runtime
-            .frontend(&self.program, &gateway.socket, arguments)?;
+        let command = self.runtime.frontend(
+            &self.program,
+            &gateway.url,
+            gateway.token.as_deref(),
+            arguments,
+        )?;
         Ok(TerminalAttachment {
             command: command.into(),
             closed: gateway.closed.clone(),

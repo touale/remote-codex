@@ -4,6 +4,8 @@ mod release;
 mod storage;
 #[cfg(test)]
 mod tests;
+#[cfg(windows)]
+mod windows;
 
 use crate::{ClientError, Result};
 pub use package::UpdateProgress;
@@ -41,6 +43,7 @@ pub struct UpdateSnapshot {
     pub busy: bool,
     pub available: bool,
     pub restart_required: bool,
+    pub pending_version: Option<String>,
 }
 
 pub struct Updater {
@@ -64,7 +67,9 @@ impl Updater {
             root,
             current: installation::current(component)?,
             can_install: option_env!("REMOTE_CODEX_RELEASE") == Some("1")
-                && cfg!(all(target_os = "macos", target_arch = "aarch64")),
+                && (cfg!(all(target_os = "macos", target_arch = "aarch64"))
+                    || (cfg!(all(windows, target_arch = "x86_64"))
+                        && component == UpdateComponent::Cli)),
         })
     }
 
@@ -76,6 +81,7 @@ impl Updater {
             self.current.version.clone()
         };
         Ok(UpdateSnapshot {
+            pending_version: None,
             available: saved
                 .release
                 .as_ref()
@@ -151,7 +157,7 @@ impl Updater {
         }
     }
 
-    fn lock(&self) -> Result<nix::fcntl::Flock<std::fs::File>> {
+    fn lock(&self) -> Result<remote_codex_platform::fs::FileLock> {
         storage::lock(&self.root, self.lock_name())?
             .ok_or_else(|| error("UPDATE_BUSY", "Another update is already running."))
     }

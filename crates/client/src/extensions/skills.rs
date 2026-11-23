@@ -9,7 +9,6 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -182,7 +181,7 @@ fn manifest(root: &Path) -> Result<Vec<SkillFile>> {
             }
             // Symlinked resources are not copied, including links within the root:
             // the bundle's behavior must not depend on a link changing mid-upload.
-            if metadata.file_type().is_symlink() {
+            if remote_codex_platform::fs::is_link(&metadata) {
                 return Err(ClientError::Argument(
                     "enabled Skill contains a symbolic link; replace it with a regular resource before remote execution",
                 ));
@@ -204,17 +203,15 @@ fn manifest(root: &Path) -> Result<Vec<SkillFile>> {
                 return Err(ClientError::Argument("Skill exceeds 16 MiB or 500 files"));
             }
             let bytes = std::fs::read(&path)?;
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|_| ClientError::PrivatePath)?
-                .to_str()
-                .ok_or(ClientError::Argument("Skill path must be UTF-8"))?
-                .to_owned();
+            let relative = remote_codex_platform::fs::relative_posix(
+                path.strip_prefix(root)
+                    .map_err(|_| ClientError::PrivatePath)?,
+            )?;
             files.push(SkillFile {
                 path: relative,
                 size: bytes.len() as u64,
                 sha256: format!("{:x}", Sha256::digest(bytes)),
-                executable: metadata.permissions().mode() & 0o111 != 0,
+                executable: remote_codex_platform::fs::mode(&metadata) & 0o111 != 0,
             });
         }
     }

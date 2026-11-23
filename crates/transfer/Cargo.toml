@@ -10,10 +10,13 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 uuid.workspace = true
-nix.workspace = true
 cap-std = "4.0.3"
-rustix = { version = "1", features = ["fs"] }
+remote-codex-platform.workspace = true
+cap-fs-ext = "4.0.3"
 [dev-dependencies]
 tempfile.workspace = true
 [lints]
 workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }

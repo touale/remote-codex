@@ -5,7 +5,7 @@ This guide covers building and testing the source checkout.
 
 ## Build from source
 
-Local CLI and desktop builds target macOS on Apple Silicon. Both embed a Linux
+Local CLI and desktop builds target macOS on Apple Silicon and Windows 11 x64. Both embed a Linux
 x86_64 execution service, which must be built first.
 
 ### Dependencies
@@ -130,3 +130,18 @@ production workspaces as fixtures.
 
 Use [Issues](https://github.com/touale/remote-codex/issues) and
 [Pull requests](https://github.com/touale/remote-codex/pulls) to contribute.
+
+### Windows builds
+
+Install Rust MSVC, Visual Studio Build Tools with Desktop development with C++, and Node.js 24.
+Build the Linux execution service on Linux/WSL using the commands above, or supply an existing build:
+
+```powershell
+$env:REMOTE_CODEX_SERVER_ARTIFACT = 'C:\build\remote-codex-server'
+cargo build --release --locked -p remote-codex
+npm ci --prefix apps/desktop
+npm --prefix apps/desktop run tauri -- build --bundles nsis
+```
+
+The CLI is `target/release/remote-codex.exe`; the per-user installer is in `target/release/bundle/nsis`.
+Windows CI checks native compilation and isolated UI fixtures. Windows 11 device acceptance remains required for terminal interaction, credential storage, SSH recovery, and installer updates.
