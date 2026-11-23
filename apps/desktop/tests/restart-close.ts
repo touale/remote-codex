@@ -31,7 +31,10 @@ export async function restartCloseGuards() {
             location.href,
           );
           const command = url.pathname.slice(1);
-          if (url.protocol !== 'ipc:' || !['file_read', 'file_write'].includes(command))
+          if (
+            (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
+            !['file_read', 'file_write'].includes(command)
+          )
             return original.call(window, input, init);
           const failed = command === 'file_write' && window.restartFixture.fail;
           return new Response(

@@ -31,7 +31,7 @@ export async function createWorkspaceFolder() {
       );
       const command = url.pathname.slice(1);
       if (
-        url.protocol !== 'ipc:' ||
+        (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
         !['directory_open', 'directory_create', 'directory_close', 'workspace_open', 'file_list'].includes(command)
       )
         return original.call(window, input, init);

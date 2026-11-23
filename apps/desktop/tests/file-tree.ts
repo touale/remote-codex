@@ -34,7 +34,8 @@ export async function copyFilePaths() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || url.pathname !== '/file_list') return fetch.call(window, input, init);
+      if ((url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') || url.pathname !== '/file_list')
+        return fetch.call(window, input, init);
       const { path } = JSON.parse(init!.body as string);
       const entries =
         path === 'src'

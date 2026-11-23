@@ -27,7 +27,7 @@ export async function firstMessage() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol === 'ipc:' && url.pathname === '/session_open') {
+      if ((url.protocol === 'ipc:' || url.origin === 'http://ipc.localhost') && url.pathname === '/session_open') {
         gate.calls++;
         const error = await new Promise<string | undefined>((resolve) => {
           gate.resume = resolve;

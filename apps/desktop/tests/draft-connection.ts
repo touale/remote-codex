@@ -27,7 +27,7 @@ export async function draftConnection(invoke: Invoke, remote: string) {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol === 'ipc:' && url.pathname === '/session_open') {
+      if ((url.protocol === 'ipc:' || url.origin === 'http://ipc.localhost') && url.pathname === '/session_open') {
         window.draftSessionOpens++;
         return new Response(
           JSON.stringify({

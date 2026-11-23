@@ -56,7 +56,8 @@ export async function toolRecords(setTheme: (theme: 'light' | 'dark') => Promise
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || url.pathname !== '/external_link') return original.call(window, input, init);
+      if ((url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') || url.pathname !== '/external_link')
+        return original.call(window, input, init);
       const state = window as typeof window & { toolLinkRequests: string[] };
       state.toolLinkRequests.push(JSON.parse(init!.body as string).url);
       const failed = state.toolLinkRequests.length > 1;
@@ -102,7 +103,8 @@ async function historicalOutput() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || url.pathname !== '/session_tool_output') return original.call(window, input, init);
+      if ((url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') || url.pathname !== '/session_tool_output')
+        return original.call(window, input, init);
       const { offset, source } = JSON.parse(init!.body as string);
       offsets.push(offset);
       cursors.push(source.cursor);

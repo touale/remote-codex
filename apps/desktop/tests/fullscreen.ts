@@ -25,13 +25,14 @@ async function titlebar(label: string) {
 }
 
 async function layout(label: string, fullscreen: boolean) {
+  const trafficLights = process.platform === 'darwin' && !fullscreen;
   await browser.waitUntil(
     async () => {
       const value = await titlebar(label);
       return (
         value.fullscreen === String(fullscreen) &&
-        value.reserved === (fullscreen ? 0 : 76) &&
-        Math.abs(value.left - (fullscreen ? 10 : 82)) < 1
+        value.reserved === (trafficLights ? 76 : 0) &&
+        Math.abs(value.left - (trafficLights ? 82 : 10)) < 1
       );
     },
     { timeoutMsg: `Titlebar did not follow fullscreen=${fullscreen} in ${label}` },
@@ -51,7 +52,9 @@ export async function fullscreenTitlebar() {
       await setFullscreen(main, fullscreen);
       await layout(main, fullscreen);
       const current = await titlebar(main);
-      expect(Math.abs(current.titleLeft! - normal.titleLeft! + (fullscreen ? 72 : 0))).toBeLessThan(1);
+      expect(
+        Math.abs(current.titleLeft! - normal.titleLeft! + (process.platform === 'darwin' && fullscreen ? 72 : 0)),
+      ).toBeLessThan(1);
     }
     content = await invokeWindow<string>(main, 'new_window', {
       target: {

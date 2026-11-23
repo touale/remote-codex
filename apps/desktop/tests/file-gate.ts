@@ -40,7 +40,8 @@ export async function holdFiles(
         const matches = server
           ? command === connection && args?.server === server
           : command === 'file_list' || command === 'file_read';
-        if (url.protocol !== 'ipc:' || !matches) return original.call(window, input, init);
+        if ((url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') || !matches)
+          return original.call(window, input, init);
         const response = server ? undefined : await original.call(window, input, init);
         let request!: Held;
         const fail = await new Promise<boolean>((release) => {

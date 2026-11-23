@@ -26,7 +26,7 @@ export async function filePreviews() {
           location.href,
         );
         if (
-          url.protocol !== 'ipc:' ||
+          (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
           !['/file_read', '/file_preview_read', '/file_write', '/cancel_operation', '/file_context_open'].includes(
             url.pathname,
           )

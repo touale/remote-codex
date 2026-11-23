@@ -72,7 +72,8 @@ export async function conversationHeading() {
             typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
             location.href,
           );
-          if (url.protocol !== 'ipc:') return original.call(window, input, init);
+          if (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost')
+            return original.call(window, input, init);
           const args = JSON.parse(init!.body as string);
           let result: unknown;
           switch (url.pathname) {

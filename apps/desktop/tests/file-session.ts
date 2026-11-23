@@ -30,7 +30,7 @@ export async function fileFolderSessions() {
       );
       const command = url.pathname.slice(1);
       if (
-        url.protocol !== 'ipc:' ||
+        (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
         !['workspace_open', 'file_context_open', 'file_context_close', 'file_list', 'session_open'].includes(command)
       )
         return original.call(window, input, init);

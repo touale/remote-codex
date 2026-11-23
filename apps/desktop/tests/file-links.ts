@@ -27,7 +27,10 @@ export async function fileLinks() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || !['/workspace_open', '/file_read', '/external_link'].includes(url.pathname))
+      if (
+        (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
+        !['/workspace_open', '/file_read', '/external_link'].includes(url.pathname)
+      )
         return original.call(window, input, init);
       const args = JSON.parse(init!.body as string);
       let result: unknown = null;

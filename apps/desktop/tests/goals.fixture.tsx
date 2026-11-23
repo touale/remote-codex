@@ -45,7 +45,10 @@ export function GoalsFixture() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || !['/session_action', '/session_snapshot'].includes(url.pathname))
+      if (
+        (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
+        !['/session_action', '/session_snapshot'].includes(url.pathname)
+      )
         return original.call(window, input, init);
       const { id, action } = JSON.parse(init!.body as string) as { id: string; action?: SessionAction };
       if (!id.startsWith('goal-fixture')) return original.call(window, input, init);

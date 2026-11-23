@@ -74,7 +74,7 @@ export async function conversationLoading(session: string) {
         location.href,
       );
       const stage =
-        url.protocol === 'ipc:'
+        url.protocol === 'ipc:' || url.origin === 'http://ipc.localhost'
           ? ({ '/session_open': 'opening', '/session_history': 'history' } as const)[
               url.pathname as '/session_open' | '/session_history'
             ]

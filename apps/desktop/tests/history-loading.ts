@@ -25,7 +25,8 @@ export async function historyLoading() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || url.pathname !== '/session_history') return original.call(window, input, init);
+      if ((url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') || url.pathname !== '/session_history')
+        return original.call(window, input, init);
       const { cursor } = JSON.parse(init!.body as string);
       requests.push(cursor);
       if (cursor === '1') {

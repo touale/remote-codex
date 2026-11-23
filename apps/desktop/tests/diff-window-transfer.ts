@@ -19,7 +19,8 @@ export async function moveDiffView() {
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
         location.href,
       );
-      if (url.protocol !== 'ipc:' || url.pathname !== '/new_window') return original.call(window, input, init);
+      if ((url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') || url.pathname !== '/new_window')
+        return original.call(window, input, init);
       const fail = await new Promise<boolean>((resolve) => {
         gate.release = resolve;
       });

@@ -46,7 +46,7 @@ export async function updateFlow() {
       );
       const command = url.pathname.slice(1);
       if (
-        url.protocol !== 'ipc:' ||
+        (url.protocol !== 'ipc:' && url.origin !== 'http://ipc.localhost') ||
         !['update_status', 'update_check', 'update_install', 'restart_app'].includes(command)
       )
         return original.call(window, input, init);
