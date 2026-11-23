@@ -1,4 +1,5 @@
 import { $, $$, browser, expect } from '@wdio/globals';
+import { pasteInEditor } from './editor-input';
 import type { Catalog, Server, TextFile } from '../src/bridge/types';
 
 import { heldFile, holdFiles, releaseFile, restoreFiles } from './file-gate';
@@ -66,7 +67,7 @@ export async function emptyServerFiles(invoke: Invoke, server: Server, other: Se
   await $(`.file-row .tree-label[title="${directory}/nested"]`).waitForDisplayed();
   await $(`.file-row .tree-label[title="${directory}/child.txt"]`).click();
   await $('.monaco-editor textarea').waitForExist();
-  await $('.monaco-editor textarea').addValue(' edited');
+  await pasteInEditor(' edited');
   await $('button[aria-label^="Save file ("]').waitForEnabled();
   expect((await invoke<TextFile>('file_read', { context, path: `${directory}/child.txt` })).text).toBe('Server files');
   // Saving a workspace must not replace the current root browser.

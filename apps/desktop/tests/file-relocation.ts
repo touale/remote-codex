@@ -1,4 +1,5 @@
 import { $, browser, expect } from '@wdio/globals';
+import { pasteInEditor } from './editor-input';
 import type { TextFile } from '../src/bridge/types';
 import { contextAt } from './interaction-controls';
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -30,7 +31,7 @@ export async function fileRelocation(invoke: Invoke, context: string) {
   await expect($(row('relocate/source.txt'))).not.toExist();
   await $(row('relocate/empty/source.txt')).click();
   await $('.monaco-editor textarea').waitForExist();
-  await $('.monaco-editor textarea').addValue('unsaved ');
+  await pasteInEditor('unsaved ');
   await contextAt(row('relocate/empty/source.txt'));
   await $('[role="menuitem"]=Rename…').click();
   await expect($('[role="dialog"] input')).toHaveValue('source.txt');
@@ -71,13 +72,13 @@ export async function fileRelocation(invoke: Invoke, context: string) {
     'title',
     expect.stringContaining('/relocate/renamed.txt'),
   );
-  await $('.monaco-editor textarea').addValue('Incoming draft. ');
+  await pasteInEditor('Incoming draft. ');
   await invoke('file_write', { context, path: 'relocate/target.txt', text: 'target', revision: null });
   await $('button[aria-label="Refresh files"]').click();
   await $(row('relocate/target.txt')).click();
   await expect($('.editor-tab.selected .tab-name')).toHaveText('target.txt');
   await expect($('.monaco-editor .view-lines')).toHaveText('target');
-  await $('.monaco-editor textarea').addValue('Destination draft. ');
+  await pasteInEditor('Destination draft. ');
   await contextAt(row('relocate/renamed.txt'));
   await $('[role="menuitem"]=Rename…').click();
   await $('[role="dialog"] input').setValue('target.txt');

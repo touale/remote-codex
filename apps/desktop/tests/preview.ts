@@ -1,4 +1,5 @@
 import { $, browser, expect } from '@wdio/globals';
+import { pasteInEditor } from './editor-input';
 import { previewPdf, previewSvg, previewMarkdown } from './preview-data';
 
 declare global {
@@ -162,7 +163,7 @@ export async function filePreviews() {
     await expect($('.content-window .editor-pane')).toHaveText(expect.stringContaining('Temporary read failure'));
     await $('.content-window').$('button=Retry').click();
     await $('.content-window .monaco-editor textarea').waitForExist();
-    await $('.content-window .monaco-editor textarea').addValue('Saved after retry. ');
+    await pasteInEditor('Saved after retry. ', '.content-window .monaco-editor');
     await expect($('.content-window .editor-status')).toHaveText(expect.stringContaining('Unsaved changes'));
     await browser.execute(() =>
       document.dispatchEvent(

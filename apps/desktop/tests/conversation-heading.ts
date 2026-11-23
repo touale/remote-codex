@@ -138,8 +138,8 @@ export async function conversationHeading() {
     await $('[aria-label="Recent sessions"] button').click();
     await $('[data-message-id="message-0"]').waitForExist();
     await expect(toggle()).toHaveAttribute('aria-expanded', 'true');
-    const input = $('textarea[aria-label="Message Codex"]');
-    await input.setValue('Keep this draft.');
+    const input = 'textarea[aria-label="Message Codex"]';
+    await $(input).setValue('Keep this draft.');
     await browser.execute(() => {
       const view = document.querySelector<HTMLElement>('.chat-scroll')!;
       view.scrollTop = 200;
@@ -151,7 +151,7 @@ export async function conversationHeading() {
     await expect(toggle()).toHaveAttribute('aria-label', 'Show conversation title');
     await browser.waitUntil(async () => (await readPosition()).height > before.height);
     expect(Math.abs((await readPosition()).top - before.top)).toBeLessThanOrEqual(2);
-    await expect(input).toHaveValue('Keep this draft.');
+    await expect($(input)).toHaveValue('Keep this draft.');
     expect(await $('[aria-label="Conversation heading"]').getSize('height')).toBe(14);
     // The embedded driver dispatches synthetic keys without native button activation.
     expect(
@@ -164,11 +164,11 @@ export async function conversationHeading() {
     await toggle().click();
     await expect(toggle()).toHaveAttribute('aria-expanded', 'true');
     expect(Math.abs((await readPosition()).top - before.top)).toBeLessThanOrEqual(2);
-    await expect(input).toHaveValue('Keep this draft.');
+    await expect($(input)).toHaveValue('Keep this draft.');
     await toggle().click();
     await expect(toggle()).toHaveAttribute('aria-expanded', 'false');
     await $('.session-row[data-session-id="second"] .tree-label').click();
-    await expect(input).toHaveValue('');
+    await expect($(input)).toHaveValue('');
     await expect(toggle()).toHaveAttribute('aria-expanded', 'false');
     await contextAt('[data-workspace-path="/fixture"]');
     await $('[role="menuitem"]=New session').click();

@@ -1,4 +1,5 @@
 import { $, browser, expect } from '@wdio/globals';
+import { pasteInEditor } from './editor-input';
 
 declare global {
   interface Window {
@@ -60,7 +61,7 @@ export async function fileLinks() {
     await $('a=Absolute').click();
     await expect($('.monaco-editor .view-lines')).toHaveText(expect.stringMatching(/alpha:\sdecision\.md/));
     // A second spelling of the same file must preserve unsaved editor content.
-    await $('.monaco-editor textarea').addValue('draft');
+    await pasteInEditor('draft');
     await $('a=Relative').click();
     await expect($('.monaco-editor .view-lines')).toHaveText(expect.stringContaining('draft'));
     expect(await browser.execute(() => window.linkFixture.reads.length)).toBe(1);
