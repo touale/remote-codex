@@ -19,7 +19,7 @@ futures-util.workspace = true
 url.workspace = true
 tauri-plugin-wdio = { version = "1", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1", optional = true }
-tauri-plugin-opener = "~2.5.5"
+tauri-plugin-opener = "~2.7.3"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
@@ -33,4 +33,4 @@ sha2.workspace = true
 workspace = true
 
 [target."cfg(windows)".dependencies]
-tauri-plugin-updater = "~2.12.0"
+tauri-plugin-updater = "~2.14.1"
