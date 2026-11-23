@@ -103,7 +103,7 @@ export async function restartCloseGuards() {
     await browser.waitUntil(async () => (await browser.getWindowHandles()).length === 2);
     await browser.tauri.execute(
       ({ core }) => {
-        void core.invoke('close_window', { cancel: false });
+        setTimeout(() => void core.invoke('close_window', { cancel: false }), 0);
       },
       withExecuteOptions({ windowLabel: fresh }),
     );
@@ -112,7 +112,11 @@ export async function restartCloseGuards() {
     if ((await browser.getWindowHandles()).includes(other)) {
       await browser.tauri.execute(
         ({ core }) => {
-          void core.invoke('close_window', { cancel: true }).then(() => core.invoke('close_window', { cancel: false }));
+          setTimeout(() => {
+            void core
+              .invoke('close_window', { cancel: true })
+              .then(() => core.invoke('close_window', { cancel: false }));
+          }, 0);
         },
         withExecuteOptions({ windowLabel: label }),
       );

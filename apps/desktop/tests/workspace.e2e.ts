@@ -1,5 +1,5 @@
 import { directoryNavigation } from './directory-navigation';
-import { pasteInEditor } from './editor-input';
+import { enterEditorText } from './editor-input';
 import { windowNavigation } from './window-navigation';
 import { contentWindows } from './content-windows';
 import { chatFollow } from './chat-follow';
@@ -147,7 +147,7 @@ describe('A real SSH workspace in the native desktop', () => {
       await $('[role="dialog"] input').setValue('notes.md');
       await $('button=Create').click();
       await $('.monaco-editor textarea').waitForExist({ timeout: 30000 });
-      await pasteInEditor('Desktop editing works.');
+      await enterEditorText('Desktop editing works.');
       await $('button[aria-label^="Save file ("]').waitForEnabled();
       await $('button[aria-label^="Save file ("]').click();
       await browser.waitUntil(async () =>
@@ -162,7 +162,7 @@ describe('A real SSH workspace in the native desktop', () => {
         text: 'Changed outside the editor.',
         revision: original.revision,
       });
-      await pasteInEditor(' More edits.');
+      await enterEditorText(' More edits.');
       await $('button[aria-label^="Save file ("]').click();
       await expect($('[role="dialog"]')).toHaveText(expect.stringContaining('This file changed remotely'));
       await $('button=Discard my edits').click();
@@ -170,7 +170,7 @@ describe('A real SSH workspace in the native desktop', () => {
       await editorTabs(remote);
     });
     await step('preserves dirty buffers across workspaces and cancelling tab closure', async () => {
-      await pasteInEditor(' Kept across workspaces.');
+      await enterEditorText(' Kept across workspaces.');
       await invoke('file_change', { context: workspace, change: { action: 'directory', path: 'second' } });
       await invoke('workspace_open', {
         operationId: crypto.randomUUID(),

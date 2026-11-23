@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
-import { pasteInEditor } from './editor-input';
+import { enterEditorText } from './editor-input';
 import type { Catalog, Server, TextFile } from '../src/bridge/types';
 import { masters } from './directory-lifecycle';
 import { activateTree, contextAt } from './interaction-controls';
@@ -9,7 +9,7 @@ type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
 
 export async function serverNavigation(invoke: Invoke, workspace: string, remote: string, session: string) {
   const savedFile = await invoke<TextFile>('file_read', { context: workspace, path: 'notes.md' });
-  await pasteInEditor(' Retained across servers.');
+  await enterEditorText(' Retained across servers.');
   await $('button[aria-label^="Save file ("]').waitForEnabled();
   const secondary = await invoke<Server>('server_save', {
     operationId: crypto.randomUUID(),

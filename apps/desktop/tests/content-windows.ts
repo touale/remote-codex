@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
-import { pasteInEditor } from './editor-input';
+import { enterEditorText } from './editor-input';
 import { withExecuteOptions } from '@wdio/tauri-service';
 import type { TextFile } from '../src/bridge/types';
 import { invokeWindow } from './invoke';
@@ -64,7 +64,7 @@ export async function contentWindows(remote: string) {
   await expect($('.editor-pane')).not.toExist();
   await $('.file-row .tree-label[title="window-test.txt"]').click();
   await $('.monaco-editor textarea').waitForExist();
-  await pasteInEditor('unsaved transfer\n');
+  await enterEditorText('unsaved transfer\n');
   await expect($('.editor-status')).toHaveText(expect.stringContaining('Unsaved changes'));
   await $('button[aria-label="Move to New Window"]').click();
   await browser.waitUntil(async () => (await browser.getWindowHandles()).length === 3);
@@ -87,7 +87,7 @@ export async function contentWindows(remote: string) {
     const saved = await invokeWindow<TextFile>('main', 'file_read', file);
     expect(saved.text).toContain('unsaved transfer');
     await invokeWindow('main', 'file_write', { ...file, revision: saved.revision, text: 'external edit\n' });
-    await pasteInEditor('local edit\n');
+    await enterEditorText('local edit\n');
     await $('button[aria-label^="Save file ("]').click();
     await expect($('[role="dialog"]')).toHaveText(expect.stringContaining('This file changed remotely'));
     await $('button=Discard my edits').click();
@@ -95,7 +95,7 @@ export async function contentWindows(remote: string) {
     await browser.saveScreenshot(
       fileURLToPath(new URL('../../../.artifacts/desktop-e2e/content-editor.png', import.meta.url)),
     );
-    await pasteInEditor('close check\n');
+    await enterEditorText('close check\n');
     // The embedded WebDriver's closeWindow destroys the window, bypassing CloseRequested.
     const requestClose = () =>
       browser.tauri.execute(
