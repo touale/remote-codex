@@ -83,16 +83,16 @@ export async function createWorkspaceFolder() {
     expect(await requests('directory_open')).toEqual([]);
     await contextAt(group);
     await $('[role="menuitem"]=New folder…').click();
-    const input = $('.new-workspace-folder input');
-    await input.setValue('../escape');
+    const input = '.new-workspace-folder input';
+    await $(input).setValue('../escape');
     await $('button=Create folder').click();
     await expect($('[role="dialog"] [role="alert"]')).toHaveText(expect.stringContaining('single folder name'));
     expect(await requests('directory_open')).toEqual([]);
-    await input.setValue('exists');
+    await $(input).setValue('exists');
     await $('button=Create folder').click();
     await expect($('[role="dialog"] [role="alert"]')).toHaveText('Fixture folder already exists.');
-    await expect(input).toHaveValue('exists');
-    await input.setValue('new 中文');
+    await expect($(input)).toHaveValue('exists');
+    await $(input).setValue('new 中文');
     await browser.execute(() => {
       const form = document.querySelector('.new-workspace-folder')!;
       for (let i = 0; i < 2; i++) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -132,7 +132,7 @@ export async function createWorkspaceFolder() {
     }, leaf);
     await $('[role="menu"]').waitForDisplayed();
     await $('[role="menuitem"]=New folder…').click();
-    await input.setValue('child');
+    await $(input).setValue('child');
     await $('button=Create folder').click();
     await expect($('[role="dialog"]')).not.toExist();
     await expect($('#created-workspace')).toHaveText('alpha · /workspace/a/child');

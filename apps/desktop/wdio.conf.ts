@@ -39,7 +39,7 @@ export const config = {
   waitforTimeout: 15000,
   connectionRetryTimeout: 30000,
   connectionRetryCount: 0,
-  mochaOpts: { timeout: 45000, bail: true },
+  mochaOpts: { timeout: 45000 },
   afterTest: async (test: { title: string }, _context: unknown, result: { passed: boolean }) => {
     if (result.passed) return;
     const name = test.title.replace(/[^a-z0-9]+/gi, '-').slice(0, 80);
