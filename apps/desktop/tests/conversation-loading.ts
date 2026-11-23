@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { activateTree } from './interaction-controls';
 import { newSession } from './navigation-controls';
@@ -112,13 +113,14 @@ export async function conversationLoading(session: string) {
       await $(`button=${theme}`).click();
       await $('[role="dialog"] button[aria-label="Close"]').click();
       await browser.saveScreenshot(
-        new URL(`../../../.artifacts/desktop-e2e/conversation-loading-${theme.toLowerCase()}.png`, import.meta.url)
-          .pathname,
+        fileURLToPath(
+          new URL(`../../../.artifacts/desktop-e2e/conversation-loading-${theme.toLowerCase()}.png`, import.meta.url),
+        ),
       );
     }
     await browser.setWindowSize(900, 600);
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/conversation-loading-minimum.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/conversation-loading-minimum.png', import.meta.url)),
     );
     await browser.setWindowSize(1280, 800);
     // Leaving while history is pending keeps the draft; a stale failure must not replace it.
@@ -177,7 +179,7 @@ export async function conversationLoading(session: string) {
     await expect($(loading)).not.toExist();
   } catch (error) {
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/conversation-loading-failure.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/conversation-loading-failure.png', import.meta.url)),
     );
     throw error;
   } finally {

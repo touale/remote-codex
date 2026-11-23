@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { pasteInEditor } from './editor-input';
 import type { Catalog, Server, TextFile } from '../src/bridge/types';
@@ -82,7 +83,7 @@ export async function serverNavigation(invoke: Invoke, workspace: string, remote
   await expect($('.terminal-tab.selected')).not.toHaveText(expect.stringContaining(remote));
   await $('button[aria-label="Close terminal"]').click();
   await browser.saveScreenshot(
-    new URL('../../../.artifacts/desktop-e2e/server-home-light.png', import.meta.url).pathname,
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/server-home-light.png', import.meta.url)),
   );
   await activateTree(`${row(first.id)} .tree-label`);
   await expect($('[aria-label="Recent sessions"]')).toHaveText(expect.stringContaining('desktop-test'));

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { pasteInEditor } from './editor-input';
 import { previewPdf, previewSvg, previewMarkdown } from './preview-data';
@@ -97,7 +98,9 @@ export async function filePreviews() {
     await browser.waitUntil(() =>
       browser.execute(() => document.querySelectorAll('.pdfViewer .page[data-loaded="true"] canvas').length > 0),
     );
-    await browser.saveScreenshot(new URL('../../../.artifacts/desktop-e2e/preview-pdf.png', import.meta.url).pathname);
+    await browser.saveScreenshot(
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/preview-pdf.png', import.meta.url)),
+    );
     await $('button[aria-label="Open diagram.svg"]').click();
     await browser.waitUntil(() =>
       browser.execute(() => (document.querySelector('.image-viewport img') as HTMLImageElement)?.naturalWidth === 360),
@@ -105,7 +108,7 @@ export async function filePreviews() {
     await expect($('.image-preview')).toHaveText(expect.stringContaining('360 × 220'));
     await $('button=100%').click();
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/preview-image.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/preview-image.png', import.meta.url)),
     );
     await $('button=Open notes/readme.md').click();
     await $('.monaco-editor').waitForDisplayed();
@@ -127,7 +130,7 @@ export async function filePreviews() {
       await browser.execute(() => window.previewFixture.reads.filter((path) => path === 'notes/diagram.svg').length),
     ).toBe(1);
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/preview-markdown.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/preview-markdown.png', import.meta.url)),
     );
     await $('button=Preview').click();
     await expect($('.monaco-editor')).not.toExist();

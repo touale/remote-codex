@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, $$, browser, expect } from '@wdio/globals';
 import type { Catalog, HistoryPage, SessionSnapshot } from '../src/bridge/types';
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -9,7 +10,9 @@ export async function messageEditing(invoke: Invoke, id: string) {
   await $('button[aria-label="Send message"]').click();
   await $('.async-questions').waitForDisplayed({ timeout: 30000 });
   await expect($$('.async-questions input[type="radio"]')).toBeElementsArrayOfSize(4);
-  await browser.saveScreenshot(new URL('../../../.artifacts/desktop-e2e/plan-questions.png', import.meta.url).pathname);
+  await browser.saveScreenshot(
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/plan-questions.png', import.meta.url)),
+  );
   await browser.waitUntil(async () => !(await invoke<SessionSnapshot>('session_snapshot', { id })).turn);
   await $('.async-questions .question-option:nth-of-type(2)').click();
   await $('.async-questions').$('button=Submit').click();
@@ -42,7 +45,7 @@ export async function messageEditing(invoke: Invoke, id: string) {
   await message.$('button[aria-label="Edit message"]').click();
   await $('textarea[aria-label="Edit message"]').setValue('Clarify the revised plan.');
   await browser.saveScreenshot(
-    new URL('../../../.artifacts/desktop-e2e/message-editing.png', import.meta.url).pathname,
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/message-editing.png', import.meta.url)),
   );
   await $('button=Save & resend').click();
   await expect($('.messages')).toHaveText(expect.stringContaining('The revised question has been processed.'));

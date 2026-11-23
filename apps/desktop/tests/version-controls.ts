@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import type { UpdateSnapshot } from '../src/bridge/updates';
 
@@ -129,7 +130,7 @@ export async function appVersionIndicator() {
         document.documentElement.dataset.theme = theme;
       }, theme);
       await browser.saveScreenshot(
-        new URL(`../../../.artifacts/desktop-e2e/app-version-${theme}.png`, import.meta.url).pathname,
+        fileURLToPath(new URL(`../../../.artifacts/desktop-e2e/app-version-${theme}.png`, import.meta.url)),
       );
     }
     await browser.execute(() => {

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { edgeScrollbar } from './scroll-controls';
 import { diffContentWindow } from './content-windows';
@@ -76,7 +77,7 @@ export async function toolRecords(setTheme: (theme: 'light' | 'dark') => Promise
       await setTheme(theme);
       await expect($('html')).toHaveAttribute('data-theme', theme);
       await browser.saveScreenshot(
-        new URL(`../../../.artifacts/desktop-e2e/tool-records-${theme}.png`, import.meta.url).pathname,
+        fileURLToPath(new URL(`../../../.artifacts/desktop-e2e/tool-records-${theme}.png`, import.meta.url)),
       );
     }
     await row('search').$('a').click();

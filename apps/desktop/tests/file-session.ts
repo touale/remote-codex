@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { activateTree, contextAt } from './interaction-controls';
 
@@ -99,7 +100,7 @@ export async function fileFolderSessions() {
         document.documentElement.dataset.theme = theme;
       }, theme);
       await browser.saveScreenshot(
-        new URL(`../../../.artifacts/desktop-e2e/file-folder-${theme}.png`, import.meta.url).pathname,
+        fileURLToPath(new URL(`../../../.artifacts/desktop-e2e/file-folder-${theme}.png`, import.meta.url)),
       );
     }
     const target = '/workspace/a/src/项目 space';

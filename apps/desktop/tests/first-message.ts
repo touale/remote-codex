@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 interface FirstGate {
   resume?: (error?: string) => void;
@@ -55,7 +56,7 @@ export async function firstMessage() {
     await browser.keys('Enter');
     expect(await browser.execute(() => window.firstMessageGate.calls)).toBe(1);
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/first-message-loading.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/first-message-loading.png', import.meta.url)),
     );
     await browser.execute(() => window.firstMessageGate.resume?.('Connection interrupted before submission.'));
     await $('.submission-error').waitForDisplayed();

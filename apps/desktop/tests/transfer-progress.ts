@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 
 export async function transferProgress() {
@@ -17,7 +18,7 @@ export async function transferProgress() {
     await expect(trigger).toHaveAttribute('title', expect.stringContaining('200.0 MiB / 400.0 MiB'));
     await expect($('#transfer-status-fixture progress[aria-label="Transfer progress"]')).toHaveAttribute('value', '25');
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/transfer-progress.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/transfer-progress.png', import.meta.url)),
     );
     await trigger.click();
     await expect($('[data-transfer-id="upload"]')).toBeDisplayed();
@@ -40,7 +41,7 @@ export async function transferProgress() {
     });
     expect(fits).toBe(true);
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/transfer-progress-narrow.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/transfer-progress-narrow.png', import.meta.url)),
     );
     await $('button=preparing').click();
     await expect(trigger).toHaveText(expect.stringContaining('Preparing…'));

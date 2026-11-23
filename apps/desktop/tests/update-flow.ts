@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import type { UpdateSnapshot } from '../src/bridge/updates';
 
@@ -98,7 +99,7 @@ export async function updateFlow() {
     await expect($('.settings-modal .spinning')).not.toExist();
     await expect($('.settings-modal button[aria-label="Close"]')).toBeDisabled();
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/update-available.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/update-available.png', import.meta.url)),
     );
     await $('button=Later').click();
     expect(await browser.execute(() => window.updateFlow.installs)).toBe(0);
@@ -125,7 +126,7 @@ export async function updateFlow() {
     await browser.execute(() => window.updateFlow.release!());
     await prompt('Restart to update?').waitForDisplayed();
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/update-restart.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/update-restart.png', import.meta.url)),
     );
     await $('button=Later').click();
     await expect($('button=Restart now')).toBeEnabled();

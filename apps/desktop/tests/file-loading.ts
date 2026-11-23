@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { heldFile, holdFiles, releaseFile, restoreFiles } from './file-gate';
 import { activateTree } from './interaction-controls';
@@ -8,7 +9,7 @@ const skeleton = '[aria-label="Loading file content"]';
 const save = 'button[aria-label^="Save file ("]';
 const close = (name: string) => $(`button[aria-label="Close ${name}"]`).click();
 const screenshot = (name: string) =>
-  browser.saveScreenshot(new URL(`../../../.artifacts/desktop-e2e/${name}.png`, import.meta.url).pathname);
+  browser.saveScreenshot(fileURLToPath(new URL(`../../../.artifacts/desktop-e2e/${name}.png`, import.meta.url)));
 
 export async function directoryLoading(invoke: Invoke, workspace: string, remote: string) {
   for (const path of ['loading', 'loading/branch', 'loading/retry-folder'])

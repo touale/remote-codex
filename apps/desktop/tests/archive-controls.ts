@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import type { Catalog } from '../src/bridge/types';
 import { contextAt } from './interaction-controls';
@@ -19,7 +20,7 @@ export async function archiveAndRestore(invoke: Invoke, id: string) {
   await $('input[aria-label="Search archived sessions"]').setValue('desktop-test');
   await $(row).waitForDisplayed();
   await browser.saveScreenshot(
-    new URL('../../../.artifacts/desktop-e2e/archived-sessions.png', import.meta.url).pathname,
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/archived-sessions.png', import.meta.url)),
   );
   await $(row).$('button=Restore').click();
   await $(row).waitForExist({ reverse: true });

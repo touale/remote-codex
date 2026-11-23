@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import type { Catalog } from '../src/bridge/types';
 import { heldFile, holdFiles, releaseFile, restoreFiles } from './file-gate';
@@ -85,7 +86,7 @@ export async function draftConnection(invoke: Invoke, remote: string) {
     expect(await browser.execute(() => window.draftSessionOpens)).toBe(1);
     expect((await invoke<Catalog>('catalog', { archived: false })).live.length).toBe(before.live.length);
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/draft-auto-connect.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/draft-auto-connect.png', import.meta.url)),
     );
   } finally {
     await restoreFiles();

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { pasteInEditor } from './editor-input';
 import { withExecuteOptions } from '@wdio/tauri-service';
@@ -25,7 +26,7 @@ export async function diffContentWindow(setTheme: (theme: 'light' | 'dark') => P
       await setTheme(theme);
       await expect($('html')).toHaveAttribute('data-theme', theme);
       await browser.saveScreenshot(
-        new URL(`../../../.artifacts/desktop-e2e/content-diff-${theme}.png`, import.meta.url).pathname,
+        fileURLToPath(new URL(`../../../.artifacts/desktop-e2e/content-diff-${theme}.png`, import.meta.url)),
       );
     }
   } finally {
@@ -92,7 +93,7 @@ export async function contentWindows(remote: string) {
     await $('button=Discard my edits').click();
     await expect($('.view-lines')).toHaveText(expect.stringMatching(/external\s+edit/));
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/content-editor.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/content-editor.png', import.meta.url)),
     );
     await pasteInEditor('close check\n');
     // The embedded WebDriver's closeWindow destroys the window, bypassing CloseRequested.

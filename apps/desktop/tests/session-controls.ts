@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, browser, expect } from '@wdio/globals';
 import { writeFileSync } from 'node:fs';
 import type { HistoryPage, SessionOpened, SessionSnapshot, TextFile } from '../src/bridge/types';
@@ -33,7 +34,9 @@ export async function sessionControls(invoke: Invoke, session: string, workspace
   await expect($('.plan-revision')).not.toExist();
   await expect(input).toHaveValue('Revise the plan to include a verification step.');
   await $('button=Continue planning').click();
-  await browser.saveScreenshot(new URL('../../../.artifacts/desktop-e2e/plan-revision.png', import.meta.url).pathname);
+  await browser.saveScreenshot(
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/plan-revision.png', import.meta.url)),
+  );
   await $('button[aria-label="Send plan changes"]').click();
   await expect($('.messages')).toHaveText(expect.stringContaining('Revised workspace plan'));
   await $('.working').waitForExist({ reverse: true });
@@ -96,7 +99,9 @@ export async function sessionControls(invoke: Invoke, session: string, workspace
   expect((await invoke<SessionSnapshot>('session_status', { id: session })).status.limits_error).toBeNull();
   await expect($('.session-status')).toHaveText(expect.stringContaining('Session total'));
   await expect($('.session-status')).toHaveText(expect.stringContaining('gpt-5.4-mini'));
-  await browser.saveScreenshot(new URL('../../../.artifacts/desktop-e2e/session-status.png', import.meta.url).pathname);
+  await browser.saveScreenshot(
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/session-status.png', import.meta.url)),
+  );
   await $('[role="dialog"] button[aria-label="Close"]').click();
   const beforeRestore = await $('.message-time').getAttribute('datetime');
   // A → B → A keeps the existing owner and unsent draft.

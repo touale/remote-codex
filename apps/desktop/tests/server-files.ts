@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { $, $$, browser, expect } from '@wdio/globals';
 import { pasteInEditor } from './editor-input';
 import type { Catalog, Server, TextFile } from '../src/bridge/types';
@@ -17,12 +18,12 @@ export async function emptyServerFiles(invoke: Invoke, server: Server, other: Se
     await expect($(home)).toHaveAttribute('data-server-id', server.id);
     await expect($(loading)).toBeDisplayed();
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/server-files-loading.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/server-files-loading.png', import.meta.url)),
     );
     await invoke('app_preferences', { patch: { theme: 'dark' } });
     await expect($('html')).toHaveAttribute('data-theme', 'dark');
     await browser.saveScreenshot(
-      new URL('../../../.artifacts/desktop-e2e/server-files-loading-dark.png', import.meta.url).pathname,
+      fileURLToPath(new URL('../../../.artifacts/desktop-e2e/server-files-loading-dark.png', import.meta.url)),
     );
     await invoke('app_preferences', { patch: { theme: 'light' } });
     // A response arriving after leaving must neither navigate nor retain its file handle.
@@ -90,6 +91,6 @@ export async function emptyServerFiles(invoke: Invoke, server: Server, other: Se
   await expect($('.workspace-path')).toHaveText('/');
   expect(await workspaces()).toHaveLength(0);
   await browser.saveScreenshot(
-    new URL('../../../.artifacts/desktop-e2e/server-files-root.png', import.meta.url).pathname,
+    fileURLToPath(new URL('../../../.artifacts/desktop-e2e/server-files-root.png', import.meta.url)),
   );
 }
